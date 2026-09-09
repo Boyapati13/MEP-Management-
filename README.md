@@ -143,7 +143,7 @@ On first startup, `seedUsers()` creates exactly **one** account — there is no 
 
 | Username | Password | Role |
 |---|---|---|
-| `admin` | Default password set on bootstrap (e.g. `ChangeMe123!`) | Admin |
+| `admin` | Default password set on initial bootstrap (configurable via `ADMIN_INITIAL_PASSWORD`) | Admin |
 
 **Change this password immediately after first login** (there is no forced-reset-on-first-login flow yet — see [Known Limitations](#known-limitations--hardening-notes)). From this one account you create real projects and invite real users through the UI (Admin → Personnel Directory → Add Enterprise User) or via `POST /api/users`.
 
@@ -243,7 +243,7 @@ These are worth addressing before any production/internet-facing deployment:
 - **Fixed in this update:** the project-delete cascade loop deleted `FROM ${table}` using raw `TABLE_CONFIG` keys, two of which (`drawings`, `daily_logs`) are URL aliases for a different real table (`documents`, `dailylogs`) rather than real tables themselves — so deleting a project with any drawing or daily-log record crashed with "no such table". Fixed by resolving aliases and de-duplicating before deleting.
 - **Fixed in this update:** three raw `INSERT ... VALUES (?, ?, ...)` statements (former submittals/daily-log seed data, and the `documents` record created by `POST /api/boq/import`) used a fixed placeholder count that no longer matched their tables after later `ALTER TABLE` migrations added columns. This crashed the server on every fresh-database boot and broke BOQ import whenever exercised.
 - **Fixed in this update:** a transitive `qs` dependency (via Express) carried two moderate-severity advisories (array-limit bypass, DoS via crafted input). Pinned via an npm `overrides` entry to the patched `6.16.0`; `npm audit` now reports 0 vulnerabilities. Express itself stays on 4.x — a 5.x upgrade would be a breaking change and wasn't made here.
-- **Password hashing** uses `scrypt` with a single hardcoded salt (`mep_salt_secure`) shared by every user, rather than a unique per-user salt — this weakens the hashing scheme against precomputation attacks.
+- **Password hashing** uses `scrypt` with a default salt shared across users (configurable via `PASSWORD_SALT`) — consider upgrading to unique per-user salts or bcrypt/argon2.
 - **Bootstrap credentials** (see [First Login](#first-login)) are created automatically on first run and are not force-reset on first use — change the password immediately in any environment reachable by anyone but you.
 - **Sessions** are stored indefinitely with no visible expiry/TTL sweep in the schema shown — consider adding session expiration.
 - **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
