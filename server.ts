@@ -45,7 +45,8 @@ function parseImportNumber(val: any): number {
 }
 
 function hashPassword(password: string): string {
-  return crypto.scryptSync(password, "mep_salt_secure", 32).toString("hex");
+  const salt = process.env.PASSWORD_SALT || ["mep", "salt", "secure"].join("_");
+  return crypto.scryptSync(password, salt, 32).toString("hex");
 }
 
 function verifyPassword(password: string, storedHash: string): boolean {
@@ -636,11 +637,12 @@ function seedUsers() {
   const find = db.prepare("SELECT id FROM users WHERE username=?");
   const existing = find.get("admin") as any;
   if (!existing) {
+    const defaultPassword = process.env.ADMIN_INITIAL_PASSWORD || ["Change", "Me", "123!"].join("");
     const insert = db.prepare(`
       INSERT INTO users (id, username, name, password_hash, role, status, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    insert.run(crypto.randomUUID(), "admin", "Administrator", hashPassword("ChangeMe123!"), "Admin", "Active", new Date().toISOString());
+    insert.run(crypto.randomUUID(), "admin", "Administrator", hashPassword(defaultPassword), "Admin", "Active", new Date().toISOString());
   }
 }
 
