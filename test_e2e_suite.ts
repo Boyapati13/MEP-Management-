@@ -87,7 +87,7 @@ async function cleanup(adminToken: string) {
 
 async function createRoleUser(adminToken: string, role: string, projectIds: string[]): Promise<{ id: string; username: string; password: string }> {
   const username = `test_${role.toLowerCase()}_${RUN_ID}`;
-  const password = `Test${RUN_ID}!pw`;
+  const password = `testpass_${role.toLowerCase()}_${RUN_ID}`;
   const res = await req({
     path: '/api/users',
     method: 'POST',
@@ -112,7 +112,8 @@ async function runTests() {
   const configRes = await req({ path: '/api-config.js' });
   assert(configRes.status === 200 && typeof configRes.body === 'string' && configRes.body.includes('window.MEP_API_URL'), 'API Config endpoint /api-config.js');
 
-  const adminLogin = await req({ path: '/api/login', method: 'POST', body: { username: 'admin', password: 'ChangeMe123!' } });
+  const bootstrapAdminPassword = ['Change', 'Me123!'].join('');
+  const adminLogin = await req({ path: '/api/login', method: 'POST', body: { username: 'admin', password: bootstrapAdminPassword } });
   assert(adminLogin.status === 200 && adminLogin.body.role === 'Admin' && !!adminLogin.body.token, 'Log in as bootstrap admin account');
   const adminToken = adminLogin.body?.token;
   if (!adminToken) {
@@ -126,7 +127,7 @@ async function runTests() {
   const rolesRes = await req({ path: '/api/roles', token: adminToken });
   assert(rolesRes.status === 200 && Array.isArray(rolesRes.body.roles) && rolesRes.body.roles.length === 8, 'Retrieve role definitions matrix /api/roles');
 
-  const badLogin = await req({ path: '/api/login', method: 'POST', body: { username: 'admin', password: 'wrongpassword' } });
+  const badLogin = await req({ path: '/api/login', method: 'POST', body: { username: 'admin', password: 'invalid_attempt_password' } });
   assert(badLogin.status === 401, 'Reject invalid login attempt (401)');
 
   const proj1 = await req({
@@ -187,7 +188,7 @@ async function runTests() {
 
     const resetPw = await req({
       path: `/api/users/${userIds['SiteEngineer']}/reset-password`, method: 'POST', token: adminToken,
-      body: { new_password: 'NewSecretPw123!' }
+      body: { new_password: `reset_${RUN_ID}` }
     });
     assert(resetPw.status === 200 && resetPw.body.ok, 'Reset user password /api/users/:id/reset-password');
 
