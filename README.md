@@ -143,7 +143,7 @@ On first startup, `seedUsers()` creates exactly **one** account — there is no 
 
 | Username | Password | Role |
 |---|---|---|
-| `admin` | `ChangeMe123!` | Admin |
+| `admin` | Default password set on bootstrap (e.g. `ChangeMe123!`) | Admin |
 
 **Change this password immediately after first login** (there is no forced-reset-on-first-login flow yet — see [Known Limitations](#known-limitations--hardening-notes)). From this one account you create real projects and invite real users through the UI (Admin → Personnel Directory → Add Enterprise User) or via `POST /api/users`.
 
