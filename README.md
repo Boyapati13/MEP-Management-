@@ -217,12 +217,16 @@ There is no integrated test runner (`npm test` is not defined). Instead, two sta
 npm run dev
 
 # In another terminal
-npx tsx test_e2e_suite.ts     # ~38 assertions across auth, RBAC, and every core module
-npx tsx test_bov_spec.ts      # ~22 assertions specifically verifying the BOV St. Venera (Job 2618)
+npx tsx test_e2e_suite.ts     # 44 assertions across auth, RBAC, and every core module
+npx tsx test_bov_spec.ts      # 21 assertions specifically verifying the BOV St. Venera (Job 2618)
                                # spec data, BOQ import and AI advisor responses
 ```
 
 Both scripts print `✅ PASS` / `❌ FAIL` per assertion and exit non-zero on any failure, so they're suitable to wire into CI against a server started in a previous step.
+
+**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → both suites above, all 44 + 21 assertions passing, plus a manual multipart-upload test of `POST /api/boq/import` (not covered by either script). `npm audit` reports 0 vulnerabilities. The AI advisor tests only exercised the built-in fallback response, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini path is untested here.
+
+⚠️ Prior to the fix in this update, the app **crashed on every fresh-database boot** (see [Known Limitations](#known-limitations--hardening-notes)) — a first-time `git clone` → `npm install` → `npm run dev` would not have worked. This is now fixed.
 
 ## Project Structure
 
@@ -245,10 +249,13 @@ Both scripts print `✅ PASS` / `❌ FAIL` per assertion and exit non-zero on an
 
 These are worth addressing before any production/internet-facing deployment:
 
+- **Fixed in this update:** three raw `INSERT ... VALUES (?, ?, ...)` statements (submittals seed, daily-log seed, and the `documents` record created by `POST /api/boq/import`) used a fixed placeholder count that no longer matched their tables after later `ALTER TABLE` migrations added columns. This crashed the server on every fresh-database boot and broke BOQ import whenever exercised — both are now fixed by switching to explicit named-column inserts.
+- **Fixed in this update:** a transitive `qs` dependency (via Express) carried two moderate-severity advisories (array-limit bypass, DoS via crafted input). Pinned via an npm `overrides` entry to the patched `6.16.0`; `npm audit` now reports 0 vulnerabilities. Express itself stays on 4.x — a 5.x upgrade would be a breaking change and wasn't made here.
 - **Password hashing** uses `scrypt` with a single hardcoded salt (`mep_salt_secure`) shared by every user, rather than a unique per-user salt — this weakens the hashing scheme against precomputation attacks.
 - **Seed credentials** (see [Demo / Seed Accounts](#demo--seed-accounts)) are created automatically on first run; disable `seedUsers()` or rotate/remove these accounts before real deployment.
 - **Sessions** are stored indefinitely with no visible expiry/TTL sweep in the schema shown — consider adding session expiration.
 - **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
+- `vite` is listed in both `dependencies` and `devDependencies` in `package.json` — harmless (it resolves to one copy either way) but redundant; worth picking one.
 - No CI configuration is currently checked in; the two test scripts above are good candidates to run on every push.
 - No `LICENSE` file is currently present in the repo.
 

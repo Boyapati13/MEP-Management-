@@ -690,7 +690,7 @@ function seedData() {
       "HVAC", "Site Engineer", "2026-09-02", "2026-09-10", "Open"
     );
 
-    db.prepare("INSERT INTO submittals VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare("INSERT INTO submittals (id, project_id, number, item, trade, date_submitted, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
       crypto.randomUUID(), pid1, "SUB-001", "Chiller unit technical datasheet",
       "HVAC", "2026-08-28", "2026-09-11", "Under Review"
     );
@@ -714,7 +714,7 @@ function seedData() {
       );
     }
 
-    db.prepare("INSERT INTO dailylogs VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare("INSERT INTO dailylogs (id, project_id, date, trade, weather, crew, notes) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
       crypto.randomUUID(), pid1, "2026-09-05", "HVAC", "Sunny", 12,
       "Continued ductwork installation Level 4. No delays."
     );
@@ -2277,8 +2277,8 @@ async function startServer() {
     const docId = crypto.randomUUID();
     const attData = "data:application/octet-stream;base64," + file.buffer.toString("base64");
     const today = new Date().toISOString().split("T")[0];
-    db.prepare("INSERT INTO documents VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-      docId, projectId, filename, "BOQ / Tender", "Imported", today, filename, attData
+    db.prepare("INSERT INTO documents (id, project_id, name, category, revision, date_added, attachment_name, attachment_data, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      docId, projectId, filename, "BOQ / Tender", "Imported", today, filename, attData, req.user!.user_id
     );
 
     let imported = 0;
