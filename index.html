@@ -412,22 +412,11 @@
     <label>API Server URL</label>
     <input id="apiUrl" placeholder="API URL (automatic when hosted with the app)">
     <label>Username</label>
-    <input id="loginUsername" value="admin" autocomplete="username">
+    <input id="loginUsername" placeholder="Username" autocomplete="username">
     <label>Password</label>
-    <input id="loginPassword" type="password" value="admin123" autocomplete="current-password">
+    <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
     <button id="loginBtn">Sign In</button>
     <div class="login-error" id="loginError">Invalid username/password, or could not reach the API server. Make sure the backend is running and the URL above is correct.</div>
-    <div class="login-hint"><b>Enterprise Seed Accounts & Roles:</b><br>
-      👑 <b>admin</b> / admin123 — Executive Administrator (All Projects)<br>
-      📋 <b>pm_mep</b> / pm123 — MEP Project Manager (Lead Oversight)<br>
-      🛠️ <b>engineer</b> / engineer123 — MEP Site Engineer (Field Ops)<br>
-      📊 <b>qs_paul</b> / qs123 — Senior Quantity Surveyor / Commercial<br>
-      🔍 <b>qa_maria</b> / qa123 — QA/QC & Commissioning Lead<br>
-      🦺 <b>safety_kurt</b> / safety123 — Site HSE & Safety Manager<br>
-      🔧 <b>sub</b> / sub123 — CoolAir HVAC Subcontractor (St. Julian's)<br>
-      ⚡ <b>sub_elec</b> / elec123 — SparkTech Electrical (St. Julian's)<br>
-      🚿 <b>sub_plumb</b> / plumb123 — AquaFlow Plumbing (Marina Bay)<br>
-      📐 <b>consultant_eng</b> / consult123 — Supervising MEP Consultant</div>
   </div>
 </div>
 
@@ -3655,7 +3644,6 @@ async function renderUsers(){
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <button class="btn accent small" id="addUserBtn">+ Add Enterprise User</button>
           <button class="btn ghost small" id="exportUsersBtn">Export CSV</button>
-          <button class="btn ghost small" id="switchUserHelperBtn" title="Switch between enterprise roles for testing" style="color:var(--primary);border-color:rgba(111,211,193,0.3);">⚡ Switch Role Test</button>
         </div>
       </div>
   `;
@@ -3741,7 +3729,7 @@ async function renderUsers(){
                       <span class="badge-role ${meta.badge}">${meta.icon} ${escHtml(meta.name)}</span>
                     </td>
                     <td>
-                      <div><b>${escHtml(user.company || 'Skyline MEP Contractors')}</b></div>
+                      <div><b>${escHtml(user.company || '—')}</b></div>
                       <div style="font-size:11px;color:var(--muted);">${escHtml(user.trade || 'General MEP')}</div>
                     </td>
                     <td>
@@ -3787,7 +3775,6 @@ async function renderUsers(){
   document.getElementById('tabRolesMatrix').onclick = () => { userAdminState.tab = 'matrix'; renderUsers(); };
   document.getElementById('addUserBtn').onclick = () => openUserModal(null);
   document.getElementById('exportUsersBtn').onclick = () => exportUsersCsv(users);
-  document.getElementById('switchUserHelperBtn').onclick = () => openSwitchUserModal(users);
 
   if (userAdminState.tab === 'directory') {
     const searchInput = document.getElementById('userSearchInput');
@@ -4020,7 +4007,7 @@ async function openUserModal(user){
           </div>
           <div>
             <label>Email Address</label>
-            <input id="f_user_email" type="email" value="${isEdit && user.email ? escHtml(user.email) : ''}" placeholder="e.g. mark@skyline-mep.com">
+            <input id="f_user_email" type="email" value="${isEdit && user.email ? escHtml(user.email) : ''}" placeholder="e.g. name@company.com">
           </div>
           <div>
             <label>Contact Phone</label>
@@ -4037,7 +4024,7 @@ async function openUserModal(user){
         <div class="form-grid" style="margin-bottom:0;">
           <div>
             <label>Company / Contractor Name</label>
-            <input id="f_user_company" value="${isEdit && user.company ? escHtml(user.company) : 'Skyline MEP Contractors'}" placeholder="e.g. Skyline MEP, CoolAir Ltd">
+            <input id="f_user_company" value="${isEdit && user.company ? escHtml(user.company) : ''}" placeholder="e.g. Acme MEP Contractors">
           </div>
           <div>
             <label>Trade Specialization</label>
@@ -4214,74 +4201,10 @@ function openResetPasswordModal(user) {
 
   document.getElementById('btnGenResetPw').onclick = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$*';
-    let pw = 'Skyline';
-    for (let i = 0; i < 6; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+    let pw = '';
+    for (let i = 0; i < 12; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
     document.getElementById('f_reset_pw_val').value = pw;
   };
-}
-
-function openSwitchUserModal(users) {
-  const html = `
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <p style="font-size:12px;color:var(--muted);margin:0;">
-        As an Administrator, you can instantly test the portal from any user or role perspective:
-      </p>
-      <div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
-        ${users.map(u => {
-          const meta = USER_ROLES_META[u.role] || { name: u.role, icon: '👤', badge: 'badge-role-sub' };
-          return `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;">
-              <div>
-                <div style="font-weight:700;color:var(--text);font-size:13px;">${escHtml(u.name)} <span style="font-size:11px;color:var(--muted);">(@${escHtml(u.username)})</span></div>
-                <div style="display:flex;gap:6px;align-items:center;margin-top:2px;">
-                  <span class="badge-role ${meta.badge}" style="font-size:10px;">${meta.icon} ${escHtml(meta.name)}</span>
-                  <span style="font-size:11px;color:var(--muted);">${escHtml(u.company || 'Skyline MEP')}</span>
-                </div>
-              </div>
-              <button class="btn accent small" data-fast-switch="${escHtml(u.username)}" style="font-size:11px;padding:4px 10px;">
-                Switch
-              </button>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  `;
-  openModal('⚡ Role Perspective Switcher (Admin)', html, null);
-
-  document.querySelectorAll('[data-fast-switch]').forEach(btn => {
-    btn.onclick = async () => {
-      const username = btn.dataset.fastSwitch;
-      closeModal();
-      // Default demo password map
-      const passMap = {
-        admin: 'admin123',
-        pm_mep: 'pm123',
-        engineer: 'engineer123',
-        qs_paul: 'qs123',
-        qa_maria: 'qa123',
-        safety_kurt: 'safety123',
-        sub: 'sub123',
-        sub_elec: 'elec123',
-        sub_plumb: 'plumb123',
-        consultant_eng: 'consult123'
-      };
-      const pw = passMap[username] || prompt(`Enter password for @${username}:`);
-      if (!pw) return;
-      try {
-        const res = await apiFetch('/api/login', {
-          method: 'POST',
-          body: JSON.stringify({ username, password: pw })
-        });
-        TOKEN = res.token;
-        ME = res;
-        localStorage.setItem('mep_token', TOKEN);
-        initApp();
-      } catch (err) {
-        alert('Switch failed: ' + err.message);
-      }
-    };
-  });
 }
 
 function exportUsersCsv(users) {

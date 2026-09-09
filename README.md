@@ -10,7 +10,7 @@ The application was originally scaffolded in Google AI Studio (see `metadata.jso
 - [Tech Stack](#tech-stack)
 - [Architecture Notes](#architecture-notes)
 - [Getting Started](#getting-started)
-- [Demo / Seed Accounts](#demo--seed-accounts)
+- [First Login](#first-login)
 - [Roles & Permissions](#roles--permissions)
 - [Data Model](#data-model)
 - [API Overview](#api-overview)
@@ -122,7 +122,7 @@ cp .env.example .env
 npm run dev
 ```
 
-This runs `tsx server.ts` directly (no build step needed) on **http://localhost:3000**. The SQLite database file `mep_pm.db` is created automatically on first run and seeded with demo projects and users (see below). It is git-ignored, so each environment gets its own local database.
+This runs `tsx server.ts` directly (no build step needed) on **http://localhost:3000**. The SQLite database file `mep_pm.db` is created automatically on first run. It is git-ignored, so each environment gets its own local database. A fresh database starts **completely empty** — no demo projects, no sample tasks — except for a single bootstrap administrator account (see below).
 
 ### Build & run in production
 
@@ -137,24 +137,15 @@ NODE_ENV=production npm start
 npm run lint   # tsc --noEmit
 ```
 
-## Demo / Seed Accounts
+## First Login
 
-On first startup, `seedUsers()` creates one demo account per role (password hashing uses `scrypt`; these are local development seed credentials, not production secrets — change or remove them before deploying anywhere reachable by real users):
+On first startup, `seedUsers()` creates exactly **one** account — there is no demo company, no sample project, and no other pre-created users:
 
 | Username | Password | Role |
 |---|---|---|
-| `admin` | `admin123` | Admin |
-| `pm_mep` | `pm123` | ProjectManager |
-| `engineer` | `engineer123` | SiteEngineer |
-| `qs_paul` | `qs123` | CommercialManager |
-| `qa_maria` | `qa123` | QAQC |
-| `safety_kurt` | `safety123` | SafetyOfficer |
-| `sub` | `sub123` | Subcontractor (HVAC) |
-| `sub_elec` | `elec123` | Subcontractor (Electrical) |
-| `sub_plumb` | `plumb123` | Subcontractor (Plumbing) |
-| `consultant_eng` | `consult123` | Consultant |
+| `admin` | `ChangeMe123!` | Admin |
 
-A demo project ("St. Julian's Tower – MEP Fitout") is seeded with sample tasks, RFIs, submittals and punch list items so the app is populated immediately after first run.
+**Change this password immediately after first login** (there is no forced-reset-on-first-login flow yet — see [Known Limitations](#known-limitations--hardening-notes)). From this one account you create real projects and invite real users through the UI (Admin → Personnel Directory → Add Enterprise User) or via `POST /api/users`.
 
 ## Roles & Permissions
 
@@ -206,40 +197,38 @@ All endpoints below (except `/api/login` and `/api/health`) require `Authorizati
 
 ## AI Technical Advisor
 
-`POST /api/ai/chat` and `POST /api/drawing/ask-ai` call Google Gemini (`@google/genai`) with the user's question plus an embedded block of MEP engineering reference knowledge (a real electrical/ELV tender specification — clauses, cable spacing tables, lighting schedules, testing sequences, etc.) so answers are grounded in that spec rather than generic advice. `drawing/ask-ai` additionally accepts a base64 drawing/photo (`image_data`) for multimodal questions about a specific sheet. If `GEMINI_API_KEY` is not configured, or the API call fails, both endpoints fall back to a structured generic engineering response so the UI never breaks.
+`POST /api/ai/chat` and `POST /api/drawing/ask-ai` call Google Gemini (`@google/genai`) with the user's question plus an embedded block of general MEP/electrical engineering reference knowledge (BS 7671 test sequences, cable containment spacing tables, HVAC/electrical separation rules, UPS sizing guidance) so answers are grounded in real standards rather than pure model recall — without being tied to any specific project, tender, or client. `drawing/ask-ai` additionally accepts a base64 drawing/photo (`image_data`) for multimodal questions about a specific sheet. If `GEMINI_API_KEY` is not configured, or the API call fails, both endpoints fall back to a structured generic engineering response so the UI never breaks.
 
 ## Testing
 
-There is no integrated test runner (`npm test` is not defined). Instead, two standalone scripts exercise a **running server** end-to-end over HTTP:
+There is no integrated test runner (`npm test` is not defined). Instead, a standalone script exercises a **running server** end-to-end over HTTP:
 
 ```bash
 # In one terminal
 npm run dev
 
 # In another terminal
-npx tsx test_e2e_suite.ts     # 44 assertions across auth, RBAC, and every core module
-npx tsx test_bov_spec.ts      # 21 assertions specifically verifying the BOV St. Venera (Job 2618)
-                               # spec data, BOQ import and AI advisor responses
+npx tsx test_e2e_suite.ts
 ```
 
-Both scripts print `✅ PASS` / `❌ FAIL` per assertion and exit non-zero on any failure, so they're suitable to wire into CI against a server started in a previous step.
+The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 51 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, and the audit trail — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
 
-**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → both suites above, all 44 + 21 assertions passing, plus a manual multipart-upload test of `POST /api/boq/import` (not covered by either script). `npm audit` reports 0 vulnerabilities. The AI advisor tests only exercised the built-in fallback response, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini path is untested here.
+It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, so it's suitable to wire into CI against a server started in a previous step.
 
-⚠️ Prior to the fix in this update, the app **crashed on every fresh-database boot** (see [Known Limitations](#known-limitations--hardening-notes)) — a first-time `git clone` → `npm install` → `npm run dev` would not have worked. This is now fixed.
+**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 51 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The AI advisor test only exercises the built-in fallback response, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini path is untested here.
+
+⚠️ Prior to this update, the app **crashed on every fresh-database boot** and had no way to log in without hardcoded demo credentials embedded directly in the login page. Both are now fixed — see [Known Limitations](#known-limitations--hardening-notes) for the full list of what changed.
 
 ## Project Structure
 
 ```
 .
-├── server.ts              # Express app: routes, RBAC, SQLite schema & seed data (~2.8k lines)
-├── bov_schedule.ts         # Hardcoded MS Project-derived schedule for the BOV St. Venera tender
+├── server.ts              # Express app: routes, RBAC, SQLite schema & bootstrap admin account (~2.3k lines)
 ├── index.html              # The actual frontend application (vanilla JS SPA)
 ├── api-config.js            # Runtime API base URL override (window.MEP_API_URL)
 ├── src/                    # Unused Vite + React scaffold (App.tsx renders an empty div)
 ├── public/                 # Static assets
-├── test_e2e_suite.ts       # Full-suite HTTP integration tests
-├── test_bov_spec.ts        # BOV Job 2618 spec/BOQ/AI verification tests
+├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (51 assertions)
 ├── vite.config.ts
 ├── tsconfig.json
 └── .env.example
@@ -249,14 +238,17 @@ Both scripts print `✅ PASS` / `❌ FAIL` per assertion and exit non-zero on an
 
 These are worth addressing before any production/internet-facing deployment:
 
-- **Fixed in this update:** three raw `INSERT ... VALUES (?, ?, ...)` statements (submittals seed, daily-log seed, and the `documents` record created by `POST /api/boq/import`) used a fixed placeholder count that no longer matched their tables after later `ALTER TABLE` migrations added columns. This crashed the server on every fresh-database boot and broke BOQ import whenever exercised — both are now fixed by switching to explicit named-column inserts.
+- **Fixed in this update:** all demo/test data removed. `seedUsers()` now creates a single bootstrap `admin` account only (no fictional company or staff roster); `seedData()` is a no-op (no sample project); the login screen no longer displays a credentials cheat-sheet or pre-filled password; the "Switch Role" admin feature (which relied on a hardcoded plaintext demo-password map and didn't work for real users) was removed; the AI advisor's reference knowledge was generalized away from one specific fictional tender.
+- **Fixed in this update:** `DELETE /api/projects/:id` and `DELETE /api/users/:id` deleted the parent row *before* their dependent rows (`project_memberships` has a declared foreign key to both `projects` and `users`), so both endpoints threw an unhandled "FOREIGN KEY constraint failed" 500 error the moment either record had any related data — i.e. on essentially any real project or user. Fixed by deleting dependents first. Found via the test suite's own cleanup step failing.
+- **Fixed in this update:** the project-delete cascade loop deleted `FROM ${table}` using raw `TABLE_CONFIG` keys, two of which (`drawings`, `daily_logs`) are URL aliases for a different real table (`documents`, `dailylogs`) rather than real tables themselves — so deleting a project with any drawing or daily-log record crashed with "no such table". Fixed by resolving aliases and de-duplicating before deleting.
+- **Fixed in this update:** three raw `INSERT ... VALUES (?, ?, ...)` statements (former submittals/daily-log seed data, and the `documents` record created by `POST /api/boq/import`) used a fixed placeholder count that no longer matched their tables after later `ALTER TABLE` migrations added columns. This crashed the server on every fresh-database boot and broke BOQ import whenever exercised.
 - **Fixed in this update:** a transitive `qs` dependency (via Express) carried two moderate-severity advisories (array-limit bypass, DoS via crafted input). Pinned via an npm `overrides` entry to the patched `6.16.0`; `npm audit` now reports 0 vulnerabilities. Express itself stays on 4.x — a 5.x upgrade would be a breaking change and wasn't made here.
 - **Password hashing** uses `scrypt` with a single hardcoded salt (`mep_salt_secure`) shared by every user, rather than a unique per-user salt — this weakens the hashing scheme against precomputation attacks.
-- **Seed credentials** (see [Demo / Seed Accounts](#demo--seed-accounts)) are created automatically on first run; disable `seedUsers()` or rotate/remove these accounts before real deployment.
+- **Bootstrap credentials** (see [First Login](#first-login)) are created automatically on first run and are not force-reset on first use — change the password immediately in any environment reachable by anyone but you.
 - **Sessions** are stored indefinitely with no visible expiry/TTL sweep in the schema shown — consider adding session expiration.
 - **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
 - `vite` is listed in both `dependencies` and `devDependencies` in `package.json` — harmless (it resolves to one copy either way) but redundant; worth picking one.
-- No CI configuration is currently checked in; the two test scripts above are good candidates to run on every push.
+- No CI configuration is currently checked in; `test_e2e_suite.ts` is a good candidate to run on every push.
 - No `LICENSE` file is currently present in the repo.
 
 ## License

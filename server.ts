@@ -5,7 +5,6 @@ import crypto from "crypto";
 import { DatabaseSync } from "node:sqlite";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
-import { BOV_MS_PROJECT_SCHEDULE } from "./bov_schedule";
 
 interface AuthenticatedUser {
   user_id: string;
@@ -631,511 +630,24 @@ function initDb() {
 }
 
 function seedUsers() {
-  const defaults: [string, string, string, string, string, string, string, string, string][] = [
-    ["admin", "Siva Boyapati", "admin123", "Admin", "siva.boyapati@skyline-mep.com", "+356 7912 3456", "Skyline Developments", "General MEP", "Active"],
-    ["pm_mep", "David Attard", "pm123", "ProjectManager", "david.attard@skyline-mep.com", "+356 7922 4567", "Skyline MEP Contractors", "General MEP", "Active"],
-    ["engineer", "Site Engineer", "engineer123", "SiteEngineer", "engineer@skyline-mep.com", "+356 7933 5678", "Skyline MEP Contractors", "HVAC", "Active"],
-    ["qs_paul", "Paul Borg", "qs123", "CommercialManager", "paul.borg@skyline-mep.com", "+356 7944 6789", "Skyline Cost Consultants", "Commercial", "Active"],
-    ["qa_maria", "Maria Vella", "qa123", "QAQC", "maria.vella@skyline-mep.com", "+356 7955 7890", "Skyline Quality Assurance", "QA/QC", "Active"],
-    ["safety_kurt", "Kurt Zammit", "safety123", "SafetyOfficer", "kurt.zammit@skyline-mep.com", "+356 7966 8901", "HSE Site Solutions", "Safety", "Active"],
-    ["sub", "CoolAir HVAC Subcontractor", "sub123", "Subcontractor", "operations@coolair-mep.com", "+356 7977 9012", "CoolAir HVAC Ltd", "HVAC", "Active"],
-    ["sub_elec", "SparkTech Electrical", "elec123", "Subcontractor", "info@sparktech.com", "+356 7988 0123", "SparkTech Electrical Ltd", "Electrical", "Active"],
-    ["sub_plumb", "AquaFlow Plumbing", "plumb123", "Subcontractor", "service@aquaflow.com", "+356 7999 1234", "AquaFlow Mechanical Ltd", "Plumbing", "Active"],
-    ["consultant_eng", "Eng. Joseph Grech", "consult123", "Consultant", "jgrech@mep-consultants.eu", "+356 7900 2345", "Grech & Associates MEP", "Consulting", "Active"],
-  ];
+  // Single bootstrap administrator account only. No demo company, no
+  // placeholder staff/subcontractor accounts. Change this password on
+  // first login (there is no forced-reset flow yet - see README).
   const find = db.prepare("SELECT id FROM users WHERE username=?");
-  const insert = db.prepare(`
-    INSERT INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const update = db.prepare(`
-    UPDATE users SET name=?, role=?, email=?, phone=?, company=?, trade=?, status=? WHERE username=?
-  `);
-  const now = new Date().toISOString();
-  for (const [username, name, pw, role, email, phone, company, trade, status] of defaults) {
-    const existing = find.get(username) as any;
-    if (!existing) {
-      insert.run(crypto.randomUUID(), username, name, hashPassword(pw), role, email, phone, company, trade, status, now);
-    } else {
-      update.run(name, role, email, phone, company, trade, status, username);
-    }
+  const existing = find.get("admin") as any;
+  if (!existing) {
+    const insert = db.prepare(`
+      INSERT INTO users (id, username, name, password_hash, role, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insert.run(crypto.randomUUID(), "admin", "Administrator", hashPassword("ChangeMe123!"), "Admin", "Active", new Date().toISOString());
   }
 }
 
 function seedData() {
-  // Project 1: St. Julian's Tower - MEP Fitout
-  let p1 = db.prepare("SELECT id FROM projects WHERE name LIKE '%St. Julian%'").get() as any;
-  let pid1: string;
-  if (!p1) {
-    pid1 = crypto.randomUUID();
-    db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      pid1, "St. Julian's Tower - MEP Fitout", "Skyline Developments", "Active",
-      "2026-06-01", "2027-03-31", 850000
-    );
-
-    const tasks = [
-      ["HVAC ductwork - Level 3-5", "HVAC", "M. Camilleri", "2026-09-01", "2026-09-25", 40, "In Progress"],
-      ["Main switchboard installation", "Electrical", "J. Borg", "2026-09-15", "2026-10-05", 0, "Not Started"],
-      ["Riser pipework - Level 1-2", "Plumbing", "A. Vella", "2026-08-01", "2026-08-20", 100, "Completed"],
-      ["Fire sprinkler rough-in", "Fire Protection", "K. Zammit", "2026-08-25", "2026-09-15", 55, "Delayed"],
-      ["BMS controller commissioning", "BMS/Controls", "R. Farrugia", "2026-10-10", "2026-10-30", 0, "Not Started"],
-    ];
-    const insertTask = db.prepare("INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const t of tasks) {
-      insertTask.run(crypto.randomUUID(), pid1, ...t);
-    }
-
-    db.prepare("INSERT INTO rfis VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "RFI-001", "Clarify AHU-3 duct routing clash with structural beam",
-      "HVAC", "Site Engineer", "2026-09-02", "2026-09-10", "Open"
-    );
-
-    db.prepare("INSERT INTO submittals (id, project_id, number, item, trade, date_submitted, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "SUB-001", "Chiller unit technical datasheet",
-      "HVAC", "2026-08-28", "2026-09-11", "Under Review"
-    );
-
-    const punchItems = [
-      ["Missing label on DB-4 panel", "Electrical", "Level 2 - Central Corridor", "Medium", "2026-09-03", "Open"],
-      ["Vibration isolator misaligned on AHU-02 supply fan", "HVAC", "Level 2 - AHU Plant Room", "High", "2026-09-04", "Open"],
-      ["Cable tray bonding jumper missing at Riser A", "Electrical", "Level 2 - Electrical Riser", "Critical", "2026-09-05", "Open"],
-      ["CRAC condensate drain pipe uninsulated near rack 3", "HVAC", "Level 2 - Server Room", "High", "2026-09-06", "In Progress"],
-      ["Flexible duct kinked at VAV terminal 2-E04", "HVAC", "Level 2 - East Wing", "Medium", "2026-09-07", "Open"],
-      ["Sprinkler head escutcheon plate loose above office 214", "Fire Protection", "Level 2 - West Wing", "Low", "2026-09-06", "Resolved"],
-      ["Pressure gauge defective on domestic water branch valve", "Plumbing", "Level 2 - Plumbing Riser", "Medium", "2026-09-07", "Open"],
-      ["Phase tagging incomplete on Main Incomer busbar", "Electrical", "Level 1 - Main Switchboard Room", "Critical", "2026-09-04", "Open"],
-      ["Chilled water pump CHWP-1 gland packing weeping", "Plumbing", "Level 1 - Chilled Water Pumps", "Medium", "2026-09-05", "Open"],
-      ["Emergency trip push button cover missing", "Electrical", "Basement - Switchgear & Generators", "High", "2026-09-03", "Open"],
-      ["Chiller-1 acoustic shroud bracket loose", "HVAC", "Roof - Chillers & Exhaust", "Low", "2026-09-02", "Closed"]
-    ];
-    for (const p of punchItems) {
-      db.prepare("INSERT INTO punchlist (id, project_id, item, trade, location, priority, date_raised, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-        crypto.randomUUID(), pid1, p[0], p[1], p[2], p[3], p[4], p[5]
-      );
-    }
-
-    db.prepare("INSERT INTO dailylogs (id, project_id, date, trade, weather, crew, notes) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "2026-09-05", "HVAC", "Sunny", 12,
-      "Continued ductwork installation Level 4. No delays."
-    );
-
-    const costs = [
-      ["HVAC", "Chiller units + ductwork", 220000, 198000, "2026-08-30"],
-      ["Electrical", "Switchgear + cabling", 180000, 192000, "2026-08-30"],
-      ["Plumbing", "Riser + fixtures", 95000, 88000, "2026-08-30"],
-      ["Fire Protection", "Sprinkler system", 110000, 115000, "2026-08-30"],
-    ];
-    const insertCost = db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)");
-    for (const c of costs) {
-      insertCost.run(crypto.randomUUID(), pid1, ...c);
-    }
-
-    db.prepare("INSERT INTO change_orders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "CO-001", "Add BMS points for Level 5 fan coils", "BMS/Controls",
-      "Client requested extra monitoring points", 8500, 5, "2026-09-01", "Pending"
-    );
-
-    db.prepare("INSERT INTO purchase_orders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "PO-1001", "CoolAir Supplies Ltd", "HVAC",
-      "AHU-3 replacement filters + belts", 4200, "2026-08-20", "2026-09-10", "Ordered"
-    );
-
-    db.prepare("INSERT INTO safety_incidents VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "2026-09-04", "Electrical", "Near Miss", "Medium",
-      "Unlabeled live cable found during ceiling works", "Cable isolated and labeled same day", "Closed"
-    );
-
-    db.prepare("INSERT INTO inspections VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "2026-09-06", "Fire Protection", "Pressure Test",
-      "K. Zammit", "Pass", "Sprinkler rough-in held 200psi for 2 hours, no drop."
-    );
-
-    db.prepare("INSERT INTO meeting_minutes VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "2026-09-05", "Weekly Coordination", "PM, Site Engineer, MEP Subs",
-      "Level 3-5 HVAC progress + AHU-3 clash", "Agreed RFI-001 to be resolved by structural by Sep 10."
-    );
-
-    db.prepare("INSERT INTO timesheets VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "2026-09-05", "M. Camilleri", "HVAC", "Ductwork Level 4", 8
-    );
-
-    db.prepare("INSERT INTO equipment VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), pid1, "Scissor Lift #2", "Access Equipment", "M. Camilleri", "In Use",
-      "On Level 4 for ductwork installation"
-    );
-  } else {
-    pid1 = p1.id;
-  }
-
-  // Project 2: Marina Bay Commercial Centre
-  let p2 = db.prepare("SELECT id FROM projects WHERE name LIKE '%Marina Bay%'").get() as any;
-  let pid2: string;
-  if (!p2) {
-    pid2 = crypto.randomUUID();
-    db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      pid2, "Marina Bay Commercial Centre", "Apex Properties", "Active",
-      "2026-07-01", "2027-06-30", 620000
-    );
-
-    const p2Tasks = [
-      ["Basement drainage pump sump install", "Plumbing", "A. Vella", "2026-09-05", "2026-09-28", 25, "In Progress"],
-      ["Primary water supply main tie-in", "Plumbing", "A. Vella", "2026-09-15", "2026-10-10", 0, "Not Started"],
-    ];
-    const insertTask = db.prepare("INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const t of p2Tasks) {
-      insertTask.run(crypto.randomUUID(), pid2, ...t);
-    }
-  } else {
-    pid2 = p2.id;
-  }
-
-  // Project 3: BOV St. Venera - Level 1 and Level 2 Refurbishment (Job 2618)
-  let p3 = db.prepare("SELECT id FROM projects WHERE name LIKE '%BOV St. Venera%'").get() as any;
-  let pid3: string;
-  if (!p3) {
-    pid3 = crypto.randomUUID();
-    db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      pid3, "BOV St. Venera - Level 1 & 2 Refurbishment", "Bank of Valletta plc (Enser Ltd)", "Active",
-      "2026-05-05", "2026-11-30", 185000
-    );
-  } else {
-    pid3 = p3.id;
-    // Clear existing tasks to force re-seed with detailed schedule
-    db.prepare("DELETE FROM tasks WHERE project_id = ?").run(pid3);
-  }
-
-  // Seed tasks
-  const insertTask = db.prepare("INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status, wbs_code, duration, is_summary, is_milestone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-  for (const t of BOV_MS_PROJECT_SCHEDULE) {
-    insertTask.run(
-      crypto.randomUUID(),
-      pid3,
-      t.title,
-      t.trade,
-      t.assignee,
-      t.start,
-      t.end,
-      t.progress,
-      t.status,
-      t.wbs_code,
-      t.duration,
-      t.is_summary,
-      t.is_milestone
-    );
-  }
-
-  // Load user records
-  const adminUser = db.prepare("SELECT id, name FROM users WHERE username='admin'").get() as any;
-  const engUser = db.prepare("SELECT id, name FROM users WHERE username='engineer'").get() as any;
-  const subHvac = db.prepare("SELECT id, name FROM users WHERE username='sub'").get() as any;
-  const subElec = db.prepare("SELECT id, name FROM users WHERE username='sub_elec'").get() as any;
-  const subPlumb = db.prepare("SELECT id, name FROM users WHERE username='sub_plumb'").get() as any;
-
-  // Strict Project Access: Assign different subcontractors to each project
-  const setMem = db.prepare(`
-    INSERT INTO project_memberships (user_id, project_id, access_role, active)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id, project_id) DO UPDATE SET access_role=excluded.access_role, active=excluded.active
-  `);
-
-  if (adminUser) {
-    setMem.run(adminUser.id, pid1, "Project Manager", 1);
-    setMem.run(adminUser.id, pid2, "Project Manager", 1);
-  }
-  if (engUser) {
-    setMem.run(engUser.id, pid1, "Site Engineer", 1);
-    setMem.run(engUser.id, pid2, "Site Engineer", 1);
-  }
-  // Subcontractor isolation across projects:
-  // CoolAir HVAC -> St. Julian's Tower ONLY
-  if (subHvac) {
-    setMem.run(subHvac.id, pid1, "Subcontractor", 1);
-    setMem.run(subHvac.id, pid2, "Subcontractor", 0);
-  }
-  // SparkTech Electrical -> St. Julian's Tower ONLY
-  if (subElec) {
-    setMem.run(subElec.id, pid1, "Subcontractor", 1);
-    setMem.run(subElec.id, pid2, "Subcontractor", 0);
-  }
-  // AquaFlow Plumbing -> Marina Bay ONLY
-  if (subPlumb) {
-    setMem.run(subPlumb.id, pid1, "Subcontractor", 0);
-    setMem.run(subPlumb.id, pid2, "Subcontractor", 1);
-  }
-
-  // Seed documents with explicit subcontractor scoping
-  const sampleDocs = [
-    // Project 1 - General (no subcontractor)
-    {
-      pid: pid1,
-      name: "MEP Coordination Drawing Rev C",
-      category: "Drawing",
-      rev: "C",
-      date: "2026-08-15",
-      subId: null,
-      uploader: engUser?.name || "Site Engineer",
-      uploaderId: engUser?.id || adminUser?.id,
-    },
-    // Project 1 - CoolAir HVAC Subcontractor Documents
-    {
-      pid: pid1,
-      name: "HVAC Ductwork Shop Drawings - Level 3-5",
-      category: "Drawing",
-      rev: "B",
-      date: "2026-08-22",
-      subId: subHvac?.id,
-      uploader: subHvac?.name || "CoolAir HVAC Subcontractor",
-      uploaderId: subHvac?.id,
-    },
-    {
-      pid: pid1,
-      name: "Chiller Plant Commissioning & Pressure Certificate",
-      category: "Report",
-      rev: "1.0",
-      date: "2026-08-29",
-      subId: subHvac?.id,
-      uploader: subHvac?.name || "CoolAir HVAC Subcontractor",
-      uploaderId: subHvac?.id,
-    },
-    // Project 1 - SparkTech Electrical Subcontractor Documents
-    {
-      pid: pid1,
-      name: "Main Switchboard Single Line Diagram",
-      category: "Drawing",
-      rev: "C",
-      date: "2026-08-20",
-      subId: subElec?.id,
-      uploader: subElec?.name || "SparkTech Electrical",
-      uploaderId: subElec?.id,
-    },
-    {
-      pid: pid1,
-      name: "Cable Insulation Resistance Test Report",
-      category: "Report",
-      rev: "1.2",
-      date: "2026-09-02",
-      subId: subElec?.id,
-      uploader: subElec?.name || "SparkTech Electrical",
-      uploaderId: subElec?.id,
-    },
-    // Project 2 - AquaFlow Plumbing Subcontractor Documents
-    {
-      pid: pid2,
-      name: "Potable Water & Drainage Riser Schematics",
-      category: "Drawing",
-      rev: "A",
-      date: "2026-08-18",
-      subId: subPlumb?.id,
-      uploader: subPlumb?.name || "AquaFlow Plumbing",
-      uploaderId: subPlumb?.id,
-    },
-    {
-      pid: pid2,
-      name: "Hydrostatic Pipe Pressure Test Log",
-      category: "Report",
-      rev: "1.0",
-      date: "2026-09-01",
-      subId: subPlumb?.id,
-      uploader: subPlumb?.name || "AquaFlow Plumbing",
-      uploaderId: subPlumb?.id,
-    },
-    // Project 2 - General Specification
-    {
-      pid: pid2,
-      name: "Commercial Centre Base Building Specification",
-      category: "Specification",
-      rev: "2.0",
-      date: "2026-08-10",
-      subId: null,
-      uploader: engUser?.name || "Site Engineer",
-      uploaderId: engUser?.id || adminUser?.id,
-    },
-    // Project 3: BOV St. Venera Tender & Technical Specifications (Job 2618)
-    {
-      pid: pid3,
-      name: "BOV St. Venera - Full Tender & Technical Specifications (Job 2618)",
-      category: "Specification",
-      rev: "0",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Building Services Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-S-ELE-01: Electrical Schematic (UPS, UP0, DB1, DB2, UP1, UP2)",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-LTG-01: Level 1 & 2 Lighting Layout & Schedule (Types A to I)",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-PWR-01: Level 1 & 2 Small Power & Desk Servicing Layout",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-DTA-01: Data & Audio Visual Layout (GOP Boxes, HDMI AOC)",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-SEC-01: Security Layout (Card Readers & Intruder Alarms)",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-CTV-01: CCTV Layout (Surveillance & Monitored Points)",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-FAS-01: Fire Alarm & Fire Fighting Layout",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-CON-01: Containment, Cable Trays & Trunking Layout",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-ACO-01: Air Conditioning Layout (VRF Cassettes & Splits)",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-    {
-      pid: pid3,
-      name: "2618-L-VEN-01: Ventilation & Motorised Volume Dampers Layout",
-      category: "Drawing",
-      rev: "Tender",
-      date: "2026-05-05",
-      subId: null,
-      uploader: "Enser Ltd / Consulting Engineers",
-      uploaderId: adminUser?.id,
-    },
-  ];
-
-  const checkDoc = db.prepare("SELECT id FROM documents WHERE project_id=? AND name=?");
-  const insertDoc = db.prepare(`
-    INSERT INTO documents (id, project_id, name, category, revision, date_added, attachment_name, attachment_data, subcontractor_id, uploaded_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const updateDoc = db.prepare(`
-    UPDATE documents SET subcontractor_id=?, uploaded_by=? WHERE id=?
-  `);
-  const insertOwner = db.prepare("INSERT OR IGNORE INTO record_owners VALUES ('documents', ?, ?)");
-
-  for (const doc of sampleDocs) {
-    if (!doc.pid) continue;
-    const existing = checkDoc.get(doc.pid, doc.name) as any;
-    if (!existing) {
-      const docId = crypto.randomUUID();
-      insertDoc.run(
-        docId, doc.pid, doc.name, doc.category, doc.rev, doc.date,
-        `${doc.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`, null, doc.subId || null, doc.uploader
-      );
-      if (doc.uploaderId) {
-        insertOwner.run(docId, doc.uploaderId);
-      }
-    } else {
-      updateDoc.run(doc.subId || null, doc.uploader, existing.id);
-      if (doc.uploaderId) {
-        insertOwner.run(existing.id, doc.uploaderId);
-      }
-    }
-  }
-
-  // Seed authentic BOV St. Venera BOQ items if not already present
-  const bovBoqCount = db.prepare("SELECT count(*) as c FROM boq_items WHERE project_id=?").get(pid3) as any;
-  if (bovBoqCount.c === 0) {
-    const insertBoq = db.prepare("INSERT INTO boq_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    const nowStr = new Date().toISOString();
-    const bovItems = [
-      ["1.0", "Risk assessment, method statement, health & safety (RAMS) provisions", "L/S", 1, 2500, 2500, "Preliminaries", "RAMS", "All Levels", "Building"],
-      ["2.0", "Submittal of coordinated working drawings prior to site works", "L/S", 1, 3200, 3200, "Preliminaries", "Shop Drawings", "All Levels", "Offices"],
-      ["3.0", "Scaffolding, staging and certified access platforms", "L/S", 1, 1800, 1800, "Preliminaries", "Safety", "All Levels", "Building"],
-      ["4.0", "Dismantling and carting away redundant electrical & data items to legal dump", "L/S", 1, 4500, 4500, "Preliminaries", "Demolition", "Level 1 & 2", "Refurbishment"],
-      ["1.01", "Supply & install electrical distribution panel UP0 per DB schedule", "No", 1, 6200, 6200, "Electrical", "Panels", "Level 1", "Server Room"],
-      ["2.01", "Schneider Isobar 4c RCBO & MCB retrofits in DB1, DB2, UP1, UP2", "No", 4, 1200, 4800, "Electrical", "Panels", "Level 1 & 2", "Risers"],
-      ["3.01", "Supply & install 63A 4P IP65 rotary isolators", "No", 2, 180, 360, "Electrical", "Containment", "Level 1 & 2", "Plant"],
-      ["5.01", "CU/XLPE/LSZH Cables (C04-C11 10sqmm, 6sqmm, 2.5sqmm)", "m", 29, 50, 1450, "Electrical", "Cables", "Level 1 & 2", "Risers"],
-      ["8.01", "Lighting points in PVC conduit with LSZH wiring (130 No)", "No", 130, 50, 6500, "Electrical", "Lighting", "Level 1 & 2", "Offices"],
-      ["8.03", "Emergency lighting points with 3-hr battery autonomy (26 No)", "No", 26, 65, 1690, "Electrical", "Emergency Lighting", "Level 1 & 2", "Escape Routes"],
-      ["8.09", "Twin socket outlets 13A white plastic finish (67 No)", "No", 67, 70, 4690, "Electrical", "Small Power", "Level 1 & 2", "Desks"],
-      ["8.13", "Switched fused connection units (FCUs) with pilot lamp (43 No)", "No", 43, 60, 2580, "Electrical", "Small Power", "Level 1 & 2", "Offices"],
-      ["10.0", "Floor-to-ceiling power poles for desk clusters (10 No)", "No", 10, 520, 5200, "Electrical", "Desk Servicing", "Level 1 & 2", "Open Plan"],
-      ["11.0", "GST 3pin connector couplers (1in3out & 1in2out) (27 No)", "No", 27, 75, 2025, "Electrical", "Desk Servicing", "Level 1 & 2", "Desks"],
-      ["14.0", "Desk combination units (4 sockets, USB-A/C quick charge) (82 No)", "No", 82, 120, 9840, "Electrical", "Desk Servicing", "Level 1 & 2", "Desks"],
-      ["15.01", "Type A 60x60cm Flat Panel LED Light Fittings (4000K, 3200lm) (77 No)", "No", 77, 150, 11550, "Electrical", "Light Fittings", "Level 1 & 2", "Offices"],
-      ["15.02", "Type B Round Recessed LED Downlights (150mm, 2100lm) (31 No)", "No", 31, 120, 3720, "Electrical", "Light Fittings", "Level 1 & 2", "Meeting Rooms"],
-      ["15.03", "Type C PushDim Dimmable Round LED Fittings (200mm, 2600lm) (6 No)", "No", 6, 180, 1080, "Electrical", "Light Fittings", "Level 1 & 2", "Boardrooms"],
-      ["15.05", "Type E1 Emergency Non-Maintained LED 3-hr IP65 (20 No)", "No", 20, 140, 2800, "Electrical", "Emergency Lighting", "Level 1 & 2", "Corridors"],
-      ["15.06", "Type E2 Emergency Exit Sign with Pictogram 3-hr IP65 (6 No)", "No", 6, 175, 1050, "Electrical", "Emergency Lighting", "Level 1 & 2", "Exits"],
-      ["4.01", "Cat 6 F/UTP foil-shielded structured cabling for WiFi APs", "m", 400, 2.5, 1000, "Data & ELV", "Structured Cabling", "Level 1 & 2", "Soffit"],
-      ["6.01", "Cat 6 U/UTP structured cabling for general desk & GOP points", "m", 3070, 2.2, 6754, "Data & ELV", "Structured Cabling", "Level 1 & 2", "Cable Trays"],
-      ["2.01", "Grid Outlet Position (GOP) boxes (4, 6, 8, 12, 16 way) (10 No)", "No", 10, 280, 2800, "Data & ELV", "GOP", "Level 1 & 2", "Underfloor"],
-      ["12.0", "TV Distribution System: 2x 6-Port HDMI DAs & Active Optical (AOC) HDMI for 11 TVs", "L/S", 1, 5400, 5400, "Data & ELV", "AV & TV", "Level 1 & 2", "Meeting & Wallboards"],
-      ["16.0", "Commercial 100V Sound System: amplifier, Bluetooth wall receiver & 6 ceiling speakers", "L/S", 1, 3100, 3100, "Data & ELV", "Sound", "Level 1 & 2", "Offices"],
-      ["1.01", "Monolithic 20kVA UPS system with internal 10-year VRLA batteries (10 min autonomy)", "No", 1, 16500, 16500, "UPS", "Central UPS", "Level 1", "Server Room"],
-      ["3.01", "5-Year UPS Maintenance Contract (4 quarterly visits/year per schedule)", "years", 5, 1200, 6000, "UPS", "Maintenance", "Level 1", "Server Room"],
-      ["18.0", "BS 7671 Testing & Commissioning and As-Fitted CAD/PDF drawings and O&M manuals", "L/S", 1, 4200, 4200, "Quality & Handover", "Commissioning", "All Levels", "Building"]
-    ];
-
-    for (const item of bovItems) {
-      insertBoq.run(
-        crypto.randomUUID(), pid3, item[0], item[1], item[2], item[3], item[4], item[5],
-        item[3], 0, 0, 0, item[6], item[7], "Main Building", item[8], item[9], null, nowStr
-      );
-    }
-  }
+  // Intentionally a no-op: no demo/sample projects, tasks, RFIs, etc.
+  // are created on startup. New installs start with zero projects;
+  // the bootstrap admin account creates real projects from the UI.
 }
 
 function ensureMemberships() {
@@ -1159,16 +671,6 @@ function ensureMemberships() {
       insert.run(s.id, p.id);
     }
   }
-
-  // Subcontractor memberships
-  const subHvac = db.prepare("SELECT id FROM users WHERE username='sub'").get() as any;
-  const subElec = db.prepare("SELECT id FROM users WHERE username='sub_elec'").get() as any;
-  const subPlumb = db.prepare("SELECT id FROM users WHERE username='sub_plumb'").get() as any;
-  const p1 = db.prepare("SELECT id FROM projects WHERE name LIKE '%St. Julian%'").get() as any;
-  const p2 = db.prepare("SELECT id FROM projects WHERE name LIKE '%Marina Bay%'").get() as any;
-  if (subHvac && p1) insert.run(subHvac.id, p1.id);
-  if (subElec && p1) insert.run(subElec.id, p1.id);
-  if (subPlumb && p2) insert.run(subPlumb.id, p2.id);
 }
 
 // Permissions & Scope Helpers
@@ -1532,9 +1034,9 @@ async function startServer() {
       res.status(404).json({ error: "User not found" });
       return;
     }
-    db.prepare("DELETE FROM users WHERE id=?").run(req.params.id);
     db.prepare("DELETE FROM project_memberships WHERE user_id=?").run(req.params.id);
     db.prepare("DELETE FROM sessions WHERE user_id=?").run(req.params.id);
+    db.prepare("DELETE FROM users WHERE id=?").run(req.params.id);
     writeAudit(req.user!.user_id, "users", req.params.id, "SYSTEM", "DELETE_USER", { username: user.username, name: user.name, role: user.role }, null);
     res.json({ ok: true });
   });
@@ -1709,11 +1211,19 @@ async function startServer() {
       return;
     }
     const id = req.params.id;
-    db.prepare("DELETE FROM projects WHERE id=?").run(id);
     db.prepare("DELETE FROM project_memberships WHERE project_id=?").run(id);
+    // A few TABLE_CONFIG keys (e.g. "drawings", "daily_logs") are URL
+    // aliases for a real table under a different name ("documents",
+    // "dailylogs") rather than real tables of their own - resolve those
+    // before deleting, and de-duplicate so each real table is only hit once.
+    const realTables = new Set<string>();
     for (const table of Object.keys(TABLE_CONFIG)) {
+      realTables.add(table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table);
+    }
+    for (const table of realTables) {
       db.prepare(`DELETE FROM ${table} WHERE project_id=?`).run(id);
     }
+    db.prepare("DELETE FROM projects WHERE id=?").run(id);
     writeAudit(req.user!.user_id, "projects", id, id, "delete");
     res.json({ ok: true });
   });
@@ -2562,30 +2072,22 @@ ${question}`;
             httpOptions: { headers: { "User-Agent": "aistudio-build" } }
           });
           const specKnowledge = `
-Project Context & Engineering Specifications:
-Tender: BOV St. Venera Level 1 and Level 2 Refurbishment - Electrical & ELV Installation (Job No. 2618, Enser Ltd Building Services Engineers).
-Key Clauses & Specifications:
-1. General Conditions:
-   - Clause 7: Contractor's All Risks Policy up to €500,000.
-   - Clause 9: Delay in Completion: Liquidated damages of 1% from Contract Price per day of delay up to a maximum of 15% of contract.
-   - Clause 11: Defects after Taking Over: 12 months warranty from full completion certificate.
-   - Clause 14.1: Interim Certificate of Payment: minimum €10,000 (excluding VAT) or postponed > 2 months. Engineer measurement certificate fee 1%.
-   - Clause 17: Practical Completion: Final acceptance requires all snags covered, all as-fitted drawings corrected and supplied with test certificates.
-2. Section 2.1 Electrical Installation:
-   - Standards: BS 7671 (IET Wiring Regs 18th Edition), IEC 60364, Enemalta LN225/2010. 400V +10%/-6% 50Hz, 4-wire TN-S system.
-   - Panels: UP0 (new), DB1, DB2, UP1, UP2 (retrofits using Schneider Isobar 4c compatible single module RCBOs / MCBs).
-   - Cables: CU/XLPE/LSZH (C04 to C11, 10sqmm, 6sqmm, 2.5sqmm) and single core H07Z-K / multicore H07ZZ-F.
-   - Cable Spacing & Ties (Clause 9.1.2): Up to 9mm dia: 600mm horizontal, 800mm vertical, 3mm tie. 10-15mm dia: 350mm horiz, 450mm vert, 5mm tie. 16-20mm dia: 450mm horiz, 550mm vert, 6mm tie. Above 20mm dia: 450mm horiz, 600mm vert, 9mm tie. Black nylon ties (-15°C to 60°C, >20kg breaking load).
-   - Conduit: UPVC BS4607-1/BS6099-1, saddles max 1.25m apart. Minimum 150mm separation from water pipes in chases. Min 35mm cover in concrete, 5mm in plaster.
-   - Desk Servicing: 10 floor-to-ceiling power poles, 20A GST 3-pin couplers (1in3out & 1in2out), combination units (4 switched sockets, 1 USB-A, 1 USB-C quick charge), 2-channel vertebrae cable management spine.
-   - Light Fitting Schedule: Type A (60x60cm LED panel 4000K 3200lm), Type B (150mm round 2100lm), Type C (200mm round 2600lm PushDim dimmable), Type D (100mm round 1200lm), Type E1 (emergency non-maintained 6W 3hr IP65 IK08), Type E2 (emergency exit sign with pictogram 3hr IP65), Type F (linear 4000lm), Type G (100mm round 600lm), Type H (bulkhead 3000K 1000lm IP65), Type I (step light 600lm).
-   - BS 7671 Sequence of Tests (Clause 15.1): Reg 612.2.1 continuity of protective bonding, 612.2.2 ring final circuits, 612.3 insulation resistance, 612.4.4 barrier/enclosure, 612.6 polarity, 612.7 earth electrode resistance, 612.8 disconnection, 612.9 earth fault loop impedance, 612.10 RCD tripping, 612.11 prospective fault current, 612.12 phase sequence, 612.13 functional, 612.14 voltage drop.
-3. Section 2.2 Extra Low Voltage & Data:
-   - Cat 6 U/UTP and Cat 6 F/UTP (shielded for WiFi APs), 23AWG LSZH, 110-style IDC blocks, GOP boxes (4, 6, 8, 12, 16 way).
-   - TV Distribution: 2 No. 6-Port HDMI distribution amplifiers with Active Optical HDMI (AOC) cables for 11 TVs (10 ceiling mounted, 4 wall mounted).
-   - Sound System: 100V line commercial amplifier (+20% speaker expansion), Bluetooth wall receiver with Push-to-Pair, 6 ceiling speakers (80Hz-18kHz, 120° dispersion, 100V line multi-taps).
-4. Section 2.3 UPS Installation:
-   - 20kVA standalone or 15kVA modular scalable to 25kVA, 10-year design life VRLA maintenance-free batteries for 10 min autonomy at 100% load, N+1 redundancy, 5-year maintenance contract with quarterly visits.
+General MEP Engineering Reference Standards (use these where relevant to the question; treat them as background knowledge, not as details of any specific contract unless the question or provided context states otherwise):
+1. Electrical Installation:
+   - Standards: BS 7671 (IET Wiring Regulations, 18th Edition), IEC 60364. Typical LV distribution: 400V +10%/-6% 50Hz, 4-wire TN-S system.
+   - Cable Spacing & Ties: Up to 9mm dia cable bundle: 600mm horizontal / 800mm vertical tie spacing, 3mm tie. 10-15mm dia: 350mm/450mm, 5mm tie. 16-20mm dia: 450mm/550mm, 6mm tie. Above 20mm dia: 450mm/600mm, 9mm tie. Use UV-stable ties rated for the installation environment.
+   - Containment: UPVC conduit to BS4607-1/BS6099-1, saddles max 1.25m apart. Minimum 150mm separation from water pipes where run in the same chase. Minimum 35mm cover in concrete, 5mm in plaster.
+   - BS 7671 Sequence of Tests (Part 6, Reg 643): continuity of protective conductors, continuity of ring final circuit conductors, insulation resistance, protection by barriers/enclosures, polarity, earth electrode resistance, verification of disconnection times, RCD operation, prospective fault current, phase sequence, functional testing, voltage drop.
+2. Extra Low Voltage & Data:
+   - Cat 6 U/UTP for general data; Cat 6 F/UTP (shielded) recommended near WiFi APs or sources of EMI. 23AWG conductors, LSZH sheath, terminated on 110-style IDC blocks.
+   - AV distribution over HDMI benefits from Active Optical Cable (AOC) runs beyond ~15m to avoid signal degradation.
+3. Mechanical / HVAC:
+   - Maintain minimum 150mm vertical separation between cable trays/ladders and insulated ductwork.
+   - Chilled water and condensate lines should generally run below electrical containment to avoid condensation risk onto live equipment.
+   - Ceiling void access: allow a minimum 200mm service envelope below VAV boxes, fire dampers and FCU filter access panels; minimum 450x450mm inspection hatch below motorised dampers.
+4. UPS Sizing:
+   - Standalone units are typically sized for the connected critical load plus headroom for future expansion; modular/scalable UPS topologies allow capacity to grow without a full replacement.
+   - VRLA battery strings are commonly specified for a 10-year design life; autonomy time and N+1 redundancy should be confirmed against the site's actual critical-load profile.
 `;
           const prompt = `You are a Senior Technical Director and Lead MEP Project Manager.
 Provide clear, expert, standards-compliant advice (ASHRAE, CIBSE, BS EN, NFPA, IEC, SMACNA).
