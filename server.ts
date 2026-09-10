@@ -5,6 +5,9 @@ import crypto from "crypto";
 import { DatabaseSync } from "node:sqlite";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
+import { MEP_REFERENCE_KNOWLEDGE, MEP_DEFECT_PATTERNS, suggestFixFallback } from "./mep_brain";
+import { PDFParse } from "pdf-parse";
+import * as mammoth from "mammoth";
 
 interface AuthenticatedUser {
   user_id: string;
@@ -36,6 +39,55 @@ function rowToDict(row: any): Record<string, any> | null {
 
 function normaliseHeader(val: any): string {
   return String(val || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Extracts plain text (or, for images, a data-URL suitable for a multimodal
+// Gemini call) from a document's stored attachment_data (a data: URL, as
+// produced by the frontend's FileReader.readAsDataURL). Used by the
+// document -> Planner ingestion pipeline.
+async function extractDocumentText(attachmentData: string, attachmentName: string): Promise<
+  | { kind: "text"; text: string }
+  | { kind: "image"; mimeType: string; base64: string }
+  | { kind: "unsupported"; reason: string }
+> {
+  const match = String(attachmentData || "").match(/^data:([^;]+);base64,(.+)$/s);
+  if (!match) {
+    return { kind: "unsupported", reason: "No readable file content on this document." };
+  }
+  const mimeType = match[1];
+  const base64 = match[2];
+  const buffer = Buffer.from(base64, "base64");
+  const nameLower = String(attachmentName || "").toLowerCase();
+
+  try {
+    if (mimeType.startsWith("image/")) {
+      return { kind: "image", mimeType, base64 };
+    }
+    if (mimeType === "application/pdf" || nameLower.endsWith(".pdf")) {
+      const parser = new PDFParse({ data: buffer });
+      const result = await parser.getText();
+      return { kind: "text", text: result.text || "" };
+    }
+    if (
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      nameLower.endsWith(".docx")
+    ) {
+      const result = await mammoth.extractRawText({ buffer });
+      return { kind: "text", text: result.value || "" };
+    }
+    if (mimeType.startsWith("text/") || nameLower.endsWith(".csv") || nameLower.endsWith(".txt") || nameLower.endsWith(".tsv")) {
+      return { kind: "text", text: buffer.toString("utf8") };
+    }
+    // Best-effort: try utf8 text; reject if it looks binary (many replacement/control chars).
+    const asText = buffer.toString("utf8");
+    const controlCharRatio = (asText.match(/[\x00-\x08\x0E-\x1F\uFFFD]/g) || []).length / Math.max(asText.length, 1);
+    if (controlCharRatio < 0.01 && asText.trim().length > 0) {
+      return { kind: "text", text: asText };
+    }
+    return { kind: "unsupported", reason: `Unsupported file type for analysis: ${mimeType || "unknown"}. Supported: PDF, DOCX, CSV, TXT, and images.` };
+  } catch (e: any) {
+    return { kind: "unsupported", reason: `Could not read file content: ${e?.message || "unknown error"}` };
+  }
 }
 
 function parseImportNumber(val: any): number {
@@ -128,7 +180,7 @@ const ROLE_DEFINITIONS = [
 const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boolean }> = {
   Admin: {
     view: [
-      "dashboard", "tasks", "rfis", "submittals", "punchlist",
+      "dashboard", "tasks", "planner", "rfis", "submittals", "punchlist",
       "costs", "budget", "dailylogs", "documents", "report", "projects", "gantt",
       "change_orders", "purchase_orders", "safety_incidents",
       "inspections", "meeting_minutes", "timesheets", "equipment",
@@ -136,7 +188,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "users", "site_today", "calendar", "attendance"
     ],
     edit: [
-      "tasks", "rfis", "submittals", "punchlist", "costs", "budget",
+      "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
       "dailylogs", "documents", "projects",
       "change_orders", "purchase_orders", "safety_incidents",
       "inspections", "meeting_minutes", "timesheets", "equipment",
@@ -147,7 +199,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
   },
   ProjectManager: {
     view: [
-      "dashboard", "tasks", "rfis", "submittals", "punchlist",
+      "dashboard", "tasks", "planner", "rfis", "submittals", "punchlist",
       "costs", "budget", "dailylogs", "documents", "report", "projects", "gantt",
       "change_orders", "purchase_orders", "safety_incidents",
       "inspections", "meeting_minutes", "timesheets", "equipment",
@@ -155,7 +207,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "site_today", "calendar", "attendance"
     ],
     edit: [
-      "tasks", "rfis", "submittals", "punchlist", "costs", "budget",
+      "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
       "dailylogs", "documents", "projects",
       "change_orders", "purchase_orders", "safety_incidents",
       "inspections", "meeting_minutes", "timesheets", "equipment",
@@ -166,7 +218,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
   },
   SiteEngineer: {
     view: [
-      "dashboard", "tasks", "rfis", "submittals", "punchlist",
+      "dashboard", "tasks", "planner", "rfis", "submittals", "punchlist",
       "costs", "budget", "dailylogs", "documents", "report", "gantt",
       "change_orders", "purchase_orders", "safety_incidents",
       "inspections", "meeting_minutes", "timesheets", "equipment",
@@ -174,7 +226,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "wbs", "site_today", "calendar", "attendance"
     ],
     edit: [
-      "tasks", "rfis", "submittals", "punchlist", "dailylogs", "documents",
+      "tasks", "planner", "rfis", "submittals", "punchlist", "dailylogs", "documents",
       "change_orders", "safety_incidents", "inspections",
       "meeting_minutes", "timesheets", "equipment", "material_requests",
       "commissioning", "attendance"
@@ -185,7 +237,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
     view: [
       "dashboard", "costs", "budget", "change_orders", "purchase_orders",
       "procurement", "material_requests", "dependencies", "risks",
-      "handover", "documents", "projects", "gantt", "wbs", "tasks", "submittals"
+      "handover", "documents", "projects", "gantt", "wbs", "tasks", "planner", "submittals"
     ],
     edit: [
       "costs", "budget", "change_orders", "purchase_orders",
@@ -197,7 +249,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
     view: [
       "dashboard", "punchlist", "inspections", "ncrs", "commissioning",
       "handover", "submittals", "rfis", "dailylogs", "documents",
-      "site_today", "equipment", "tasks"
+      "site_today", "equipment", "tasks", "planner"
     ],
     edit: [
       "punchlist", "inspections", "ncrs", "commissioning",
@@ -209,7 +261,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
     view: [
       "dashboard", "safety_incidents", "risks", "inspections",
       "dailylogs", "timesheets", "attendance", "site_today",
-      "documents", "equipment", "tasks"
+      "documents", "equipment", "tasks", "planner"
     ],
     edit: [
       "safety_incidents", "risks", "inspections", "dailylogs",
@@ -219,19 +271,19 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
   },
   Subcontractor: {
     view: [
-      "dashboard", "tasks", "submittals", "punchlist", "dailylogs", "documents",
+      "dashboard", "tasks", "planner", "submittals", "punchlist", "dailylogs", "documents",
       "safety_incidents", "timesheets", "equipment", "dependencies",
       "material_requests", "site_today", "calendar", "attendance"
     ],
     edit: [
-      "tasks", "submittals", "punchlist", "dailylogs", "documents", "safety_incidents",
+      "tasks", "planner", "submittals", "punchlist", "dailylogs", "documents", "safety_incidents",
       "timesheets", "dependencies", "material_requests", "attendance"
     ],
     delete: false,
   },
   Consultant: {
     view: [
-      "dashboard", "tasks", "gantt", "rfis", "submittals", "punchlist",
+      "dashboard", "tasks", "planner", "gantt", "rfis", "submittals", "punchlist",
       "costs", "change_orders", "inspections", "meeting_minutes", "ncrs",
       "commissioning", "handover", "documents", "site_today", "calendar"
     ],
@@ -370,6 +422,21 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
       "submitted", "approved", "due_date", "status", "notes"
     ],
     module: "handover",
+  },
+  plan_buckets: {
+    cols: ["id", "project_id", "source_document_id", "name", "order_index", "created_at"],
+    module: "planner",
+  },
+  plan_tasks: {
+    cols: [
+      "id", "project_id", "bucket_id", "title", "description", "trade", "priority", "status",
+      "due_date", "assigned_to", "source_document_id", "source_excerpt", "order_index", "created_at"
+    ],
+    module: "planner",
+  },
+  plan_task_checklist: {
+    cols: ["id", "project_id", "task_id", "label", "is_checked", "order_index"],
+    module: "planner",
   },
 };
 
@@ -596,6 +663,20 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS record_owners (
       module TEXT NOT NULL, record_id TEXT NOT NULL, user_id TEXT NOT NULL,
       PRIMARY KEY (module, record_id)
+    );
+    CREATE TABLE IF NOT EXISTS plan_buckets (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, source_document_id TEXT,
+      name TEXT, order_index INTEGER, created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS plan_tasks (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, bucket_id TEXT NOT NULL,
+      title TEXT, description TEXT, trade TEXT, priority TEXT, status TEXT,
+      due_date TEXT, assigned_to TEXT, source_document_id TEXT, source_excerpt TEXT,
+      order_index INTEGER, created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS plan_task_checklist (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, task_id TEXT NOT NULL, label TEXT,
+      is_checked INTEGER DEFAULT 0, order_index INTEGER
     );
   `);
 
@@ -2071,27 +2152,9 @@ ${question}`;
             apiKey,
             httpOptions: { headers: { "User-Agent": "aistudio-build" } }
           });
-          const specKnowledge = `
-General MEP Engineering Reference Standards (use these where relevant to the question; treat them as background knowledge, not as details of any specific contract unless the question or provided context states otherwise):
-1. Electrical Installation:
-   - Standards: BS 7671 (IET Wiring Regulations, 18th Edition), IEC 60364. Typical LV distribution: 400V +10%/-6% 50Hz, 4-wire TN-S system.
-   - Cable Spacing & Ties: Up to 9mm dia cable bundle: 600mm horizontal / 800mm vertical tie spacing, 3mm tie. 10-15mm dia: 350mm/450mm, 5mm tie. 16-20mm dia: 450mm/550mm, 6mm tie. Above 20mm dia: 450mm/600mm, 9mm tie. Use UV-stable ties rated for the installation environment.
-   - Containment: UPVC conduit to BS4607-1/BS6099-1, saddles max 1.25m apart. Minimum 150mm separation from water pipes where run in the same chase. Minimum 35mm cover in concrete, 5mm in plaster.
-   - BS 7671 Sequence of Tests (Part 6, Reg 643): continuity of protective conductors, continuity of ring final circuit conductors, insulation resistance, protection by barriers/enclosures, polarity, earth electrode resistance, verification of disconnection times, RCD operation, prospective fault current, phase sequence, functional testing, voltage drop.
-2. Extra Low Voltage & Data:
-   - Cat 6 U/UTP for general data; Cat 6 F/UTP (shielded) recommended near WiFi APs or sources of EMI. 23AWG conductors, LSZH sheath, terminated on 110-style IDC blocks.
-   - AV distribution over HDMI benefits from Active Optical Cable (AOC) runs beyond ~15m to avoid signal degradation.
-3. Mechanical / HVAC:
-   - Maintain minimum 150mm vertical separation between cable trays/ladders and insulated ductwork.
-   - Chilled water and condensate lines should generally run below electrical containment to avoid condensation risk onto live equipment.
-   - Ceiling void access: allow a minimum 200mm service envelope below VAV boxes, fire dampers and FCU filter access panels; minimum 450x450mm inspection hatch below motorised dampers.
-4. UPS Sizing:
-   - Standalone units are typically sized for the connected critical load plus headroom for future expansion; modular/scalable UPS topologies allow capacity to grow without a full replacement.
-   - VRLA battery strings are commonly specified for a 10-year design life; autonomy time and N+1 redundancy should be confirmed against the site's actual critical-load profile.
-`;
           const prompt = `You are a Senior Technical Director and Lead MEP Project Manager.
 Provide clear, expert, standards-compliant advice (ASHRAE, CIBSE, BS EN, NFPA, IEC, SMACNA).
-${specKnowledge}
+${MEP_REFERENCE_KNOWLEDGE}
 Context: ${JSON.stringify(context || {})}
 Question: ${query}`;
 
@@ -2118,6 +2181,259 @@ Question: ${query}`;
       }
 
       res.json({ reply, answer: reply, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Suggest a likely cause + fix for a punch list item, NCR, or any free-text
+  // defect description, grounded in the shared MEP defect-pattern reference.
+  // Falls back to deterministic keyword matching if no GEMINI_API_KEY is set.
+  app.post("/api/ai/suggest-fix", authRequired, async (req: Request, res: Response) => {
+    try {
+      const { description, trade, discipline } = req.body || {};
+      if (!description || !String(description).trim()) {
+        res.status(400).json({ error: "description is required" });
+        return;
+      }
+      const tradeHint = trade || discipline || "";
+      const apiKey = process.env.GEMINI_API_KEY;
+      let suggestion = "";
+      let source: "ai" | "reference" = "reference";
+
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey,
+            httpOptions: { headers: { "User-Agent": "aistudio-build" } }
+          });
+          const patternList = MEP_DEFECT_PATTERNS.map(p => `- [${p.discipline}] ${p.issue}: cause = ${p.likelyCause} | fix = ${p.recommendedFix} | ref = ${p.reference}`).join("\n");
+          const prompt = `You are a Senior MEP QA/QC Engineer diagnosing a defect reported on a construction site.
+${MEP_REFERENCE_KNOWLEDGE}
+
+Known defect reference patterns (use these as a guide when the description matches; otherwise reason from first principles using the standards above):
+${patternList}
+
+Defect description: "${description}"
+${tradeHint ? `Trade/discipline hint: ${tradeHint}` : ""}
+
+Respond in this exact format, concise, no preamble:
+**Likely cause:** <one or two sentences>
+**Recommended fix:** <clear, actionable steps>
+**Reference:** <standard or clause, if applicable>`;
+
+          try {
+            const result = await ai.models.generateContent({
+              model: "gemini-3.8-flash",
+              contents: prompt,
+            });
+            suggestion = result.text || "";
+            source = "ai";
+          } catch {
+            const result = await ai.models.generateContent({
+              model: "gemini-3.6-flash",
+              contents: prompt,
+            });
+            suggestion = result.text || "";
+            source = "ai";
+          }
+        } catch (e: any) {
+          console.warn("Suggest-fix AI call failed, using reference fallback:", e?.message);
+        }
+      }
+
+      if (!suggestion || !suggestion.trim()) {
+        const fallback = suggestFixFallback(description, tradeHint);
+        suggestion = fallback.message;
+        source = "reference";
+      }
+
+      res.json({ suggestion, source, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Analyze an uploaded document (PDF, DOCX, CSV/TXT, or image) and generate
+  // a Planner-style board (Buckets -> Tasks -> Checklist) from its content,
+  // grounded in the shared MEP reference knowledge. Falls back to a
+  // deterministic paragraph/row split when no GEMINI_API_KEY is configured
+  // or the AI call fails/returns unusable output. Every generated task keeps
+  // a source_excerpt pointing back to the text it came from.
+  app.post("/api/documents/:id/analyze", authRequired, async (req: Request, res: Response) => {
+    try {
+      const docId = req.params.id;
+      const doc = db.prepare("SELECT * FROM documents WHERE id=?").get(docId) as any;
+      if (!doc) {
+        res.status(404).json({ error: "Document not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, doc.project_id)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      if (!canEdit(req.user!, "planner")) {
+        res.status(403).json({ error: "No edit access to planner" });
+        return;
+      }
+      if (!doc.attachment_data) {
+        res.status(400).json({ error: "This document has no file content to analyze." });
+        return;
+      }
+
+      const extracted = await extractDocumentText(doc.attachment_data, doc.attachment_name || doc.name);
+      if (extracted.kind === "unsupported") {
+        res.status(400).json({ error: extracted.reason });
+        return;
+      }
+
+      type PlannerTask = { title: string; description?: string; trade?: string; priority?: string; due_date?: string | null; source_excerpt?: string; checklist?: string[] };
+      type PlannerStructure = { buckets: { name: string; tasks: PlannerTask[] }[] };
+      let structure: PlannerStructure | null = null;
+      let usedAi = false;
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
+          const instruction = `You are analyzing a construction/MEP document to build a Microsoft-Planner-style task board.
+${MEP_REFERENCE_KNOWLEDGE}
+
+Break the document content into:
+- Buckets: group by discipline/trade or logical document section (e.g. "Electrical", "HVAC", "General Conditions"). Keep bucket names short.
+- Tasks: one per discrete, actionable scope item, deliverable, or requirement. Do not invent items the text does not support.
+  Each task: title (short), description (1-2 sentences), trade, priority (one of: Urgent, Important, Low), due_date (ONLY if a specific date or duration is explicitly stated in the text - otherwise null, never invent one), source_excerpt (the exact phrase/sentence this task was derived from), checklist (0-4 short sub-step strings, only if the text implies discrete steps or compliance checks - otherwise an empty array).
+
+Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this shape:
+{"buckets":[{"name":"string","tasks":[{"title":"string","description":"string","trade":"string","priority":"Urgent|Important|Low","due_date":null,"source_excerpt":"string","checklist":["string"]}]}]}`;
+
+          let contentsPayload: any;
+          if (extracted.kind === "image") {
+            contentsPayload = {
+              parts: [
+                { inlineData: { mimeType: extracted.mimeType, data: extracted.base64 } },
+                { text: instruction },
+              ],
+            };
+          } else {
+            const truncated = extracted.text.slice(0, 15000);
+            contentsPayload = `${instruction}\n\nDocument content:\n"""\n${truncated}\n"""`;
+          }
+
+          let raw = "";
+          try {
+            const result = await ai.models.generateContent({ model: "gemini-3.8-flash", contents: contentsPayload });
+            raw = result.text || "";
+          } catch {
+            const result = await ai.models.generateContent({ model: "gemini-3.6-flash", contents: contentsPayload });
+            raw = result.text || "";
+          }
+
+          const cleaned = raw.trim().replace(/^```(json)?/i, "").replace(/```\s*$/i, "").trim();
+          const parsed = JSON.parse(cleaned);
+          if (parsed && Array.isArray(parsed.buckets) && parsed.buckets.length > 0) {
+            structure = parsed;
+            usedAi = true;
+          }
+        } catch (e: any) {
+          console.warn("Document analyze AI structuring failed, using fallback:", e?.message);
+        }
+      }
+
+      if (!structure) {
+        let items: string[] = [];
+        const nameLower = String(doc.attachment_name || doc.name || "").toLowerCase();
+        if (extracted.kind === "text") {
+          if (nameLower.endsWith(".csv") || nameLower.endsWith(".tsv")) {
+            items = extracted.text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0).slice(1, 41);
+          } else {
+            // pdf-parse inserts "-- N of M --" page-separator artifacts; strip those before splitting.
+            const cleanedText = extracted.text.replace(/^--\s*\d+\s*of\s*\d+\s*--$/gm, "");
+            let paragraphs = cleanedText.split(/\r?\n\s*\r?\n/).map(p => p.replace(/\s+/g, " ").trim()).filter(p => p.length > 10);
+            // Some PDFs extract with a single newline per line rather than blank-line-separated
+            // paragraphs, which would otherwise produce one giant blob. If paragraph splitting
+            // gives too few usable items, fall back to a per-line split instead.
+            if (paragraphs.length <= 1) {
+              paragraphs = cleanedText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 10);
+            }
+            items = paragraphs.slice(0, 40);
+          }
+        }
+        if (items.length === 0) {
+          items = ["Review this document manually - no distinct items could be automatically extracted."];
+        }
+        structure = {
+          buckets: [{
+            name: "Imported Items",
+            tasks: items.map(t => ({ title: t.slice(0, 120), description: t, trade: "", priority: "Important", due_date: null, source_excerpt: t.slice(0, 300), checklist: [] })),
+          }],
+        };
+      }
+
+      const now = new Date().toISOString();
+      const createdBuckets: any[] = [];
+      let bucketOrder = 0;
+      for (const bucket of structure.buckets.slice(0, 20)) {
+        const bucketId = crypto.randomUUID();
+        db.prepare("INSERT INTO plan_buckets (id, project_id, source_document_id, name, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(bucketId, doc.project_id, docId, String(bucket.name || "Imported Items").slice(0, 100), bucketOrder++, now);
+
+        const createdTasks: any[] = [];
+        let taskOrder = 0;
+        for (const task of (bucket.tasks || []).slice(0, 60)) {
+          const taskId = crypto.randomUUID();
+          db.prepare(`INSERT INTO plan_tasks (id, project_id, bucket_id, title, description, trade, priority, status, due_date, assigned_to, source_document_id, source_excerpt, order_index, created_at)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(taskId, doc.project_id, bucketId, String(task.title || "Untitled task").slice(0, 200), task.description || "", task.trade || "", task.priority || "Important", "Not Started", task.due_date || null, null, docId, task.source_excerpt || "", taskOrder++, now);
+
+          const createdChecklist: any[] = [];
+          let clOrder = 0;
+          for (const label of (task.checklist || []).slice(0, 10)) {
+            const clId = crypto.randomUUID();
+            db.prepare("INSERT INTO plan_task_checklist (id, project_id, task_id, label, is_checked, order_index) VALUES (?, ?, ?, ?, 0, ?)")
+              .run(clId, doc.project_id, taskId, String(label).slice(0, 200), clOrder++);
+            createdChecklist.push({ id: clId, label, is_checked: 0 });
+          }
+          createdTasks.push({ id: taskId, title: task.title, description: task.description, trade: task.trade, priority: task.priority, status: "Not Started", due_date: task.due_date || null, source_excerpt: task.source_excerpt, checklist: createdChecklist });
+        }
+        createdBuckets.push({ id: bucketId, name: bucket.name, tasks: createdTasks });
+      }
+
+      writeAudit(req.user!.user_id, "planner", docId, doc.project_id, "analyze_document", null, { bucket_count: createdBuckets.length });
+
+      res.json({ document_id: docId, source: usedAi ? "ai" : "reference", buckets: createdBuckets });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Read the full Planner board for a project in one call: buckets with
+  // nested tasks with nested checklist, in display order.
+  app.get("/api/projects/:id/planner", authRequired, (req: Request, res: Response) => {
+    try {
+      const projectId = req.params.id;
+      if (!hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      if (!canView(req.user!, "planner")) {
+        res.status(403).json({ error: "No view access to planner" });
+        return;
+      }
+      const buckets = db.prepare("SELECT * FROM plan_buckets WHERE project_id=? ORDER BY order_index ASC").all(projectId) as any[];
+      const tasks = db.prepare("SELECT * FROM plan_tasks WHERE project_id=? ORDER BY order_index ASC").all(projectId) as any[];
+      const checklistRows = db.prepare("SELECT * FROM plan_task_checklist WHERE project_id=? ORDER BY order_index ASC").all(projectId) as any[];
+
+      const checklistByTask: Record<string, any[]> = {};
+      for (const c of checklistRows) {
+        (checklistByTask[c.task_id] ||= []).push(c);
+      }
+      const tasksByBucket: Record<string, any[]> = {};
+      for (const t of tasks) {
+        (tasksByBucket[t.bucket_id] ||= []).push({ ...t, checklist: checklistByTask[t.id] || [] });
+      }
+      const result = buckets.map(b => ({ ...b, tasks: tasksByBucket[b.id] || [] }));
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

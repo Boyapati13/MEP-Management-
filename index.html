@@ -448,6 +448,7 @@
       <div class="nav-item" data-view="risks">Risk Register</div>
       <div class="nav-item" data-view="boq_items">BOQ / Tender Import</div>
       <div class="nav-item" data-view="documents">Documents</div>
+      <div class="nav-item" data-view="planner">Planner</div>
     </div>
     <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Site & Quality <span>⌄</span></button>
       <div class="nav-item" data-view="dailylogs">Daily Logs</div>
@@ -801,6 +802,7 @@ async function render(){
     punchlist: renderPunchList,
     dailylogs: ()=>renderCrud('dailylogs','Log',[['date','Date'],['trade','Trade'],['weather','Weather'],['crew','Crew'],['notes','Notes']]),
     documents: renderDocuments,
+    planner: renderPlanner,
     costs: ()=>renderCrud('costs','Cost Entry',[['category','Category'],['description','Description'],['planned','Planned'],['actual','Actual'],['date_logged','Logged']]),
     change_orders: ()=>renderCrud('change_orders','Change Order',[['number','No.'],['title','Title'],['trade','Trade'],['cost_impact','Cost Impact'],['schedule_impact_days','Days'],['status','Status']]),
     purchase_orders: ()=>renderCrud('purchase_orders','Purchase Order',[['po_number','PO No.'],['vendor','Vendor'],['trade','Trade'],['amount','Amount'],['expected_delivery','Expected'],['status','Status']]),
@@ -4351,6 +4353,106 @@ async function renderCrud(table, label, cols){
   });
 }
 
+async function renderPlanner(){
+  const buckets = await apiFetch(`/api/projects/${currentProjectId}/planner`);
+  const canEditPlanner = ME.permissions.edit.includes('planner');
+  const priorityColor = { Urgent: '#ef4444', Important: '#f59e0b', Low: '#6fd3c1' };
+
+  document.getElementById('viewContent').innerHTML = `
+  <div class="panel">
+    <h3>
+      <span>Planner</span>
+      <span style="font-size:11px;color:var(--muted);font-weight:400;">Generated from documents you've analyzed — organized into buckets, tasks and checklists.</span>
+    </h3>
+    ${buckets.length ? `
+      <div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;">
+        ${buckets.map(b => `
+          <div style="min-width:280px;max-width:280px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px;flex-shrink:0;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;justify-content:space-between;">
+              <span>${escHtml(b.name)}</span>
+              <span style="color:var(--muted);font-weight:400;">${b.tasks.length}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              ${b.tasks.map(t => {
+                const checked = (t.checklist||[]).filter(c=>c.is_checked).length;
+                const total = (t.checklist||[]).length;
+                return `
+                <div class="planner-card" data-task="${t.id}" style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;">
+                  <div style="font-size:12px;font-weight:600;margin-bottom:4px;">${escHtml(t.title)}</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    ${t.trade?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.06);">${escHtml(t.trade)}</span>`:''}
+                    ${t.priority?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;color:${priorityColor[t.priority]||'var(--muted)'};border:1px solid ${priorityColor[t.priority]||'var(--border)'};">${escHtml(t.priority)}</span>`:''}
+                    ${t.due_date?`<span style="font-size:10px;color:var(--muted);">📅 ${escHtml(t.due_date)}</span>`:''}
+                    ${total>0?`<span style="font-size:10px;color:var(--muted);">☑ ${checked}/${total}</span>`:''}
+                  </div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:4px;">${escHtml(t.status||'Not Started')}</div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : `<div class="empty">No planner items yet. Open <b>Documents</b>, then click <b>🧠 Analyze</b> on any uploaded file to build a board from it.</div>`}
+  </div>`;
+
+  document.querySelectorAll('[data-task]').forEach(card => {
+    card.onclick = () => {
+      const taskId = card.dataset.task;
+      let task = null;
+      for (const b of buckets) { const f = b.tasks.find(x=>x.id===taskId); if (f) task = f; }
+      if (task) openPlannerTaskModal(task, buckets, canEditPlanner);
+    };
+  });
+}
+
+function openPlannerTaskModal(task, buckets, canEditPlanner){
+  const html = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:11px;color:var(--muted);">Title</label>
+        <div style="font-weight:700;">${escHtml(task.title)}</div>
+      </div>
+      ${task.description?`<div><label style="font-size:11px;color:var(--muted);">Description</label><div style="font-size:13px;">${escHtml(task.description)}</div></div>`:''}
+      ${task.source_excerpt?`<div style="font-size:11px;color:var(--muted);font-style:italic;border-left:2px solid var(--border);padding-left:8px;">Source: "${escHtml(task.source_excerpt)}"</div>`:''}
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--muted);">Status</label>
+          <select id="f_plan_status" ${canEditPlanner?'':'disabled'}>
+            ${['Not Started','In Progress','Completed'].map(s=>`<option value="${s}" ${task.status===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--muted);">Move to bucket</label>
+          <select id="f_plan_bucket" ${canEditPlanner?'':'disabled'}>
+            ${buckets.map(b=>`<option value="${b.id}" ${task.bucket_id===b.id?'selected':''}>${escHtml(b.name)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      ${(task.checklist||[]).length ? `
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Checklist</label>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+            ${task.checklist.map(c=>`
+              <label style="display:flex;gap:6px;align-items:center;font-size:12px;">
+                <input type="checkbox" data-checklist="${c.id}" ${c.is_checked?'checked':''} ${canEditPlanner?'':'disabled'}>
+                <span>${escHtml(c.label)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  openModal('Task Details', html, canEditPlanner ? async () => {
+    const status = document.getElementById('f_plan_status').value;
+    const bucket_id = document.getElementById('f_plan_bucket').value;
+    await apiFetch(`/api/plan_tasks/${task.id}`, {method:'PUT', body: JSON.stringify({status, bucket_id})});
+    for (const el of document.querySelectorAll('[data-checklist]')) {
+      await apiFetch(`/api/plan_task_checklist/${el.dataset.checklist}`, {method:'PUT', body: JSON.stringify({is_checked: el.checked ? 1 : 0})});
+    }
+  } : async () => {});
+}
+
 async function renderDocuments(){
   const rows = await apiFetch(`/api/documents?project_id=${currentProjectId}`);
   const canEdit = ME.permissions.edit.includes('documents');
@@ -4383,6 +4485,9 @@ async function renderDocuments(){
               ${isDrawingOrVisual && r.attachment_data ? `
                 <button class="btn ghost small" data-doc-markup="${r.id}" style="padding:2px 6px;font-size:10px;" title="Open in Drawing & PDF Markup Studio">✏️ Draw</button>
                 <button class="btn ghost small" data-doc-ai="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#0284c7;color:#38bdf8;" title="Ask AI about this drawing">🤖 AI</button>
+              ` : ''}
+              ${r.attachment_data && canEdit ? `
+                <button class="btn ghost small" data-doc-analyze="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#6fd3c1;color:#6fd3c1;" title="Read this document and build a Planner board from it">🧠 Analyze</button>
               ` : ''}
             </div>
           </td>
@@ -4421,6 +4526,25 @@ async function renderDocuments(){
           zoneSub: doc.category,
           openItems: []
         });
+      }
+    };
+  });
+  document.querySelectorAll('[data-doc-analyze]').forEach(btn=>{
+    btn.onclick = async () => {
+      const docId = btn.dataset.docAnalyze;
+      const originalText = btn.textContent;
+      btn.textContent = '⏳ Reading...';
+      btn.disabled = true;
+      try {
+        const result = await apiFetch(`/api/documents/${docId}/analyze`, {method:'POST'});
+        const taskCount = result.buckets.reduce((n,b)=>n+b.tasks.length,0);
+        alert(`Done — created ${result.buckets.length} bucket(s) and ${taskCount} task(s) on the Planner board` + (result.source==='reference' ? ' (reference fallback — no AI key configured).' : ' using AI.'));
+        document.querySelector('[data-view="planner"]').click();
+      } catch(err) {
+        alert('Could not analyze this document: ' + err.message);
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
     };
   });
@@ -4594,7 +4718,14 @@ const FIELD_TEMPLATES = {
     <div><label>Date Submitted</label><input type="date" id="f_date_submitted" value="${r?escHtml(r.date_submitted):''}"></div>
     <div><label>Due Date</label><input type="date" id="f_due_date" value="${r?escHtml(r.due_date):''}"></div>
     <div><label>Status</label><select id="f_status">${['Under Review','Approved','Rejected','Resubmit'].map(s=>`<option ${r&&r.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div>`,
-  punchlist: (r) => `<div class="form-grid"><div class="full"><label>Item</label><input id="f_item" value="${r?escHtml(r.item):''}"></div>
+  punchlist: (r) => `<div class="form-grid"><div class="full">
+      <label>Item</label>
+      <div style="display:flex;gap:6px;">
+        <input id="f_item" value="${r?escHtml(r.item):''}" style="flex:1;">
+        <button type="button" class="btn ghost small" id="suggestFixBtn" title="Get an AI-assisted likely cause and fix for this defect">🧠 Suggest Fix</button>
+      </div>
+      <div id="suggestFixResult" style="display:none;font-size:12px;background:rgba(111,211,193,0.08);border:1px solid rgba(111,211,193,0.3);border-radius:6px;padding:8px;margin-top:6px;white-space:pre-wrap;"></div>
+    </div>
     <div><label>Trade</label><select id="f_trade">${TRADES.map(t=>`<option ${r&&r.trade===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div><label>Location</label><input id="f_location" value="${r?escHtml(r.location):''}"></div>
     <div><label>Priority</label><select id="f_priority">${['Critical','High','Medium','Low'].map(p=>`<option ${r&&r.priority===p?'selected':''}>${p}</option>`).join('')}</select></div>
@@ -4698,6 +4829,30 @@ const FIELD_IDS = {
   ...GENERIC_FIELD_IDS
 };
 
+function wireSuggestFixButton(){
+  const btn = document.getElementById('suggestFixBtn');
+  if(!btn) return;
+  btn.onclick = async () => {
+    const description = document.getElementById('f_item').value.trim();
+    const trade = document.getElementById('f_trade') ? document.getElementById('f_trade').value : '';
+    if(!description){ alert('Enter a description of the defect first.'); return; }
+    const resultBox = document.getElementById('suggestFixResult');
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Thinking...';
+    btn.disabled = true;
+    try {
+      const res = await apiFetch('/api/ai/suggest-fix', {method:'POST', body: JSON.stringify({description, trade})});
+      resultBox.style.display = 'block';
+      resultBox.textContent = res.suggestion + (res.source==='reference' ? '\n\n(from the built-in MEP reference — configure GEMINI_API_KEY for AI-assisted analysis of issues outside this reference set)' : '');
+    } catch(err) {
+      alert('Could not get a suggestion: ' + err.message);
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  };
+}
+
 function wireFormPhotoControls(){
   const snapBtn = document.getElementById('formSnapPhotoBtn');
   const uploadBtn = document.getElementById('formUploadPhotoBtn');
@@ -4760,6 +4915,7 @@ function openAddModal(table, label, cols, initialData = null){
     await apiFetch(`/api/${table}`, {method:'POST', body: JSON.stringify(payload)});
   });
   if(table==='punchlist') wireFormPhotoControls();
+  if(table==='punchlist') wireSuggestFixButton();
 }
 
 function openEditModal(table, label, record){
@@ -4768,6 +4924,7 @@ function openEditModal(table, label, record){
     await apiFetch(`/api/${table}/${record.id}`, {method:'PUT', body: JSON.stringify(payload)});
   });
   if(table==='punchlist') wireFormPhotoControls();
+  if(table==='punchlist') wireSuggestFixButton();
 }
 
 document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') { stopActiveCameraStream(); e.target.classList.remove('show'); } });

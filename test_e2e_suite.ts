@@ -327,6 +327,39 @@ async function runTests() {
     const auditRes = await req({ path: `/api/audit?project_id=${projectId}`, token: tokens['Admin'] });
     assert(auditRes.status === 200 && Array.isArray(auditRes.body) && auditRes.body.length > 0, 'Audit trail records project actions');
 
+    console.log('\nSection 11: MEP Brain - Fix Suggestions & Document-to-Planner');
+    const fixRes = await req({
+      path: '/api/ai/suggest-fix', method: 'POST', token: tokens['QAQC'],
+      body: { description: 'Cable tray is sagging badly between supports', trade: 'Electrical' }
+    });
+    assert(fixRes.status === 200 && !!fixRes.body.suggestion && fixRes.body.suggestion.length > 10, 'Suggest-fix returns a substantive suggestion for a known defect pattern');
+
+    const fixBadReq = await req({ path: '/api/ai/suggest-fix', method: 'POST', token: tokens['QAQC'], body: {} });
+    assert(fixBadReq.status === 400, 'Suggest-fix rejects a request with no description (400)');
+
+    // A minimal plain-text "document" - exercises the fallback (non-AI) extraction
+    // and structuring path deterministically, without depending on GEMINI_API_KEY.
+    const csvContent = 'Item,Description\n1,Install fire dampers to all riser penetrations\n2,Test smoke detectors in plant rooms\n';
+    const csvDataUrl = 'data:text/csv;base64,' + Buffer.from(csvContent).toString('base64');
+    const testDoc = await req({
+      path: '/api/documents', method: 'POST', token: tokens['SiteEngineer'],
+      body: { project_id: projectId, name: `test_items_${RUN_ID}.csv`, category: 'Checklist', attachment_name: `test_items_${RUN_ID}.csv`, attachment_data: csvDataUrl }
+    });
+    assert(testDoc.status === 201 && !!testDoc.body.id, 'Create a document with real CSV file content');
+    const testDocId = testDoc.body?.id;
+
+    const analyzeRes = await req({ path: `/api/documents/${testDocId}/analyze`, method: 'POST', token: tokens['SiteEngineer'] });
+    assert(analyzeRes.status === 200 && Array.isArray(analyzeRes.body.buckets) && analyzeRes.body.buckets.length > 0, 'Analyze endpoint reads the document and returns at least one bucket');
+    const totalTasks = (analyzeRes.body.buckets || []).reduce((n: number, b: any) => n + (b.tasks || []).length, 0);
+    assert(totalTasks >= 2, 'Analyze endpoint produced a task per CSV row');
+
+    const plannerRes = await req({ path: `/api/projects/${projectId}/planner`, token: tokens['ProjectManager'] });
+    assert(plannerRes.status === 200 && Array.isArray(plannerRes.body) && plannerRes.body.some((b: any) => b.tasks && b.tasks.length > 0),
+      'Planner board read returns the bucket/task structure just created');
+
+    const analyzeForbidden = await req({ path: `/api/documents/${testDocId}/analyze`, method: 'POST', token: tokens['Subcontractor'] });
+    assert(analyzeForbidden.status === 403, 'Subcontractor (no access to this project) forbidden from analyzing its documents (403)');
+
   } finally {
     await cleanup(adminToken);
   }
