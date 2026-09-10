@@ -229,11 +229,11 @@ npm run dev
 npx tsx test_e2e_suite.ts
 ```
 
-The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 58 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, and the document-to-Planner pipeline — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
+The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 64 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, the document-to-Planner pipeline, and notifications — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
 
 It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, so it's suitable to wire into CI against a server started in a previous step.
 
-**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 58 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
+**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 64 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
 
 ⚠️ Prior to this update, the app **crashed on every fresh-database boot** and had no way to log in without hardcoded demo credentials embedded directly in the login page. Both are now fixed — see [Known Limitations](#known-limitations--hardening-notes) for the full list of what changed.
 
@@ -247,7 +247,7 @@ It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, s
 ├── api-config.js            # Runtime API base URL override (window.MEP_API_URL)
 ├── src/                    # Unused Vite + React scaffold (App.tsx renders an empty div)
 ├── public/                 # Static assets
-├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (58 assertions)
+├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (64 assertions)
 ├── vite.config.ts
 ├── tsconfig.json
 └── .env.example
@@ -259,10 +259,10 @@ These are worth addressing before any production/internet-facing deployment. Ear
 
 **Still open:**
 - **No MFA/SSO.** Authentication is username + password only.
-- **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, but the Planner UI doesn't yet expose a way to pick an assignee from the task detail modal - it can only be set via a direct API call.
+- **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, and now triggers an in-app notification when set - but the Planner UI still doesn't expose a way to pick an assignee from the task detail modal; it can only be set via a direct API call.
 - **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
-- **No email/notification layer** - nothing alerts a user when something needs their attention; they have to open the app and look.
-- **No true drag-and-drop** on the Planner board - moving a task between buckets or changing its status is done via dropdowns in a detail modal, not by dragging the card.
+- **Notifications are in-app only** - no email/push/SMS layer. The `createNotification()` helper is a natural place to add an email send (e.g. via `nodemailer`) behind an `SMTP_*` env var check, following the same "works without it, better with it" pattern as `GEMINI_API_KEY` - not built yet.
+- **Notification bell dropdown uses fixed positioning** near the top-left rather than anchoring precisely under the bell icon - functional, not pixel-perfect.
 - **Single SQLite file** for the whole database, and file attachments are stored as base64 inside it rather than in separate object storage. Fine for one team's internal use; won't hold up as a scaled, multi-tenant product.
 - `vite` is listed in both `dependencies` and `devDependencies` in `package.json` — harmless (it resolves to one copy either way) but redundant; worth picking one.
 - No CI configuration is currently checked in; `test_e2e_suite.ts` is a good candidate to run on every push.
@@ -274,6 +274,10 @@ These are worth addressing before any production/internet-facing deployment. Ear
 - Login now rate-limits: 5 failed attempts for a username triggers a 60-second lockout (`429`), as basic brute-force protection.
 - The bootstrap `admin` account is flagged `must_change_password`; the login response and `GET /api/me` surface it, and the frontend now blocks access behind a mandatory password-change screen until `PUT /api/me/password` succeeds. There's also a new self-service password change endpoint for any user (`PUT /api/me/password`, requires the current password) - previously password changes could only be done by an Admin resetting someone else's password.
 - The UI's ~75 decorative pictograph emoji (used as ad-hoc icons throughout nav, buttons, and role badges) were removed in favor of plain text labels and a small set of neutral typographic symbols (✕ ✓ ✎ → ☰), for a more professional look. A proper SVG icon set would be the next step beyond this pass.
+
+**Added this round (feature parity with generic PM tools):**
+- **Real drag-and-drop** on the Planner board - dragging a task card to a different bucket column calls `PUT /api/plan_tasks/:id` to move it, instead of only being possible through a dropdown in the detail modal.
+- **In-app notifications.** New `notifications` table plus a generic hook in the shared `PUT /api/:table/:id` handler: whenever a record's status changes to something "decision-worthy" (Approved, Rejected, Answered, Completed, Closed, Rectified, Certified), the record's creator (looked up via the existing `record_owners` table - no new per-table columns needed) gets a notification, unless they made the change themselves. Also fires when a record's `assigned_to` changes. Surfaced via a bell icon with an unread-count badge, polling every 45 seconds, plus `GET /api/notifications`, `PUT /api/notifications/:id/read`, and `PUT /api/notifications/read-all`.
 
 ## License
 

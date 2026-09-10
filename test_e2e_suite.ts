@@ -360,6 +360,31 @@ async function runTests() {
     const analyzeForbidden = await req({ path: `/api/documents/${testDocId}/analyze`, method: 'POST', token: tokens['Subcontractor'] });
     assert(analyzeForbidden.status === 403, 'Subcontractor (no access to this project) forbidden from analyzing its documents (403)');
 
+    console.log('\nSection 12: Notifications');
+    const rfiForNotif = await req({
+      path: '/api/rfis', method: 'POST', token: tokens['SiteEngineer'],
+      body: { project_id: projectId, number: `RFI-NOTIF-${RUN_ID}`, subject: 'Notification test RFI', status: 'Open' }
+    });
+    assert(rfiForNotif.status === 201, 'Create an RFI to test notification-on-answer');
+    const notifRfiId = rfiForNotif.body?.id;
+
+    await req({ path: `/api/rfis/${notifRfiId}`, method: 'PUT', token: tokens['Consultant'], body: { status: 'Answered' } });
+
+    const engineerNotifs = await req({ path: '/api/notifications', token: tokens['SiteEngineer'] });
+    assert(engineerNotifs.status === 200 && Array.isArray(engineerNotifs.body), 'Fetch notifications for the RFI creator');
+    const matchingNotif = (engineerNotifs.body || []).find((n: any) => n.record_id === notifRfiId);
+    assert(!!matchingNotif && matchingNotif.is_read === 0, 'RFI creator received an unread notification when their RFI was answered');
+
+    const markRead = await req({ path: `/api/notifications/${matchingNotif.id}/read`, method: 'PUT', token: tokens['SiteEngineer'] });
+    assert(markRead.status === 200, 'Mark a notification as read');
+    const afterRead = await req({ path: '/api/notifications', token: tokens['SiteEngineer'] });
+    const reReadNotif = (afterRead.body || []).find((n: any) => n.id === matchingNotif.id);
+    assert(!!reReadNotif && reReadNotif.is_read === 1, 'Notification is now marked read');
+
+    const consultantNotifs = await req({ path: '/api/notifications', token: tokens['Consultant'] });
+    assert(consultantNotifs.status === 200 && !(consultantNotifs.body || []).some((n: any) => n.record_id === notifRfiId),
+      'The person who made the change does not get notified of their own action');
+
   } finally {
     await cleanup(adminToken);
   }

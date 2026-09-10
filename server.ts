@@ -708,6 +708,10 @@ function initDb() {
       module TEXT NOT NULL, record_id TEXT NOT NULL, user_id TEXT NOT NULL,
       PRIMARY KEY (module, record_id)
     );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, project_id TEXT, module TEXT,
+      record_id TEXT, title TEXT, message TEXT, is_read INTEGER DEFAULT 0, created_at TEXT
+    );
     CREATE TABLE IF NOT EXISTS plan_buckets (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL, source_document_id TEXT,
       name TEXT, order_index INTEGER, created_at TEXT
@@ -861,6 +865,30 @@ function writeAudit(userId: string, module: string, recordId: string, projectId:
   }
 }
 
+// Creates an in-app notification for a single user. Used by the generic PUT
+// handler when a record's status changes to something the record's creator
+// (looked up via record_owners) would want to know about, and by anything
+// that assigns a person to a task. Never throws - a notification failing to
+// write should never break the request that triggered it.
+function createNotification(userId: string, projectId: string | null, module: string, recordId: string, title: string, message: string) {
+  if (!userId) return;
+  try {
+    db.prepare(`
+      INSERT INTO notifications (id, user_id, project_id, module, record_id, title, message, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `).run(crypto.randomUUID(), userId, projectId, module, recordId, title, message, new Date().toISOString());
+  } catch (err) {
+    console.error("Notification write error:", err);
+  }
+}
+
+// Statuses across modules that are worth notifying the record's creator
+// about - deliberately just the "a decision was made" set, not every status,
+// so this doesn't turn into noise on every minor edit.
+const NOTIFY_WORTHY_STATUSES = new Set([
+  "Approved", "Rejected", "Answered", "Completed", "Closed", "Rectified", "Certified",
+]);
+
 // Authentication Middleware
 function authRequired(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization || "";
@@ -996,6 +1024,27 @@ async function startServer() {
     }
     db.prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?").run(hashPassword(new_password), user.id);
     writeAudit(req.user!.user_id, "users", user.id, "SYSTEM", "CHANGE_OWN_PASSWORD");
+    res.json({ ok: true });
+  });
+
+  // In-app notifications for the current user, most recent first.
+  app.get("/api/notifications", authRequired, (req, res) => {
+    const rows = db.prepare("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100").all(req.user!.user_id);
+    res.json(rows);
+  });
+
+  app.put("/api/notifications/:id/read", authRequired, (req, res) => {
+    const existing = db.prepare("SELECT * FROM notifications WHERE id=?").get(req.params.id) as any;
+    if (!existing || existing.user_id !== req.user!.user_id) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    db.prepare("UPDATE notifications SET is_read=1 WHERE id=?").run(req.params.id);
+    res.json({ ok: true });
+  });
+
+  app.put("/api/notifications/read-all", authRequired, (req, res) => {
+    db.prepare("UPDATE notifications SET is_read=1 WHERE user_id=? AND is_read=0").run(req.user!.user_id);
     res.json({ ok: true });
   });
 
@@ -1201,6 +1250,7 @@ async function startServer() {
     }
     db.prepare("DELETE FROM project_memberships WHERE user_id=?").run(req.params.id);
     db.prepare("DELETE FROM sessions WHERE user_id=?").run(req.params.id);
+    db.prepare("DELETE FROM notifications WHERE user_id=?").run(req.params.id);
     db.prepare("DELETE FROM users WHERE id=?").run(req.params.id);
     writeAudit(req.user!.user_id, "users", req.params.id, "SYSTEM", "DELETE_USER", { username: user.username, name: user.name, role: user.role }, null);
     res.json({ ok: true });
@@ -1377,6 +1427,7 @@ async function startServer() {
     }
     const id = req.params.id;
     db.prepare("DELETE FROM project_memberships WHERE project_id=?").run(id);
+    db.prepare("DELETE FROM notifications WHERE project_id=?").run(id);
     // A few TABLE_CONFIG keys (e.g. "drawings", "daily_logs") are URL
     // aliases for a real table under a different name ("documents",
     // "dailylogs") rather than real tables of their own - resolve those
@@ -2679,6 +2730,25 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         db.prepare("INSERT INTO task_status_history VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
           crypto.randomUUID(), existing.project_id, req.params.id, req.user!.name,
           existing.status, data.status, new Date().toISOString(), data.status_comment || null
+        );
+        if (NOTIFY_WORTHY_STATUSES.has(data.status)) {
+          const owner = db.prepare("SELECT user_id FROM record_owners WHERE module=? AND record_id=?").get(module, req.params.id) as any;
+          if (owner && owner.user_id !== req.user!.user_id) {
+            const label = existing.title || existing.number || existing.item || existing.name || module;
+            createNotification(
+              owner.user_id, existing.project_id, module, req.params.id,
+              `${label} is now ${data.status}`,
+              `${req.user!.name} changed the status of "${label}" to ${data.status}.`
+            );
+          }
+        }
+      }
+      if ("assigned_to" in data && data.assigned_to && data.assigned_to !== existing.assigned_to) {
+        const label = existing.title || existing.number || existing.item || module;
+        createNotification(
+          data.assigned_to, existing.project_id, module, req.params.id,
+          `You were assigned: ${label}`,
+          `${req.user!.name} assigned you to "${label}".`
         );
       }
       writeAudit(req.user!.user_id, module, req.params.id, existing.project_id, "update", existing, updated);

@@ -423,7 +423,14 @@
 <div id="app">
   <div id="sidebar">
     <div class="sidebar-brand"><h1>MEP Project Manager<span>Full Stack Edition</span></h1><button id="sidebarToggle" class="sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button></div>
-    <div class="user-chip"><b id="chipName">-</b><span id="chipRole">-</span></div>
+    <div class="user-chip">
+      <b id="chipName">-</b><span id="chipRole">-</span>
+      <button id="notifBellBtn" title="Notifications" style="position:relative;background:none;border:none;color:var(--text);cursor:pointer;font-size:16px;margin-left:auto;padding:4px;">
+        <span>Alerts</span>
+        <span id="notifBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:var(--danger,#ef4444);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;font-weight:700;"></span>
+      </button>
+    </div>
+    <div id="notifDropdown" style="display:none;position:fixed;top:64px;left:16px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-width:320px;min-width:280px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
     <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Overview <span>⌃</span></button>
       <div class="nav-item active" data-view="dashboard">Dashboard</div>
       <div class="nav-item" data-view="site_today">Today on Site</div>
@@ -730,6 +737,7 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
     if(ME.must_change_password){
       showForcedPasswordChange();
     }
+    startNotificationPolling();
   }catch(err){
     document.getElementById('loginError').style.display = 'block';
   }
@@ -739,6 +747,7 @@ document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e
 function doLogout(){
   localStorage.removeItem('mep_token');
   TOKEN=''; ME=null;
+  if(notifPollInterval){ clearInterval(notifPollInterval); notifPollInterval = null; }
   document.getElementById('app').classList.remove('show');
   document.getElementById('loginScreen').classList.remove('hide');
 }
@@ -4405,7 +4414,7 @@ async function renderPlanner(){
   <div class="panel">
     <h3>
       <span>Planner</span>
-      <span style="font-size:11px;color:var(--muted);font-weight:400;">Generated from documents you've analyzed — organized into buckets, tasks and checklists.</span>
+      <span style="font-size:11px;color:var(--muted);font-weight:400;">Generated from documents you've analyzed — organized into buckets, tasks and checklists.${canEditPlanner && buckets.length ? ' Drag a card to move it between buckets.' : ''}</span>
     </h3>
     ${buckets.length ? `
       <div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;">
@@ -4415,17 +4424,17 @@ async function renderPlanner(){
               <span>${escHtml(b.name)}</span>
               <span style="color:var(--muted);font-weight:400;">${b.tasks.length}</span>
             </div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="planner-dropzone" data-bucket="${b.id}" style="display:flex;flex-direction:column;gap:8px;min-height:40px;border-radius:8px;transition:background 0.15s;">
               ${b.tasks.map(t => {
                 const checked = (t.checklist||[]).filter(c=>c.is_checked).length;
                 const total = (t.checklist||[]).length;
                 return `
-                <div class="planner-card" data-task="${t.id}" style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;">
+                <div class="planner-card" data-task="${t.id}" ${canEditPlanner?'draggable="true"':''} style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;${canEditPlanner?'cursor:grab;':''}">
                   <div style="font-size:12px;font-weight:600;margin-bottom:4px;">${escHtml(t.title)}</div>
                   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                     ${t.trade?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.06);">${escHtml(t.trade)}</span>`:''}
                     ${t.priority?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;color:${priorityColor[t.priority]||'var(--muted)'};border:1px solid ${priorityColor[t.priority]||'var(--border)'};">${escHtml(t.priority)}</span>`:''}
-                    ${t.due_date?`<span style="font-size:10px;color:var(--muted);">📅 ${escHtml(t.due_date)}</span>`:''}
+                    ${t.due_date?`<span style="font-size:10px;color:var(--muted);">${escHtml(t.due_date)}</span>`:''}
                     ${total>0?`<span style="font-size:10px;color:var(--muted);">☑ ${checked}/${total}</span>`:''}
                   </div>
                   <div style="font-size:10px;color:var(--muted);margin-top:4px;">${escHtml(t.status||'Not Started')}</div>
@@ -4438,6 +4447,10 @@ async function renderPlanner(){
     ` : `<div class="empty">No planner items yet. Open <b>Documents</b>, then click <b>Analyze</b> on any uploaded file to build a board from it.</div>`}
   </div>`;
 
+  if(canEditPlanner){
+    wirePlannerDragAndDrop(buckets);
+  }
+
   document.querySelectorAll('[data-task]').forEach(card => {
     card.onclick = () => {
       const taskId = card.dataset.task;
@@ -4445,6 +4458,121 @@ async function renderPlanner(){
       for (const b of buckets) { const f = b.tasks.find(x=>x.id===taskId); if (f) task = f; }
       if (task) openPlannerTaskModal(task, buckets, canEditPlanner);
     };
+  });
+}
+
+let notifPollInterval = null;
+
+function startNotificationPolling(){
+  refreshNotifications();
+  if(notifPollInterval) clearInterval(notifPollInterval);
+  notifPollInterval = setInterval(refreshNotifications, 45000);
+  document.getElementById('notifBellBtn').onclick = (e) => {
+    e.stopPropagation();
+    const dd = document.getElementById('notifDropdown');
+    if(dd.style.display === 'block'){
+      dd.style.display = 'none';
+    }else{
+      refreshNotifications();
+      dd.style.display = 'block';
+    }
+  };
+  document.addEventListener('click', (e) => {
+    const dd = document.getElementById('notifDropdown');
+    if(dd.style.display === 'block' && !dd.contains(e.target) && e.target.id !== 'notifBellBtn'){
+      dd.style.display = 'none';
+    }
+  });
+}
+
+async function refreshNotifications(){
+  try{
+    const notifs = await apiFetch('/api/notifications');
+    const unread = notifs.filter(n=>!n.is_read).length;
+    const badge = document.getElementById('notifBadge');
+    if(unread > 0){
+      badge.textContent = unread > 9 ? '9+' : String(unread);
+      badge.style.display = 'inline-block';
+    }else{
+      badge.style.display = 'none';
+    }
+    renderNotifDropdown(notifs);
+  }catch(err){ /* silent - notifications are a convenience, not critical */ }
+}
+
+function renderNotifDropdown(notifs){
+  const dd = document.getElementById('notifDropdown');
+  if(notifs.length === 0){
+    dd.innerHTML = `<div style="padding:16px;font-size:12px;color:var(--muted);text-align:center;">No notifications yet.</div>`;
+    return;
+  }
+  dd.innerHTML = `
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:12px;font-weight:700;">Notifications</span>
+      <span id="notifMarkAllBtn" style="font-size:11px;color:var(--primary);cursor:pointer;">Mark all read</span>
+    </div>
+    ${notifs.map(n => `
+      <div class="notif-item" data-notif="${n.id}" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;background:${n.is_read?'transparent':'rgba(111,211,193,0.06)'};">
+        <div style="font-size:12px;font-weight:600;">${escHtml(n.title)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${escHtml(n.message)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">${new Date(n.created_at).toLocaleString()}</div>
+      </div>
+    `).join('')}
+  `;
+  document.getElementById('notifMarkAllBtn').onclick = async (e) => {
+    e.stopPropagation();
+    await apiFetch('/api/notifications/read-all', {method:'PUT'});
+    refreshNotifications();
+  };
+  document.querySelectorAll('.notif-item').forEach(el => {
+    el.onclick = async () => {
+      await apiFetch(`/api/notifications/${el.dataset.notif}/read`, {method:'PUT'});
+      refreshNotifications();
+    };
+  });
+}
+
+function wirePlannerDragAndDrop(buckets){
+  let draggedTaskId = null;
+
+  document.querySelectorAll('.planner-card[draggable="true"]').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+      draggedTaskId = card.dataset.task;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', draggedTaskId);
+      card.style.opacity = '0.4';
+    });
+    card.addEventListener('dragend', () => {
+      card.style.opacity = '1';
+      draggedTaskId = null;
+    });
+  });
+
+  document.querySelectorAll('.planner-dropzone').forEach(zone => {
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      zone.style.background = 'rgba(111,211,193,0.08)';
+    });
+    zone.addEventListener('dragleave', () => {
+      zone.style.background = '';
+    });
+    zone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      zone.style.background = '';
+      const taskId = e.dataTransfer.getData('text/plain') || draggedTaskId;
+      const newBucketId = zone.dataset.bucket;
+      if(!taskId || !newBucketId) return;
+      let currentBucket = null;
+      for(const b of buckets){ if(b.tasks.some(t=>t.id===taskId)) currentBucket = b.id; }
+      if(currentBucket === newBucketId) return;
+      try{
+        await apiFetch(`/api/plan_tasks/${taskId}`, {method:'PUT', body: JSON.stringify({bucket_id: newBucketId})});
+        render();
+      }catch(err){
+        alert('Could not move task: ' + err.message);
+      }
+    });
   });
 }
 
@@ -4984,6 +5112,10 @@ document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.ta
       document.getElementById('chipRole').textContent = ME.role;
       buildNav();
       await loadProjectsAndRender();
+      if(ME.must_change_password){
+        showForcedPasswordChange();
+      }
+      startNotificationPolling();
     }catch(e){ doLogout(); }
   }
 })();
