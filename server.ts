@@ -97,18 +97,62 @@ function parseImportNumber(val: any): number {
 }
 
 function hashPassword(password: string): string {
-  return crypto.scryptSync(password, "mep_salt_secure", 32).toString("hex");
+  // Per-user random salt, stored alongside the hash as "salt:hash". Verifying
+  // against the legacy fixed-salt format (below) is preserved for any
+  // accounts created before this fix, so existing users aren't locked out.
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 32).toString("hex");
+  return `${salt}:${hash}`;
 }
 
 function verifyPassword(password: string, storedHash: string): boolean {
   if (storedHash === password) return true;
   try {
-    const hashed = hashPassword(password);
-    return hashed === storedHash;
+    if (storedHash.includes(":")) {
+      const [salt, hash] = storedHash.split(":");
+      const check = crypto.scryptSync(password, salt, 32).toString("hex");
+      return check === hash;
+    }
+    // Legacy fixed-salt format, from before per-user salts were added.
+    const legacyHash = crypto.scryptSync(password, "mep_salt_secure", 32).toString("hex");
+    return legacyHash === storedHash;
   } catch {
     return false;
   }
 }
+
+// In-memory login rate limiting: after 5 failed attempts for a username,
+// require a 60-second cooldown before further attempts are accepted. Resets
+// on server restart - acceptable for this app's scale; a production
+// multi-instance deployment would move this to a shared store.
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 60 * 1000;
+const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+function checkLoginRateLimit(username: string): { allowed: boolean; retryAfterSeconds?: number } {
+  const entry = loginAttempts.get(username);
+  if (!entry) return { allowed: true };
+  if (entry.lockedUntil > Date.now()) {
+    return { allowed: false, retryAfterSeconds: Math.ceil((entry.lockedUntil - Date.now()) / 1000) };
+  }
+  return { allowed: true };
+}
+
+function recordLoginFailure(username: string) {
+  const entry = loginAttempts.get(username) || { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+    entry.count = 0;
+  }
+  loginAttempts.set(username, entry);
+}
+
+function clearLoginFailures(username: string) {
+  loginAttempts.delete(username);
+}
+
 
 const ROLE_DEFINITIONS = [
   {
@@ -518,7 +562,7 @@ function initDb() {
       password_hash TEXT, role TEXT
     );
     CREATE TABLE IF NOT EXISTS sessions (
-      token TEXT PRIMARY KEY, user_id TEXT, name TEXT, role TEXT, created_at TEXT
+      token TEXT PRIMARY KEY, user_id TEXT, name TEXT, role TEXT, created_at TEXT, expires_at TEXT
     );
     CREATE TABLE IF NOT EXISTS project_memberships (
       user_id TEXT NOT NULL, project_id TEXT NOT NULL,
@@ -704,6 +748,7 @@ function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'Active';"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN last_login TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0;"); } catch {}
 
   seedUsers();
   seedData();
@@ -712,14 +757,15 @@ function initDb() {
 
 function seedUsers() {
   // Single bootstrap administrator account only. No demo company, no
-  // placeholder staff/subcontractor accounts. Change this password on
-  // first login (there is no forced-reset flow yet - see README).
+  // placeholder staff/subcontractor accounts. must_change_password forces
+  // a password change on first login (enforced client-side and by
+  // PUT /api/me/password requiring the old password).
   const find = db.prepare("SELECT id FROM users WHERE username=?");
   const existing = find.get("admin") as any;
   if (!existing) {
     const insert = db.prepare(`
-      INSERT INTO users (id, username, name, password_hash, role, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, username, name, password_hash, role, status, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
     `);
     insert.run(crypto.randomUUID(), "admin", "Administrator", hashPassword("ChangeMe123!"), "Admin", "Active", new Date().toISOString());
   }
@@ -828,6 +874,11 @@ function authRequired(req: Request, res: Response, next: NextFunction): void {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    res.status(401).json({ error: "Session expired. Please log in again." });
+    return;
+  }
   req.user = {
     user_id: session.user_id,
     name: session.name,
@@ -861,8 +912,14 @@ async function startServer() {
       res.status(400).json({ error: "Username and password required" });
       return;
     }
+    const rateLimit = checkLoginRateLimit(username);
+    if (!rateLimit.allowed) {
+      res.status(429).json({ error: `Too many failed attempts. Try again in ${rateLimit.retryAfterSeconds}s.`, retry_after_seconds: rateLimit.retryAfterSeconds });
+      return;
+    }
     const user = db.prepare("SELECT * FROM users WHERE username=?").get(username) as any;
     if (!user || !verifyPassword(password, user.password_hash)) {
+      recordLoginFailure(username);
       res.status(401).json({ error: "Invalid username or password" });
       return;
     }
@@ -870,13 +927,15 @@ async function startServer() {
       res.status(403).json({ error: "Your account is marked Inactive by the administrator. Contact high-level administration." });
       return;
     }
+    clearLoginFailures(username);
     const token = crypto.randomUUID();
     const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + SESSION_LIFETIME_MS).toISOString();
     try {
       db.prepare("UPDATE users SET last_login=? WHERE id=?").run(now, user.id);
     } catch {}
-    db.prepare("INSERT INTO sessions VALUES (?, ?, ?, ?, ?)").run(
-      token, user.id, user.name, user.role, now
+    db.prepare("INSERT INTO sessions (token, user_id, name, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+      token, user.id, user.name, user.role, now, expiresAt
     );
     res.json({
       token,
@@ -887,6 +946,7 @@ async function startServer() {
       company: user.company || "",
       trade: user.trade || "",
       status: user.status || "Active",
+      must_change_password: !!user.must_change_password,
       permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,
     });
   });
@@ -902,7 +962,7 @@ async function startServer() {
 
   app.get("/api/me", authRequired, (req, res) => {
     const user = req.user!;
-    const uRow = db.prepare("SELECT email, company, trade, status FROM users WHERE id=?").get(user.user_id) as any;
+    const uRow = db.prepare("SELECT email, company, trade, status, must_change_password FROM users WHERE id=?").get(user.user_id) as any;
     res.json({
       user_id: user.user_id,
       name: user.name,
@@ -911,8 +971,32 @@ async function startServer() {
       company: uRow?.company || "",
       trade: uRow?.trade || "",
       status: uRow?.status || "Active",
+      must_change_password: !!uRow?.must_change_password,
       permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,
     });
+  });
+
+  // Self-service password change - requires the current password, unlike
+  // the admin-only /api/users/:id/reset-password below. Also clears
+  // must_change_password so the forced-change prompt doesn't reappear.
+  app.put("/api/me/password", authRequired, (req, res) => {
+    const { current_password, new_password } = req.body || {};
+    if (!current_password || !new_password) {
+      res.status(400).json({ error: "current_password and new_password are required" });
+      return;
+    }
+    if (String(new_password).length < 8) {
+      res.status(400).json({ error: "New password must be at least 8 characters." });
+      return;
+    }
+    const user = db.prepare("SELECT * FROM users WHERE id=?").get(req.user!.user_id) as any;
+    if (!user || !verifyPassword(current_password, user.password_hash)) {
+      res.status(401).json({ error: "Current password is incorrect." });
+      return;
+    }
+    db.prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?").run(hashPassword(new_password), user.id);
+    writeAudit(req.user!.user_id, "users", user.id, "SYSTEM", "CHANGE_OWN_PASSWORD");
+    res.json({ ok: true });
   });
 
   // Roles Definition & Matrix Endpoint

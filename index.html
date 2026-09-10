@@ -484,15 +484,15 @@
       <span>Punch Clock</span>
     </button>
     <button class="mobile-nav-btn" data-mobile-view="site_today" id="mNavToday">
-      <span class="m-icon">📋</span>
+      <span class="m-icon"></span>
       <span>Site Today</span>
     </button>
     <button class="mobile-nav-btn" data-mobile-view="punchlist" id="mNavPunch">
-      <span class="m-icon">📍</span>
+      <span class="m-icon"></span>
       <span>Floor Plan</span>
     </button>
     <button class="mobile-nav-btn" data-mobile-view="documents" id="mNavDocs">
-      <span class="m-icon">📁</span>
+      <span class="m-icon"></span>
       <span>Drawings</span>
     </button>
     <button class="mobile-nav-btn" id="mNavMenu">
@@ -510,32 +510,32 @@
     <div class="drawing-studio-title">
       <button class="btn ghost small" id="closeStudioBtn" style="padding:4px 9px;">✕ Close</button>
       <h3>
-        <span>📐 Drawing Markup & PDF Studio</span>
+        <span>Drawing Markup & PDF Studio</span>
         <span class="zone-tag" id="studioDrawingLabel">Level 2 - Fitout & Services</span>
       </h3>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <input type="file" id="studioFileInput" accept=".pdf,image/*" style="display:none;">
-      <button class="btn accent small" id="studioSamplePdfBtn" title="Open sample multi-page MEP engineering blueprint PDF to test hand drawing">📑 Sample MEP PDF</button>
-      <button class="btn ghost small" id="studioUploadPdfBtn" title="Load custom PDF or Blueprint">📂 Load PDF / Image</button>
-      <button class="btn accent small" id="studioAskAiBtn" title="Ask AI questions about this drawing">🤖 Ask Worker AI</button>
-      <button class="btn ghost small" id="studioSaveDocBtn" title="Save marked-up drawing to project documents">💾 Save to Documents</button>
+      <button class="btn accent small" id="studioSamplePdfBtn" title="Open sample multi-page MEP engineering blueprint PDF to test hand drawing">Sample MEP PDF</button>
+      <button class="btn ghost small" id="studioUploadPdfBtn" title="Load custom PDF or Blueprint">Load PDF / Image</button>
+      <button class="btn accent small" id="studioAskAiBtn" title="Ask AI questions about this drawing">Ask Worker AI</button>
+      <button class="btn ghost small" id="studioSaveDocBtn" title="Save marked-up drawing to project documents">Save to Documents</button>
       <button class="btn ghost small" id="studioDownloadBtn" title="Download marked-up image">⬇️ Download PNG</button>
-      <button class="btn ghost small" id="studioCreateSnagBtn" style="border-color:#f5a623;color:#f5a623;" title="Create Punch Snag from marked drawing">📋 Create Snag from Markup</button>
+      <button class="btn ghost small" id="studioCreateSnagBtn" style="border-color:#f5a623;color:#f5a623;" title="Create Punch Snag from marked drawing">Create Snag from Markup</button>
     </div>
   </div>
 
   <div class="markup-toolbar-wrap">
     <div class="markup-tool-group">
-      <button class="markup-btn hand-primary active" data-tool="hand_pen" id="toolHandPen" title="Freehand Hand Draw (Draw freely with your hand, finger or stylus on PDF)">🖐️ Hand Draw</button>
-      <button class="markup-btn" data-tool="highlighter" id="toolHighlighter" title="Hand Highlighter (Semi-transparent for duct/pipe lines)">🖍️ Highlight</button>
-      <button class="markup-btn" data-tool="cloud" id="toolCloud" title="Revision Cloud (Draw defect clouds with hand on drawing)">☁️ Cloud</button>
-      <button class="markup-btn" data-tool="eraser" id="toolEraser" title="Hand Eraser (Rub with finger or hand to erase strokes)">🧹 Eraser</button>
-      <button class="markup-btn" data-tool="arrow" id="toolArrow" title="Pointer Arrow (Point to clash or defect)">➡️ Arrow</button>
-      <button class="markup-btn" data-tool="rect" id="toolRect" title="Rectangle / Clash Bounding Box">🔲 Box</button>
-      <button class="markup-btn" data-tool="text" id="toolText" title="Text Note (Click on drawing to place note)">🏷️ Text</button>
-      <button class="markup-btn" data-tool="pin" id="toolPin" title="Punch Defect Pin Stamp">📌 Snag Pin</button>
-      <button class="markup-btn" data-tool="pan" id="toolPan" title="Pan / Move (Drag with hand to move blueprint without drawing)">✋ Pan</button>
+      <button class="markup-btn hand-primary active" data-tool="hand_pen" id="toolHandPen" title="Freehand Hand Draw (Draw freely with your hand, finger or stylus on PDF)">Hand Draw</button>
+      <button class="markup-btn" data-tool="highlighter" id="toolHighlighter" title="Hand Highlighter (Semi-transparent for duct/pipe lines)">Highlight</button>
+      <button class="markup-btn" data-tool="cloud" id="toolCloud" title="Revision Cloud (Draw defect clouds with hand on drawing)">Cloud</button>
+      <button class="markup-btn" data-tool="eraser" id="toolEraser" title="Hand Eraser (Rub with finger or hand to erase strokes)">Eraser</button>
+      <button class="markup-btn" data-tool="arrow" id="toolArrow" title="Pointer Arrow (Point to clash or defect)">Arrow</button>
+      <button class="markup-btn" data-tool="rect" id="toolRect" title="Rectangle / Clash Bounding Box">Box</button>
+      <button class="markup-btn" data-tool="text" id="toolText" title="Text Note (Click on drawing to place note)">Text</button>
+      <button class="markup-btn" data-tool="pin" id="toolPin" title="Punch Defect Pin Stamp">Snag Pin</button>
+      <button class="markup-btn" data-tool="pan" id="toolPan" title="Pan / Move (Drag with hand to move blueprint without drawing)">Pan</button>
     </div>
 
     <div class="markup-tool-group" style="gap:5px;">
@@ -574,13 +574,13 @@
 
     <div class="markup-tool-group">
       <button class="markup-btn" id="studioUndoBtn" title="Undo Last Stroke">↩️ Undo</button>
-      <button class="markup-btn" id="studioClearBtn" title="Clear All Markups">🗑️ Clear</button>
+      <button class="markup-btn" id="studioClearBtn" title="Clear All Markups">Clear</button>
     </div>
   </div>
 
   <div class="drawing-stage-viewport" id="studioStage">
     <div class="hand-mode-toast" id="studioHandModeToast">
-      <span>🖐️</span>
+      <span></span>
       <span id="studioHandToastText">Hand Draw Mode: Draw freely with finger or stylus directly on the PDF</span>
     </div>
     <div class="canvas-stack-wrapper" id="studioCanvasWrapper">
@@ -593,7 +593,7 @@
 <!-- Worker AI Assistant Drawer -->
 <div class="worker-ai-drawer hide" id="workerAiDrawer">
   <div class="ai-drawer-header">
-    <h3>🤖 Worker Drawing AI Assistant</h3>
+    <h3>Worker Drawing AI Assistant</h3>
     <button class="btn ghost small" id="closeAiDrawerBtn" style="padding:4px 8px;">✕ Close</button>
   </div>
   <div class="ai-drawer-body" id="aiDrawerBody">
@@ -603,26 +603,26 @@
     </div>
 
     <div>
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">💡 Common Worker Questions (1-Tap):</div>
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Common Worker Questions (1-Tap):</div>
       <div class="ai-quick-questions">
-        <button class="ai-quick-btn" data-q="What are the duct, pipe, and cable tray clearance heights and separation distances in this area?">📏 What are the duct & cable tray clearance heights?</button>
-        <button class="ai-quick-btn" data-q="What specific safety, PPE, and lockout/tagout (LOTO) procedures must be followed before working here?">🔒 Safety & LOTO procedures for panels / equipment</button>
-        <button class="ai-quick-btn" data-q="What open punch snags or defects are located in this zone, and what remediation is required to pass inspection?">⚠️ Open punch snags & defects in this zone</button>
-        <button class="ai-quick-btn" data-q="Where are the main isolation valves, risers, and drainage points located on this floor?">💧 Water shutoff valves & pipe risers layout</button>
-        <button class="ai-quick-btn" data-q="What are the pre-commissioning and testing checklist requirements for HVAC and power distribution here?">❄️ Commissioning & testing steps for this area</button>
+        <button class="ai-quick-btn" data-q="What are the duct, pipe, and cable tray clearance heights and separation distances in this area?">What are the duct & cable tray clearance heights?</button>
+        <button class="ai-quick-btn" data-q="What specific safety, PPE, and lockout/tagout (LOTO) procedures must be followed before working here?">Safety & LOTO procedures for panels / equipment</button>
+        <button class="ai-quick-btn" data-q="What open punch snags or defects are located in this zone, and what remediation is required to pass inspection?">Open punch snags & defects in this zone</button>
+        <button class="ai-quick-btn" data-q="Where are the main isolation valves, risers, and drainage points located on this floor?">Water shutoff valves & pipe risers layout</button>
+        <button class="ai-quick-btn" data-q="What are the pre-commissioning and testing checklist requirements for HVAC and power distribution here?">Commissioning & testing steps for this area</button>
       </div>
     </div>
 
     <div id="aiResponseContainer" style="display:none;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <span style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.05em;">AI Superintendent Answer:</span>
-        <button class="btn ghost small" id="aiCopyAnswerBtn" style="padding:2px 7px;font-size:10px;">📋 Copy</button>
+        <button class="btn ghost small" id="aiCopyAnswerBtn" style="padding:2px 7px;font-size:10px;">Copy</button>
       </div>
       <div class="ai-answer-card" id="aiAnswerCard"></div>
     </div>
 
     <div id="aiLoadingIndicator" style="display:none;text-align:center;padding:20px;color:var(--muted);font-size:13px;">
-      <div style="display:inline-block;animation:pulse 1.2s infinite;color:var(--primary);font-size:24px;margin-bottom:8px;">⚙️</div>
+      <div style="display:inline-block;animation:pulse 1.2s infinite;color:var(--primary);font-size:24px;margin-bottom:8px;"></div>
       <div>Analyzing drawing specs, MEP equipment & snags...</div>
     </div>
   </div>
@@ -669,6 +669,43 @@ async function apiFetch(path, opts={}){
   return res.status===204 ? null : res.json();
 }
 
+function showForcedPasswordChange(){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.id = 'forcedPwOverlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>Set a new password</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">You're signing in with a temporary password. Choose a new one to continue - this only takes a moment.</p>
+      <div class="form-grid">
+        <div class="full"><label>Current (temporary) password</label><input type="password" id="f_force_current"></div>
+        <div class="full"><label>New password (min. 8 characters)</label><input type="password" id="f_force_new"></div>
+        <div class="full"><label>Confirm new password</label><input type="password" id="f_force_confirm"></div>
+      </div>
+      <div id="forcedPwError" style="display:none;color:var(--danger);font-size:12px;margin-top:8px;"></div>
+      <div class="modal-actions"><button class="btn small" id="forcedPwSubmit">Set password</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('forcedPwSubmit').onclick = async () => {
+    const current_password = document.getElementById('f_force_current').value;
+    const new_password = document.getElementById('f_force_new').value;
+    const confirm = document.getElementById('f_force_confirm').value;
+    const errBox = document.getElementById('forcedPwError');
+    errBox.style.display = 'none';
+    if(new_password.length < 8){ errBox.textContent = 'New password must be at least 8 characters.'; errBox.style.display='block'; return; }
+    if(new_password !== confirm){ errBox.textContent = 'New password and confirmation do not match.'; errBox.style.display='block'; return; }
+    try{
+      await apiFetch('/api/me/password', {method:'PUT', body: JSON.stringify({current_password, new_password})});
+      ME.must_change_password = false;
+      overlay.remove();
+    }catch(err){
+      errBox.textContent = err.message;
+      errBox.style.display = 'block';
+    }
+  };
+}
+
 document.getElementById('loginBtn').addEventListener('click', async ()=>{
   API = (document.getElementById('apiUrl').value.trim() || DEFAULT_API).replace(/\/$/,'');
   const username = document.getElementById('loginUsername').value.trim();
@@ -676,7 +713,10 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
   document.getElementById('loginError').style.display = 'none';
   try{
     const res = await fetch(API+'/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password})});
-    if(!res.ok) throw new Error('Login failed');
+    if(!res.ok){
+      const errBody = await res.json().catch(()=>({}));
+      throw new Error(errBody.error || 'Login failed');
+    }
     const data = await res.json();
     TOKEN = data.token; ME = data;
     localStorage.setItem('mep_token', TOKEN);
@@ -687,6 +727,9 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
     document.getElementById('chipRole').textContent = ME.role;
     buildNav();
     await loadProjectsAndRender();
+    if(ME.must_change_password){
+      showForcedPasswordChange();
+    }
   }catch(err){
     document.getElementById('loginError').style.display = 'block';
   }
@@ -906,7 +949,7 @@ async function renderSiteToday(){
   const canEditTasks=ME.permissions.edit.includes('tasks');
   const canEditDailyLogs=ME.permissions.edit.includes('dailylogs');
   const selectedLabel=new Date(`${selectedDate}T00:00:00`).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  document.getElementById('viewContent').innerHTML=`<div class="today-hero"><div><div class="health BLUE">FIELD CONTROL</div><h1>${escHtml(selectedLabel)}</h1><p>${dayTasks.length} scheduled task${dayTasks.length===1?'':'s'} · ${dayLogs.length} site log${dayLogs.length===1?'':'s'} · ${photos.length} photo${photos.length===1?'':'s'}</p></div><div class="today-date"><button class="btn ghost small" id="previousSiteDay">←</button><input type="date" id="siteDate" value="${selectedDate}"><button class="btn ghost small" id="nextSiteDay">→</button>${canEditDocuments?'<button class="btn accent small" id="heroCameraBtn" title="Take site photo with mobile camera">📷 Capture Photo</button>':''}</div></div><div class="today-grid"><div class="panel"><h3><span>Work planned for this day</span><span>${canEditTasks?'<button class="btn accent small" id="addSiteTask">+ Add task</button>':''}</span></h3>${dayTasks.length?dayTasks.map(task=>`<div class="today-task"><div class="today-time">${escHtml(task.trade||'Site')}</div><div><h4>${escHtml(task.title)}</h4><p>${escHtml(task.assignee||'Unassigned')} · ${escHtml(task.start)} to ${escHtml(task.end)}</p><div class="today-progress"><span style="width:${Math.max(0,Math.min(100,task.progress||0))}%"></span></div></div><span class="badge ${badgeClass(task.status)}">${escHtml(task.status)}</span></div>`).join(''):'<div class="empty">No scheduled work for this date. Add a task from the Tasks module.</div>'}</div><div><div class="panel"><h3><span>BOQ / tender context</span><span>${boq.length} lines</span></h3><div class="mini-list">${boq.slice(0,5).map(item=>`<div class="mini-list-item"><b>${escHtml(item.item_number||'BOQ')} · ${escHtml(item.description)}</b><span>${escHtml(item.discipline||'General')} · ${item.installed_quantity||0} of ${item.tender_quantity||0} ${escHtml(item.unit||'')}</span></div>`).join('')||'<div class="empty">Import tender lines to control installed quantities here.</div>'}</div></div><div class="panel"><h3><span>Site log</span><span>${dayLogs.length?`${dayLogs.reduce((sum,log)=>sum+Number(log.crew||0),0)} crew`:''}</span></h3>${dayLogs.map(log=>`<div class="mini-list-item"><b>${escHtml(log.trade)} · ${escHtml(log.weather||'Weather not recorded')}</b><span>${escHtml(log.notes||'No notes recorded')}</span></div>`).join('')||'<div class="empty">No daily log recorded for this date.</div>'}</div><div class="panel"><h3><span>Site photos (${photos.length})</span><span style="display:flex;gap:6px;align-items:center;">${canEditDocuments?'<button class="btn accent small" id="siteCameraBtn">📷 Capture Photo</button><button class="btn ghost small" id="uploadSitePhoto">📁 Upload</button>':''}</span></h3>${photos.length?`<div class="photo-strip">${photos.map(photo=>`<div onclick="openPhotoLightbox(\`${escHtml(photo.name)}\`, \`${photo.attachment_data}\`)" style="cursor:pointer;" title="Tap to inspect full photo"><img class="photo-thumb" src="${photo.attachment_data}" alt="${escHtml(photo.name)}"><div class="photo-name">${escHtml(photo.name)}</div></div>`).join('')}</div>`:'<div class="empty">Capture or upload progress photos against this date for the project record.</div>'}</div></div></div>`;
+  document.getElementById('viewContent').innerHTML=`<div class="today-hero"><div><div class="health BLUE">FIELD CONTROL</div><h1>${escHtml(selectedLabel)}</h1><p>${dayTasks.length} scheduled task${dayTasks.length===1?'':'s'} · ${dayLogs.length} site log${dayLogs.length===1?'':'s'} · ${photos.length} photo${photos.length===1?'':'s'}</p></div><div class="today-date"><button class="btn ghost small" id="previousSiteDay">←</button><input type="date" id="siteDate" value="${selectedDate}"><button class="btn ghost small" id="nextSiteDay">→</button>${canEditDocuments?'<button class="btn accent small" id="heroCameraBtn" title="Take site photo with mobile camera">Capture Photo</button>':''}</div></div><div class="today-grid"><div class="panel"><h3><span>Work planned for this day</span><span>${canEditTasks?'<button class="btn accent small" id="addSiteTask">+ Add task</button>':''}</span></h3>${dayTasks.length?dayTasks.map(task=>`<div class="today-task"><div class="today-time">${escHtml(task.trade||'Site')}</div><div><h4>${escHtml(task.title)}</h4><p>${escHtml(task.assignee||'Unassigned')} · ${escHtml(task.start)} to ${escHtml(task.end)}</p><div class="today-progress"><span style="width:${Math.max(0,Math.min(100,task.progress||0))}%"></span></div></div><span class="badge ${badgeClass(task.status)}">${escHtml(task.status)}</span></div>`).join(''):'<div class="empty">No scheduled work for this date. Add a task from the Tasks module.</div>'}</div><div><div class="panel"><h3><span>BOQ / tender context</span><span>${boq.length} lines</span></h3><div class="mini-list">${boq.slice(0,5).map(item=>`<div class="mini-list-item"><b>${escHtml(item.item_number||'BOQ')} · ${escHtml(item.description)}</b><span>${escHtml(item.discipline||'General')} · ${item.installed_quantity||0} of ${item.tender_quantity||0} ${escHtml(item.unit||'')}</span></div>`).join('')||'<div class="empty">Import tender lines to control installed quantities here.</div>'}</div></div><div class="panel"><h3><span>Site log</span><span>${dayLogs.length?`${dayLogs.reduce((sum,log)=>sum+Number(log.crew||0),0)} crew`:''}</span></h3>${dayLogs.map(log=>`<div class="mini-list-item"><b>${escHtml(log.trade)} · ${escHtml(log.weather||'Weather not recorded')}</b><span>${escHtml(log.notes||'No notes recorded')}</span></div>`).join('')||'<div class="empty">No daily log recorded for this date.</div>'}</div><div class="panel"><h3><span>Site photos (${photos.length})</span><span style="display:flex;gap:6px;align-items:center;">${canEditDocuments?'<button class="btn accent small" id="siteCameraBtn">Capture Photo</button><button class="btn ghost small" id="uploadSitePhoto">Upload</button>':''}</span></h3>${photos.length?`<div class="photo-strip">${photos.map(photo=>`<div onclick="openPhotoLightbox(\`${escHtml(photo.name)}\`, \`${photo.attachment_data}\`)" style="cursor:pointer;" title="Tap to inspect full photo"><img class="photo-thumb" src="${photo.attachment_data}" alt="${escHtml(photo.name)}"><div class="photo-name">${escHtml(photo.name)}</div></div>`).join('')}</div>`:'<div class="empty">Capture or upload progress photos against this date for the project record.</div>'}</div></div></div>`;
   if(canEditTasks) document.querySelectorAll('.today-task').forEach((card,index)=>{ const button=document.createElement('button'); button.className='btn ghost small'; button.textContent='Update'; button.onclick=()=>openEditModal('tasks','Task',dayTasks[index]); card.appendChild(button); });
   if(canEditDailyLogs){ const logHeader=[...document.querySelectorAll('.panel h3')].find(header=>header.textContent.includes('Site log')); if(logHeader){ const button=document.createElement('button'); button.className='btn accent small'; button.textContent='+ Add log'; button.onclick=()=>openSiteLogModal(selectedDate); logHeader.appendChild(button); } }
   document.getElementById('siteDate').onchange=()=>renderSiteToday();
@@ -1005,7 +1048,7 @@ async function renderAttendance(){
           <div class="punch-live-date">${getLiveDateStr()}</div>
           <div style="margin-top:10px;">
             <span class="punch-status-badge ${active?'active':'inactive'}">
-              ${active?'<span class="pulse-dot"></span> ON SITE — SHIFT IN PROGRESS':'⚪ READY TO START WORK'}
+              ${active?'<span class="pulse-dot"></span> ON SITE — SHIFT IN PROGRESS':'READY TO START WORK'}
             </span>
           </div>
         </div>
@@ -1042,7 +1085,7 @@ async function renderAttendance(){
         `}
 
         <div class="gps-status-chip">
-          <span class="dot">📍</span>
+          <span class="dot"></span>
           <span><b>GPS Geofence Verified:</b> ${escHtml(punchProjectObj?.name || 'Active Job Site')} (Geofence radius 250m valid)</span>
         </div>
 
@@ -1063,8 +1106,8 @@ async function renderAttendance(){
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-        <button class="btn ghost small" id="openFloorPlanBtn">📍 Open Interactive Floor Plan</button>
-        <button class="btn ghost small" id="openProjectDocs">📁 View Drawings & Documents</button>
+        <button class="btn ghost small" id="openFloorPlanBtn">Open Interactive Floor Plan</button>
+        <button class="btn ghost small" id="openProjectDocs">View Drawings & Documents</button>
       </div>
 
       <div class="panel">
@@ -1359,9 +1402,9 @@ function openPunchDetailsModal(item, canEdit, canDel){
       ` : ''}
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
-        <button class="btn small accent" id="modalAskAiBtn" style="background:#0284c7;border-color:#0284c7;">🤖 Ask AI Advice</button>
+        <button class="btn small accent" id="modalAskAiBtn" style="background:#0284c7;border-color:#0284c7;">Ask AI Advice</button>
         ${canEdit ? `
-          <button class="btn small accent" id="modalAttachPhotoBtn">📷 ${item.attachment_data ? 'Retake Photo' : 'Capture Photo'}</button>
+          <button class="btn small accent" id="modalAttachPhotoBtn">${item.attachment_data ? 'Retake Photo' : 'Capture Photo'}</button>
         ` : ''}
         ${canEdit && nextStatus ? `
           <button class="btn small ghost" id="modalAdvBtn">▶ Advance to: ${nextStatus}</button>
@@ -1464,7 +1507,7 @@ async function renderPunchList(){
         <div class="floor-nav-pills">
           ${Object.values(FLOOR_PLANS).map(fl => `
             <button class="floor-pill ${fl.id===currentFloor?'active':''}" data-floor-select="${fl.id}">
-              <span>📍 ${escHtml(fl.shortName)}</span>
+              <span>${escHtml(fl.shortName)}</span>
             </button>
           `).join('')}
         </div>
@@ -1472,11 +1515,11 @@ async function renderPunchList(){
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div class="view-mode-toggle">
             <button class="view-mode-btn ${planViewMode==='split'?'active':''}" data-view-mode="split" title="Split Plan and Table">⊞ Split</button>
-            <button class="view-mode-btn ${planViewMode==='plan'?'active':''}" data-view-mode="plan" title="Floor Plan Only">🗺 Plan</button>
+            <button class="view-mode-btn ${planViewMode==='plan'?'active':''}" data-view-mode="plan" title="Floor Plan Only">Plan</button>
             <button class="view-mode-btn ${planViewMode==='table'?'active':''}" data-view-mode="table" title="Table Only">☰ Table</button>
           </div>
           ${canEdit ? `
-            <button class="btn accent small" id="punchCameraBtn" title="Take defect photo using camera">📷 Capture Photo</button>
+            <button class="btn accent small" id="punchCameraBtn" title="Take defect photo using camera">Capture Photo</button>
             <button class="btn ghost small" id="addPunchBtn">+ Add Punch Item</button>
           ` : ''}
           <button class="btn ghost small" id="exportPunchBtn">Export CSV</button>
@@ -1515,16 +1558,16 @@ async function renderPunchList(){
                 <div style="font-size:11px;color:var(--muted);">Interactive Architectural Drawing · Click any room/zone to filter snags</div>
               </div>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <button class="btn accent small" id="planAskAiBtn" style="font-size:11px;" title="Ask AI technical questions about this drawing">🤖 Ask Worker AI</button>
+                <button class="btn accent small" id="planAskAiBtn" style="font-size:11px;" title="Ask AI technical questions about this drawing">Ask Worker AI</button>
                 <button class="btn ghost small" id="planMarkupBtn" style="font-size:11px;" title="Open Drawing & PDF Markup Studio">✏️ Draw / Markup</button>
                 ${selectedPlanZone ? `
                   <button class="btn ghost small" id="clearZoneBtn" style="font-size:11px;">✕ Clear Zone</button>
                   ${canEdit ? `
-                    <button class="btn accent small" id="cameraZoneBtn" style="font-size:11px;">📷 Snap Snag</button>
+                    <button class="btn accent small" id="cameraZoneBtn" style="font-size:11px;">Snap Snag</button>
                     <button class="btn ghost small" id="addSnagToZoneBtn" style="font-size:11px;">+ Add Here</button>
                   ` : ''}
                 ` : (canEdit ? `
-                  <button class="btn ghost small" id="cameraPlanBtn" style="font-size:11px;">📷 Snap Snag</button>
+                  <button class="btn ghost small" id="cameraPlanBtn" style="font-size:11px;">Snap Snag</button>
                 ` : '')}
               </div>
             </div>
@@ -1533,10 +1576,10 @@ async function renderPunchList(){
             ${selectedPlanZone ? `
               <div style="background:rgba(243,181,98,0.14);border:1px solid #f3b562;padding:8px 12px;border-radius:6px;margin:8px 16px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <span style="font-size:12px;color:#f3b562;">
-                  📍 <b>Filtered Zone:</b> ${escHtml(selectedPlanZone)} (${displayedItems.length} snags)
+                  <b>Filtered Zone:</b> ${escHtml(selectedPlanZone)} (${displayedItems.length} snags)
                 </span>
                 <div style="display:flex;gap:6px;align-items:center;">
-                  <button class="btn ghost small" id="zoneAskAiBtn" style="font-size:11px;padding:3px 8px;border-color:#f3b562;color:#f3b562;" title="Ask AI questions specifically about this zone">🤖 Ask AI about ${escHtml(selectedPlanZone)}</button>
+                  <button class="btn ghost small" id="zoneAskAiBtn" style="font-size:11px;padding:3px 8px;border-color:#f3b562;color:#f3b562;" title="Ask AI questions specifically about this zone">Ask AI about ${escHtml(selectedPlanZone)}</button>
                   <button class="btn ghost small" id="zoneMarkupBtn" style="font-size:11px;padding:3px 8px;" title="Annotate this zone drawing">✏️ Markup Zone</button>
                 </div>
               </div>
@@ -1631,7 +1674,7 @@ async function renderPunchList(){
                           <td>
                             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
                               <b>${escHtml(row.item)}</b>
-                              ${row.attachment_data ? `<span class="photo-badge-indicator" onclick="event.stopPropagation(); openPhotoLightbox(\`${escHtml(row.item)}\`, \`${row.attachment_data}\`)">📷 Photo</span>` : ''}
+                              ${row.attachment_data ? `<span class="photo-badge-indicator" onclick="event.stopPropagation(); openPhotoLightbox(\`${escHtml(row.item)}\`, \`${row.attachment_data}\`)">Photo</span>` : ''}
                             </div>
                             <span style="display:block;font-size:10px;color:var(--muted);">${escHtml(row.date_raised||'')}</span>
                           </td>
@@ -1648,7 +1691,7 @@ async function renderPunchList(){
                             </span>
                           </td>
                           <td class="row-actions" onclick="event.stopPropagation();">
-                            ${canEdit ? `<button class="icon-btn" data-cam-punch="${row.id}" title="${row.attachment_data ? 'Retake Defect Photo' : 'Capture Defect Photo with Camera'}">📷</button>` : ''}
+                            ${canEdit ? `<button class="icon-btn" data-cam-punch="${row.id}" title="${row.attachment_data ? 'Retake Defect Photo' : 'Capture Defect Photo with Camera'}"></button>` : ''}
                             ${canEdit && nextStatus ? `<button class="icon-btn" data-adv-punch="${row.id}" data-next-status="${nextStatus}" title="Advance to ${nextStatus}">▶</button>` : ''}
                             ${canEdit ? `<button class="icon-btn edit" data-edit-punch="${row.id}" title="Edit">✎</button>` : ''}
                             ${canDel ? `<button class="icon-btn" data-del-punch="${row.id}" title="Delete">✕</button>` : ''}
@@ -1981,7 +2024,7 @@ function openCameraCaptureModal(options = {}){
     modalBody.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <h3 style="margin:0;font-size:15px;display:flex;align-items:center;gap:6px;">
-          <span>📷</span> <span>${escHtml(titleText)}</span>
+          <span></span> <span>${escHtml(titleText)}</span>
         </h3>
         <button class="btn ghost small" id="camCloseBtn" style="padding:3px 8px;">✕</button>
       </div>
@@ -1993,23 +2036,23 @@ function openCameraCaptureModal(options = {}){
         <div class="camera-watermark" id="camWatermarkText">${escHtml(projName)} · ${defaultZone ? escHtml(defaultZone)+' · ' : ''}${new Date().toLocaleTimeString()}</div>
         ${errorMsg ? `
           <div style="position:absolute;inset:0;background:rgba(10,20,30,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;color:#ef6a63;z-index:20;">
-            <div style="font-size:24px;margin-bottom:8px;">⚠️</div>
+            <div style="font-size:24px;margin-bottom:8px;"></div>
             <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Camera Access Notice</div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:14px;max-width:320px;">${escHtml(errorMsg)}</div>
-            <button class="btn accent small" id="camFallbackTriggerBtn">📱 Use Device Camera App</button>
+            <button class="btn accent small" id="camFallbackTriggerBtn">Use Device Camera App</button>
           </div>
         ` : ''}
       </div>
 
       <div class="camera-controls-bar">
         <button class="btn ghost small camera-action-btn" id="camSwitchLensBtn" title="Switch between front and back camera">
-          🔄 Switch Lens
+          Switch Lens
         </button>
         <button class="camera-shutter-btn" id="camShutterBtn" title="Capture photo">
           <div class="shutter-inner"></div>
         </button>
         <button class="btn ghost small camera-action-btn" id="camDeviceAppBtn" title="Open native mobile camera app">
-          📱 Device App
+          Device App
         </button>
         <input type="file" id="camNativeFallbackInput" accept="image/*" capture="environment" style="display:none;">
       </div>
@@ -2356,23 +2399,23 @@ function updateHandModeToast(toolName){
   if(!toast || !text) return;
   toast.classList.remove('fade');
   if(toolName === 'hand_pen'){
-    text.textContent = '🖐️ Hand Draw Mode: Draw freely with finger or stylus directly on the PDF';
+    text.textContent = 'Hand Draw Mode: Draw freely with finger or stylus directly on the PDF';
   } else if(toolName === 'highlighter'){
-    text.textContent = '🖍️ Hand Highlighter: Highlight ducts, pipes, or notes with your hand';
+    text.textContent = 'Hand Highlighter: Highlight ducts, pipes, or notes with your hand';
   } else if(toolName === 'cloud'){
-    text.textContent = '☁️ Hand Revision Cloud: Trace with finger to bubble-mark MEP defects & clashes';
+    text.textContent = 'Hand Revision Cloud: Trace with finger to bubble-mark MEP defects & clashes';
   } else if(toolName === 'eraser'){
-    text.textContent = '🧹 Hand Eraser: Rub with finger or stylus over hand markings to erase';
+    text.textContent = 'Hand Eraser: Rub with finger or stylus over hand markings to erase';
   } else if(toolName === 'pan'){
-    text.textContent = '✋ Pan Mode: Drag with hand to inspect blueprint without drawing';
+    text.textContent = 'Pan Mode: Drag with hand to inspect blueprint without drawing';
   } else if(toolName === 'arrow'){
-    text.textContent = '➡️ Arrow Tool: Drag to point out clashes or discrepancies';
+    text.textContent = 'Arrow Tool: Drag to point out clashes or discrepancies';
   } else if(toolName === 'rect'){
-    text.textContent = '🔲 Box Tool: Drag to frame defect or penetration boundaries';
+    text.textContent = 'Box Tool: Drag to frame defect or penetration boundaries';
   } else if(toolName === 'text'){
-    text.textContent = '🏷️ Text Note: Tap anywhere on the PDF to place an engineering note';
+    text.textContent = 'Text Note: Tap anywhere on the PDF to place an engineering note';
   } else if(toolName === 'pin'){
-    text.textContent = '📌 Snag Pin: Tap to stamp a defect pin and create a punch ticket';
+    text.textContent = 'Snag Pin: Tap to stamp a defect pin and create a punch ticket';
   }
   setTimeout(() => { if(toast) toast.classList.add('fade'); }, 3000);
 }
@@ -3223,7 +3266,7 @@ async function openDrawingMarkupStudio(opts = {}){
       alert('Failed to save document: ' + e.message);
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = '💾 Save to Documents';
+      saveBtn.textContent = 'Save to Documents';
     }
   };
 
@@ -3389,7 +3432,7 @@ async function openDrawingMarkupStudio(opts = {}){
       markupCtx.fillText('!', pos.x, pos.y);
       markupCtx.restore();
 
-      const wantSnag = confirm(`📌 Defect pin stamped at coordinates (${Math.round(pos.x)}, ${Math.round(pos.y)})!\n\nWould you like to open the Punch List form now to create a ticket with this marked-up drawing attached?`);
+      const wantSnag = confirm(`Defect pin stamped at coordinates (${Math.round(pos.x)}, ${Math.round(pos.y)})!\n\nWould you like to open the Punch List form now to create a ticket with this marked-up drawing attached?`);
       if(wantSnag){
         createSnagFromStudioCanvas();
       }
@@ -3510,7 +3553,7 @@ async function openWorkerAiDrawer(ctx = {}){
     navigator.clipboard.writeText(raw).then(() => {
       const copyBtn = document.getElementById('aiCopyAnswerBtn');
       copyBtn.textContent = '✓ Copied!';
-      setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 2000);
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
     });
   };
 
@@ -3547,14 +3590,14 @@ async function renderDashboard(){
 }
 
 const USER_ROLES_META = {
-  Admin: { name: 'Executive Administrator', icon: '👑', badge: 'badge-role-admin', cat: 'Executive Leadership', scope: 'Global Enterprise (All Projects)', desc: 'Unrestricted system governance, user/role provisioning, project setup, and financial approvals.' },
-  ProjectManager: { name: 'MEP Project Manager', icon: '📋', badge: 'badge-role-pm', cat: 'Operations Management', scope: 'Assigned Projects (or All)', desc: 'Full project execution oversight, schedule/Gantt management, variation claim approvals, submittals, and budget tracking.' },
-  SiteEngineer: { name: 'MEP Site Engineer', icon: '🛠️', badge: 'badge-role-engineer', cat: 'Field Engineering', scope: 'Assigned Projects', desc: 'Site installation, drawing hand markups, punch snagging, daily site logs, RFIs, and material requisitions.' },
-  CommercialManager: { name: 'Quantity Surveyor / Commercial Lead', icon: '📊', badge: 'badge-role-commercial', cat: 'Commercial & Contracts', scope: 'Assigned Projects', desc: 'BOQ measurement, cost valuations, budget commitments, change orders & claims, procurement, and supplier purchase orders.' },
-  QAQC: { name: 'QA/QC & Commissioning Lead', icon: '🔍', badge: 'badge-role-qaqc', cat: 'Quality & Compliance', scope: 'Assigned Projects', desc: 'Site inspections, Non-Conformance Reports (NCRs), testing & balancing witness sheets, and system handover closeout.' },
-  SafetyOfficer: { name: 'Site HSE & Safety Manager', icon: '🦺', badge: 'badge-role-safety', cat: 'Health, Safety & Environment', scope: 'Assigned Projects', desc: 'HSE compliance, safety incident reporting, hazard mitigation, safety audits, and worker safety briefing tracking.' },
-  Subcontractor: { name: 'Specialist Trade Subcontractor', icon: '🔧', badge: 'badge-role-sub', cat: 'Trade Contractor', scope: 'Project & Trade Restricted', desc: 'Execute assigned trade tasks, report progress, submit floor plan snags, create material requests, and upload trade documents.' },
-  Consultant: { name: 'Supervising MEP Consultant', icon: '📐', badge: 'badge-role-consultant', cat: 'Client & Design Oversight', scope: 'Assigned Projects (Witness/Review)', desc: 'Design compliance review, RFI responses, submittal approvals, inspection witness sign-off, and handover acceptance.' }
+  Admin: { name: 'Executive Administrator', icon: '', badge: 'badge-role-admin', cat: 'Executive Leadership', scope: 'Global Enterprise (All Projects)', desc: 'Unrestricted system governance, user/role provisioning, project setup, and financial approvals.' },
+  ProjectManager: { name: 'MEP Project Manager', icon: '', badge: 'badge-role-pm', cat: 'Operations Management', scope: 'Assigned Projects (or All)', desc: 'Full project execution oversight, schedule/Gantt management, variation claim approvals, submittals, and budget tracking.' },
+  SiteEngineer: { name: 'MEP Site Engineer', icon: '', badge: 'badge-role-engineer', cat: 'Field Engineering', scope: 'Assigned Projects', desc: 'Site installation, drawing hand markups, punch snagging, daily site logs, RFIs, and material requisitions.' },
+  CommercialManager: { name: 'Quantity Surveyor / Commercial Lead', icon: '', badge: 'badge-role-commercial', cat: 'Commercial & Contracts', scope: 'Assigned Projects', desc: 'BOQ measurement, cost valuations, budget commitments, change orders & claims, procurement, and supplier purchase orders.' },
+  QAQC: { name: 'QA/QC & Commissioning Lead', icon: '', badge: 'badge-role-qaqc', cat: 'Quality & Compliance', scope: 'Assigned Projects', desc: 'Site inspections, Non-Conformance Reports (NCRs), testing & balancing witness sheets, and system handover closeout.' },
+  SafetyOfficer: { name: 'Site HSE & Safety Manager', icon: '', badge: 'badge-role-safety', cat: 'Health, Safety & Environment', scope: 'Assigned Projects', desc: 'HSE compliance, safety incident reporting, hazard mitigation, safety audits, and worker safety briefing tracking.' },
+  Subcontractor: { name: 'Specialist Trade Subcontractor', icon: '', badge: 'badge-role-sub', cat: 'Trade Contractor', scope: 'Project & Trade Restricted', desc: 'Execute assigned trade tasks, report progress, submit floor plan snags, create material requests, and upload trade documents.' },
+  Consultant: { name: 'Supervising MEP Consultant', icon: '', badge: 'badge-role-consultant', cat: 'Client & Design Oversight', scope: 'Assigned Projects (Witness/Review)', desc: 'Design compliance review, RFI responses, submittal approvals, inspection witness sign-off, and handover acceptance.' }
 };
 
 let userAdminState = {
@@ -3641,7 +3684,7 @@ async function renderUsers(){
       <div class="admin-toolbar">
         <div class="admin-tabs">
           <button class="admin-tab-btn ${userAdminState.tab === 'directory' ? 'active' : ''}" id="tabUsersDir">👥 Personnel Directory (${filteredUsers.length})</button>
-          <button class="admin-tab-btn ${userAdminState.tab === 'matrix' ? 'active' : ''}" id="tabRolesMatrix">🛡️ Role & Permission Matrix</button>
+          <button class="admin-tab-btn ${userAdminState.tab === 'matrix' ? 'active' : ''}" id="tabRolesMatrix">Role & Permission Matrix</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <button class="btn accent small" id="addUserBtn">+ Add Enterprise User</button>
@@ -3708,7 +3751,7 @@ async function renderUsers(){
 
                 let projectBadgesHtml = '';
                 if (user.role === 'Admin') {
-                  projectBadgesHtml = `<span class="tag-project-all">👑 Global (All Projects)</span>`;
+                  projectBadgesHtml = `<span class="tag-project-all">Global (All Projects)</span>`;
                 } else if (user.project_names) {
                   const names = user.project_names.split(', ');
                   projectBadgesHtml = names.map(n => `<span class="tag-project-pill">${escHtml(n)}</span>`).join('');
@@ -4021,7 +4064,7 @@ async function openUserModal(user){
       <!-- Section 2: Organization & Trade -->
       <div style="background:rgba(255,255,255,0.02);border:1px solid var(--hairline);border-radius:10px;padding:14px;">
         <h4 style="margin:0 0 10px;color:var(--primary);font-size:13px;display:flex;align-items:center;gap:6px;">
-          🏢 Organization & Discipline Specialization
+          Organization & Discipline Specialization
         </h4>
         <div class="form-grid" style="margin-bottom:0;">
           <div>
@@ -4047,7 +4090,7 @@ async function openUserModal(user){
             <label>${isEdit ? 'Reset Password (optional)' : 'Initial Password *'}</label>
             <div style="display:flex;gap:6px;">
               <input id="f_user_password" type="text" placeholder="${isEdit ? 'Leave blank to keep current' : 'Min 6 characters'}" style="flex:1;">
-              <button type="button" class="btn ghost small" id="btnGenPassword" title="Generate secure random password" style="white-space:nowrap;">⚡ Gen</button>
+              <button type="button" class="btn ghost small" id="btnGenPassword" title="Generate secure random password" style="white-space:nowrap;">Gen</button>
             </div>
           </div>
         </div>
@@ -4056,7 +4099,7 @@ async function openUserModal(user){
       <!-- Section 3: High-Level Role Assignment -->
       <div style="background:rgba(255,255,255,0.02);border:1px solid var(--hairline);border-radius:10px;padding:14px;">
         <h4 style="margin:0 0 8px;color:var(--primary);font-size:13px;display:flex;align-items:center;gap:6px;">
-          🛡️ Enterprise Role & Authority Scope
+          Enterprise Role & Authority Scope
         </h4>
         <div>
           <label>Assigned System Role</label>
@@ -4075,7 +4118,7 @@ async function openUserModal(user){
       <div style="background:rgba(255,255,255,0.02);border:1px solid var(--hairline);border-radius:10px;padding:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 style="margin:0;color:var(--primary);font-size:13px;display:flex;align-items:center;gap:6px;">
-            🏗️ Project Scope Access
+            Project Scope Access
           </h4>
           <div style="display:flex;gap:6px;" id="projectQuickButtons">
             <button type="button" class="btn ghost small" id="btnSelectAllProjects" style="font-size:11px;padding:3px 8px;">Select All</button>
@@ -4083,7 +4126,7 @@ async function openUserModal(user){
           </div>
         </div>
         <div id="adminProjectNotice" style="display:none;padding:8px 12px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:6px;font-size:12px;color:#c084fc;margin-bottom:8px;">
-          👑 <b>Executive Administrator:</b> Automatically granted unrestricted access to all current and future projects.
+          <b>Executive Administrator:</b> Automatically granted unrestricted access to all current and future projects.
         </div>
         <div id="projectChoicesContainer" style="max-height:160px;overflow-y:auto;background:#08121e;border:1px solid var(--border);border-radius:6px;padding:4px;">
           ${projectChoices || '<div class="empty">No projects found.</div>'}
@@ -4187,7 +4230,7 @@ function openResetPasswordModal(user) {
       </p>
       <div style="display:flex;gap:8px;align-items:center;">
         <input id="f_reset_pw_val" type="text" placeholder="Enter new password" style="flex:1;" value="MepPass#2026">
-        <button type="button" class="btn ghost small" id="btnGenResetPw">⚡ Gen</button>
+        <button type="button" class="btn ghost small" id="btnGenResetPw">Gen</button>
       </div>
     </div>
   `;
@@ -4392,7 +4435,7 @@ async function renderPlanner(){
           </div>
         `).join('')}
       </div>
-    ` : `<div class="empty">No planner items yet. Open <b>Documents</b>, then click <b>🧠 Analyze</b> on any uploaded file to build a board from it.</div>`}
+    ` : `<div class="empty">No planner items yet. Open <b>Documents</b>, then click <b>Analyze</b> on any uploaded file to build a board from it.</div>`}
   </div>`;
 
   document.querySelectorAll('[data-task]').forEach(card => {
@@ -4464,12 +4507,12 @@ async function renderDocuments(){
     <h3>
       <span>Documents</span>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn ghost small" id="openDocStudioBtn" title="Open Drawing & PDF Markup Studio">📐 Drawing & PDF Studio</button>
+        <button class="btn ghost small" id="openDocStudioBtn" title="Open Drawing & PDF Markup Studio">Drawing & PDF Studio</button>
         ${canEdit?`<button class="btn accent small" id="addBtn">+ Add Document</button>`:'<span style="font-size:11px;color:var(--muted);margin-right:10px;">Read-only</span>'}
         <button class="btn ghost small" id="exportBtn">Export CSV</button>
       </span>
     </h3>
-    ${isSub ? `<div class="api-banner show" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534;margin-bottom:12px;">🔒 Document Isolation Active: You only have access to documents assigned to your subcontracting company for this project.</div>` : ''}
+    ${isSub ? `<div class="api-banner show" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534;margin-bottom:12px;">Document Isolation Active: You only have access to documents assigned to your subcontracting company for this project.</div>` : ''}
     ${rows.length ? `<table><thead><tr><th>Name</th><th>Category</th><th>Rev.</th><th>Date Added</th>${!isSub?'<th>Assigned Subcontractor / Uploader</th>':''}<th>File & Tools</th>${canEdit?'<th></th>':''}</tr></thead><tbody>
       ${rows.map(r=>{
         const isDrawingOrVisual = (r.category === 'Drawing') || (r.attachment_name && (r.attachment_name.endsWith('.pdf') || r.attachment_name.match(/\.(png|jpg|jpeg|svg)$/i)));
@@ -4484,10 +4527,10 @@ async function renderDocuments(){
               ${r.attachment_data?`<span class="doc-link" data-dl="${r.id}">${escHtml(r.attachment_name||'download')}</span>`:'<span style="color:var(--muted);">—</span>'}
               ${isDrawingOrVisual && r.attachment_data ? `
                 <button class="btn ghost small" data-doc-markup="${r.id}" style="padding:2px 6px;font-size:10px;" title="Open in Drawing & PDF Markup Studio">✏️ Draw</button>
-                <button class="btn ghost small" data-doc-ai="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#0284c7;color:#38bdf8;" title="Ask AI about this drawing">🤖 AI</button>
+                <button class="btn ghost small" data-doc-ai="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#0284c7;color:#38bdf8;" title="Ask AI about this drawing">AI</button>
               ` : ''}
               ${r.attachment_data && canEdit ? `
-                <button class="btn ghost small" data-doc-analyze="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#6fd3c1;color:#6fd3c1;" title="Read this document and build a Planner board from it">🧠 Analyze</button>
+                <button class="btn ghost small" data-doc-analyze="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#6fd3c1;color:#6fd3c1;" title="Read this document and build a Planner board from it">Analyze</button>
               ` : ''}
             </div>
           </td>
@@ -4533,7 +4576,7 @@ async function renderDocuments(){
     btn.onclick = async () => {
       const docId = btn.dataset.docAnalyze;
       const originalText = btn.textContent;
-      btn.textContent = '⏳ Reading...';
+      btn.textContent = 'Reading...';
       btn.disabled = true;
       try {
         const result = await apiFetch(`/api/documents/${docId}/analyze`, {method:'POST'});
@@ -4722,7 +4765,7 @@ const FIELD_TEMPLATES = {
       <label>Item</label>
       <div style="display:flex;gap:6px;">
         <input id="f_item" value="${r?escHtml(r.item):''}" style="flex:1;">
-        <button type="button" class="btn ghost small" id="suggestFixBtn" title="Get an AI-assisted likely cause and fix for this defect">🧠 Suggest Fix</button>
+        <button type="button" class="btn ghost small" id="suggestFixBtn" title="Get an AI-assisted likely cause and fix for this defect">Suggest Fix</button>
       </div>
       <div id="suggestFixResult" style="display:none;font-size:12px;background:rgba(111,211,193,0.08);border:1px solid rgba(111,211,193,0.3);border-radius:6px;padding:8px;margin-top:6px;white-space:pre-wrap;"></div>
     </div>
@@ -4734,8 +4777,8 @@ const FIELD_TEMPLATES = {
     <div class="full">
       <label>Site Defect Photo</label>
       <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
-        <button type="button" class="btn ghost small" id="formSnapPhotoBtn">📷 Take Photo with Camera</button>
-        <button type="button" class="btn ghost small" id="formUploadPhotoBtn">📁 Choose File</button>
+        <button type="button" class="btn ghost small" id="formSnapPhotoBtn">Take Photo with Camera</button>
+        <button type="button" class="btn ghost small" id="formUploadPhotoBtn">Choose File</button>
         <input type="file" id="formNativePhotoInput" accept="image/*" capture="environment" style="display:none;">
       </div>
       <input type="hidden" id="f_attachment_data" value="${r&&r.attachment_data?escHtml(r.attachment_data):''}">
@@ -4838,7 +4881,7 @@ function wireSuggestFixButton(){
     if(!description){ alert('Enter a description of the defect first.'); return; }
     const resultBox = document.getElementById('suggestFixResult');
     const originalText = btn.textContent;
-    btn.textContent = '⏳ Thinking...';
+    btn.textContent = 'Analyzing...';
     btn.disabled = true;
     try {
       const res = await apiFetch('/api/ai/suggest-fix', {method:'POST', body: JSON.stringify({description, trade})});

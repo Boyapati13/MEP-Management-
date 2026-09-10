@@ -147,7 +147,7 @@ On first startup, `seedUsers()` creates exactly **one** account — there is no 
 |---|---|---|
 | `admin` | `ChangeMe123!` | Admin |
 
-**Change this password immediately after first login** (there is no forced-reset-on-first-login flow yet — see [Known Limitations](#known-limitations--hardening-notes)). From this one account you create real projects and invite real users through the UI (Admin → Personnel Directory → Add Enterprise User) or via `POST /api/users`.
+**You'll be prompted to set a new password immediately after first login** - the account is flagged to force this, and the UI blocks access to the rest of the app until you do. From this one account you create real projects and invite real users through the UI (Admin → Personnel Directory → Add Enterprise User) or via `POST /api/users`.
 
 ## Roles & Permissions
 
@@ -179,7 +179,7 @@ Two `TABLE_CONFIG` keys (`drawings`, `daily_logs`) are intentional URL aliases f
 All endpoints below (except `/api/login` and `/api/health`) require `Authorization: Bearer <token>`.
 
 **Auth & Users**
-`POST /api/login` · `POST /api/logout` · `GET /api/me` · `GET /api/users` · `POST /api/users` · `PUT /api/users/:id` · `DELETE /api/users/:id` · `POST /api/users/:id/reset-password` · `POST /api/users/:id/toggle-status` · `GET /api/roles`
+`POST /api/login` · `POST /api/logout` · `GET /api/me` · `PUT /api/me/password` · `GET /api/users` · `POST /api/users` · `PUT /api/users/:id` · `DELETE /api/users/:id` · `POST /api/users/:id/reset-password` · `POST /api/users/:id/toggle-status` · `GET /api/roles`
 
 **Projects**
 `GET /api/projects` · `POST /api/projects` · `PUT /api/projects/:id` · `DELETE /api/projects/:id` · `GET/PUT /api/projects/:id/members` · `GET /api/projects/:id/subcontractors` · `GET /api/users/:id/projects` · `PUT /api/users/:id/projects`
@@ -255,22 +255,25 @@ It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, s
 
 ## Known Limitations & Hardening Notes
 
-These are worth addressing before any production/internet-facing deployment:
+These are worth addressing before any production/internet-facing deployment. Earlier rounds of fixes (the fresh-install crash, cascading-delete bugs, demo-data removal, the `qs` vulnerability, and more) are summarized in commit history rather than repeated here as this section was getting long — see `git log`.
 
-- **Fixed in this update:** all demo/test data removed. `seedUsers()` now creates a single bootstrap `admin` account only (no fictional company or staff roster); `seedData()` is a no-op (no sample project); the login screen no longer displays a credentials cheat-sheet or pre-filled password; the "Switch Role" admin feature (which relied on a hardcoded plaintext demo-password map and didn't work for real users) was removed; the AI advisor's reference knowledge was generalized away from one specific fictional tender.
-- **Fixed in this update:** `DELETE /api/projects/:id` and `DELETE /api/users/:id` deleted the parent row *before* their dependent rows (`project_memberships` has a declared foreign key to both `projects` and `users`), so both endpoints threw an unhandled "FOREIGN KEY constraint failed" 500 error the moment either record had any related data — i.e. on essentially any real project or user. Fixed by deleting dependents first. Found via the test suite's own cleanup step failing.
-- **Fixed in this update:** the project-delete cascade loop deleted `FROM ${table}` using raw `TABLE_CONFIG` keys, two of which (`drawings`, `daily_logs`) are URL aliases for a different real table (`documents`, `dailylogs`) rather than real tables themselves — so deleting a project with any drawing or daily-log record crashed with "no such table". Fixed by resolving aliases and de-duplicating before deleting.
-- **Fixed in this update:** three raw `INSERT ... VALUES (?, ?, ...)` statements (former submittals/daily-log seed data, and the `documents` record created by `POST /api/boq/import`) used a fixed placeholder count that no longer matched their tables after later `ALTER TABLE` migrations added columns. This crashed the server on every fresh-database boot and broke BOQ import whenever exercised.
-- **Fixed in this update:** a transitive `qs` dependency (via Express) carried two moderate-severity advisories (array-limit bypass, DoS via crafted input). Pinned via an npm `overrides` entry to the patched `6.16.0`; `npm audit` now reports 0 vulnerabilities. Express itself stays on 4.x — a 5.x upgrade would be a breaking change and wasn't made here.
-- **Fixed before it shipped:** the shared `openModal(title, html, onSave)` frontend helper calls `onSave()` unconditionally in its Save handler with no null-check, so the initial Planner task-detail modal (which passed `null` for read-only users) would have thrown a `TypeError` the first time a non-editing role opened a task. Caught in code review; fixed by passing a no-op async function instead of `null`.
+**Still open:**
+- **No MFA/SSO.** Authentication is username + password only.
 - **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, but the Planner UI doesn't yet expose a way to pick an assignee from the task detail modal - it can only be set via a direct API call.
-- **Password hashing** uses `scrypt` with a single hardcoded salt (`mep_salt_secure`) shared by every user, rather than a unique per-user salt — this weakens the hashing scheme against precomputation attacks.
-- **Bootstrap credentials** (see [First Login](#first-login)) are created automatically on first run and are not force-reset on first use — change the password immediately in any environment reachable by anyone but you.
-- **Sessions** are stored indefinitely with no visible expiry/TTL sweep in the schema shown — consider adding session expiration.
 - **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
+- **No email/notification layer** - nothing alerts a user when something needs their attention; they have to open the app and look.
+- **No true drag-and-drop** on the Planner board - moving a task between buckets or changing its status is done via dropdowns in a detail modal, not by dragging the card.
+- **Single SQLite file** for the whole database, and file attachments are stored as base64 inside it rather than in separate object storage. Fine for one team's internal use; won't hold up as a scaled, multi-tenant product.
 - `vite` is listed in both `dependencies` and `devDependencies` in `package.json` — harmless (it resolves to one copy either way) but redundant; worth picking one.
 - No CI configuration is currently checked in; `test_e2e_suite.ts` is a good candidate to run on every push.
 - No `LICENSE` file is currently present in the repo.
+
+**Fixed this round (security hardening):**
+- Password hashing now uses a unique random salt per user (`scrypt`), instead of one salt shared by every account - verified backward-compatible with any hash created before this change.
+- Sessions now expire 12 hours after login and are rejected (and deleted) by `authRequired` once expired, instead of lasting forever.
+- Login now rate-limits: 5 failed attempts for a username triggers a 60-second lockout (`429`), as basic brute-force protection.
+- The bootstrap `admin` account is flagged `must_change_password`; the login response and `GET /api/me` surface it, and the frontend now blocks access behind a mandatory password-change screen until `PUT /api/me/password` succeeds. There's also a new self-service password change endpoint for any user (`PUT /api/me/password`, requires the current password) - previously password changes could only be done by an Admin resetting someone else's password.
+- The UI's ~75 decorative pictograph emoji (used as ad-hoc icons throughout nav, buttons, and role badges) were removed in favor of plain text labels and a small set of neutral typographic symbols (✕ ✓ ✎ → ☰), for a more professional look. A proper SVG icon set would be the next step beyond this pass.
 
 ## License
 
