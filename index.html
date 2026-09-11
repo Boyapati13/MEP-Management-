@@ -73,6 +73,7 @@
   .badge.progress{background:rgba(232,163,61,0.18);color:#ffcd7a;}
   .badge.closed{background:rgba(46,158,91,0.18);color:#7be3a4;}
   .empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center;}
+  .empty-state{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--muted);font-size:13px;padding:48px 20px;text-align:center;border:1px dashed var(--border);border-radius:10px;margin-top:4px;}
   .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px;}
   .form-grid label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
   .form-grid .full{grid-column:1/-1;}
@@ -136,7 +137,7 @@
   body:before{content:'';position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(8,17,28,.22),transparent 18%,transparent 82%,rgba(8,17,28,.18));z-index:-1;}
   #loginScreen{background:radial-gradient(circle at 18% 18%,rgba(111,211,193,.2),transparent 30%),radial-gradient(circle at 84% 84%,rgba(243,181,98,.12),transparent 26%),#08111c;background-image:linear-gradient(135deg,rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(45deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:38px 38px,38px 38px;}
   .login-box{width:400px;background:rgba(16,28,43,.92);border:1px solid rgba(111,211,193,.25);border-radius:18px;padding:40px;box-shadow:0 26px 90px rgba(0,0,0,.48);backdrop-filter:blur(16px);animation:riseIn .45s ease both;}
-  .login-box:before{content:'DLI / OPERATIONS PLATFORM';display:block;color:var(--accent);font-size:10px;letter-spacing:.18em;font-weight:700;margin-bottom:18px;}
+  .login-box:before{display:none;}
   .login-box h1{font-size:27px;letter-spacing:-.03em;line-height:1.1;}
   .login-box p{font-size:13px;margin:9px 0 25px;line-height:1.5;}
   .login-box label,.form-grid label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;}
@@ -149,8 +150,12 @@
   #sidebar h1 span{font-size:10px;letter-spacing:.15em;text-transform:uppercase;margin:7px 0 0 23px;color:var(--accent);}
   .sidebar-toggle{margin:20px 13px 0 0;width:28px;height:28px;border:1px solid var(--border);border-radius:7px;background:rgba(111,211,193,.08);color:var(--primary);font-size:23px;line-height:20px;cursor:pointer;}
   .sidebar-toggle:hover{background:rgba(111,211,193,.17);}
-  .user-chip{padding:18px 21px;border-bottom:1px solid var(--hairline);background:rgba(111,211,193,.035);white-space:nowrap;}
+  .user-chip{padding:18px 21px;border-bottom:1px solid var(--hairline);background:rgba(111,211,193,.035);white-space:nowrap;display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .user-chip b{font-size:14px;}.user-chip span{font-size:11px;color:var(--primary);}
+  #notifBellBtn{position:relative;background:rgba(255,255,255,.04);border:1px solid var(--hairline);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s;}
+  #notifBellBtn:hover{color:var(--text);border-color:var(--primary);}
+  #notifBadge{display:none;position:absolute;top:-4px;right:-4px;background:var(--danger,#ef4444);color:#fff;border-radius:9px;font-size:9px;line-height:1;padding:3px 4px;font-weight:700;min-width:14px;text-align:center;}
+  #notifDropdown{display:none;position:fixed;top:140px;left:16px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-width:320px;min-width:280px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
   .nav-group{padding:13px 0 3px;border-bottom:1px solid rgba(215,232,238,.045);}.nav-group:last-of-type{border-bottom:0;}
   .nav-group-label{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 21px 7px;border:0;background:transparent;color:#7892a5;font-family:inherit;font-size:9px;font-weight:700;letter-spacing:.16em;text-align:left;text-transform:uppercase;cursor:pointer;}
   .nav-group-label span{font-size:14px;line-height:8px;color:var(--primary);transition:transform .2s;}.nav-group:not(.is-open) .nav-group-label span{transform:rotate(0deg);}
@@ -424,13 +429,15 @@
   <div id="sidebar">
     <div class="sidebar-brand"><h1>MEP Project Manager<span>Full Stack Edition</span></h1><button id="sidebarToggle" class="sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button></div>
     <div class="user-chip">
-      <b id="chipName">-</b><span id="chipRole">-</span>
-      <button id="notifBellBtn" title="Notifications" style="position:relative;background:none;border:none;color:var(--text);cursor:pointer;font-size:16px;margin-left:auto;padding:4px;">
-        <span>Alerts</span>
-        <span id="notifBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:var(--danger,#ef4444);color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;font-weight:700;"></span>
+      <div>
+        <b id="chipName">-</b><span id="chipRole">-</span>
+      </div>
+      <button id="notifBellBtn" title="Notifications">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span id="notifBadge"></span>
       </button>
     </div>
-    <div id="notifDropdown" style="display:none;position:fixed;top:64px;left:16px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-width:320px;min-width:280px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+    <div id="notifDropdown"></div>
     <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Overview <span>⌃</span></button>
       <div class="nav-item active" data-view="dashboard">Dashboard</div>
       <div class="nav-item" data-view="site_today">Today on Site</div>
@@ -3574,7 +3581,8 @@ async function openWorkerAiDrawer(ctx = {}){
 async function renderDashboard(){
   if(currentProjectId==='ALL'){
     const [cards, operations] = await Promise.all([apiFetch('/api/portfolio'), apiFetch('/api/operations/today')]);
-    document.getElementById('viewContent').innerHTML = `<div class="panel"><h3><span>Portfolio Overview</span><span style="font-size:11px;color:var(--muted);">${cards.length} accessible project${cards.length===1?'':'s'}</span></h3><div class="portfolio-grid">${cards.map(card=>`<article class="project-card" data-project-card="${card.id}"><div style="display:flex;justify-content:space-between;gap:10px;"><div><h3>${escHtml(card.name)}</h3><div class="meta">${escHtml(card.client||'No client recorded')} · ${escHtml(card.status||'')}</div></div><span class="health ${card.health}">${card.health}</span></div><div class="project-metrics"><div><span>Completion</span><b>${card.project_completion}%</b></div><div><span>Contract value</span><b>${fmtCurrency(card.revised_contract_value)}</b></div><div><span>Open snags</span><b>${card.open_snags}</b></div><div><span>Overdue actions</span><b>${card.overdue_actions}</b></div><div><span>Blockers</span><b>${card.major_blockers}</b></div><div><span>Late materials</span><b>${card.late_materials}</b></div></div></article>`).join('')||'<div class="empty">No accessible projects.</div>'}</div></div><div class="panel"><h3><span>Today across all projects</span><span style="font-size:11px;color:var(--muted);">${escHtml(operations.date)}</span></h3>${operations.projects.length?`<table><thead><tr><th>Project</th><th>Work today</th><th>Progress</th><th>Crew</th><th>Logs</th><th>Photos</th><th>BOQ installed</th></tr></thead><tbody>${operations.projects.map(item=>`<tr class="operations-row" data-operation-project="${item.project.id}"><td><b>${escHtml(item.project.name)}</b><span style="display:block;color:var(--muted);font-size:11px;">${escHtml(item.project.client||'')}</span></td><td>${item.tasks.length?item.tasks.map(task=>`<div>${escHtml(task.title)}</div>`).join(''):'<span style="color:var(--muted);">No scheduled work</span>'}</td><td>${item.progress}%</td><td>${item.crew}</td><td>${item.logs.length}</td><td>${item.photo_count}</td><td>${item.boq.tender?`${item.boq.installed} / ${item.boq.tender}`:'-'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No projects are available for today’s operations view.</div>'}</div>`;
+    document.getElementById('viewContent').innerHTML = `<div class="panel"><h3><span>Portfolio Overview</span><span style="font-size:11px;color:var(--muted);">${cards.length} accessible project${cards.length===1?'':'s'}</span></h3><div class="portfolio-grid">${cards.map(card=>`<article class="project-card" data-project-card="${card.id}"><div style="display:flex;justify-content:space-between;gap:10px;"><div><h3>${escHtml(card.name)}</h3><div class="meta">${escHtml(card.client||'No client recorded')} · ${escHtml(card.status||'')}</div></div><span class="health ${card.health}">${card.health}</span></div><div class="project-metrics"><div><span>Completion</span><b>${card.project_completion}%</b></div><div><span>Contract value</span><b>${fmtCurrency(card.revised_contract_value)}</b></div><div><span>Open snags</span><b>${card.open_snags}</b></div><div><span>Overdue actions</span><b>${card.overdue_actions}</b></div><div><span>Blockers</span><b>${card.major_blockers}</b></div><div><span>Late materials</span><b>${card.late_materials}</b></div></div></article>`).join('')||'<div class="empty-state"><p>No projects yet. Create your first project to get started.</p><button class="btn accent small" data-goto-projects>+ Create Project</button></div>'}</div></div><div class="panel"><h3><span>Today across all projects</span><span style="font-size:11px;color:var(--muted);">${escHtml(operations.date)}</span></h3>${operations.projects.length?`<table><thead><tr><th>Project</th><th>Work today</th><th>Progress</th><th>Crew</th><th>Logs</th><th>Photos</th><th>BOQ installed</th></tr></thead><tbody>${operations.projects.map(item=>`<tr class="operations-row" data-operation-project="${item.project.id}"><td><b>${escHtml(item.project.name)}</b><span style="display:block;color:var(--muted);font-size:11px;">${escHtml(item.project.client||'')}</span></td><td>${item.tasks.length?item.tasks.map(task=>`<div>${escHtml(task.title)}</div>`).join(''):'<span style="color:var(--muted);">No scheduled work</span>'}</td><td>${item.progress}%</td><td>${item.crew}</td><td>${item.logs.length}</td><td>${item.photo_count}</td><td>${item.boq.tender?`${item.boq.installed} / ${item.boq.tender}`:'-'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty-state"><p>Nothing scheduled for today across your projects yet.</p></div>'}</div>`;
+    if(document.querySelector('[data-goto-projects]')) document.querySelector('[data-goto-projects]').onclick = () => document.querySelector('[data-view="projects"]').click();
     document.querySelectorAll('[data-project-card]').forEach(card=>card.onclick=()=>{ currentProjectId=card.dataset.projectCard; document.getElementById('projectSelect').value=currentProjectId; render(); });
     document.querySelectorAll('[data-operation-project]').forEach(row=>row.onclick=()=>{ currentProjectId=row.dataset.operationProject; document.getElementById('projectSelect').value=currentProjectId; currentView='site_today'; document.querySelectorAll('.nav-item').forEach(item=>item.classList.toggle('active',item.dataset.view==='site_today')); document.getElementById('viewTitle').textContent='Today on Site'; render(); });
     return;
@@ -4369,9 +4377,13 @@ async function renderCrud(table, label, cols){
         if(c[0]==='planned'||c[0]==='actual'||c[0]==='cost_impact'||c[0]==='amount') return `<td>${fmtCurrency(v)}</td>`;
         return `<td>${v!==undefined&&v!==null?escHtml(v):''}</td>`;
       }).join('')}${canEdit?`<td class="row-actions">${table==='procurement_items'&&!r.po_number?`<button class="icon-btn" data-create-po="${r.id}" title="Create purchase order">PO</button>`:''}${WORKFLOW_NEXT[table]&&WORKFLOW_NEXT[table][r.status]?`<button class="icon-btn" data-transition="${r.id}" title="Advance to ${WORKFLOW_NEXT[table][r.status]}">▶</button>`:''}${canEdit?`<button class="icon-btn edit" data-edit="${r.id}" title="Edit">✎</button>`:''}${canDel?`<button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}
-    </tbody></table>` : '<div class="empty">No records yet.</div>'}
+    </tbody></table>` : `<div class="empty-state">
+      <p>No ${label.toLowerCase()}s recorded yet for this project.</p>
+      ${canEdit?`<button class="btn accent small" id="emptyAddBtn">+ Add the first ${label}</button>`:''}
+    </div>`}
   </div>`;
   if(canEdit) document.getElementById('addBtn').onclick = ()=> openAddModal(table, label, cols);
+  if(canEdit && document.getElementById('emptyAddBtn')) document.getElementById('emptyAddBtn').onclick = ()=> openAddModal(table, label, cols);
   document.getElementById('exportBtn').onclick = ()=> exportCsv(table);
   document.querySelectorAll('[data-edit]').forEach(btn=>{
     btn.onclick = ()=>{
@@ -4808,11 +4820,15 @@ async function renderProjects(){
   const canDel = ME.permissions.delete;
   document.getElementById('viewContent').innerHTML = `
   <div class="panel"><h3><span>Projects</span><span>${canEdit?'<button class="btn accent small" id="addProjBtn">+ Add Project</button>':''}<button class="btn ghost small" id="exportBtn" style="margin-left:8px;">Export CSV</button></span></h3>
-    <table><thead><tr><th>Name</th><th>Client</th><th>Status</th><th>Budget</th>${canEdit?'<th></th>':''}</tr></thead>
+    ${PROJECTS.length ? `<table><thead><tr><th>Name</th><th>Client</th><th>Status</th><th>Budget</th>${canEdit?'<th></th>':''}</tr></thead>
     <tbody>${PROJECTS.map(p=>`<tr><td>${escHtml(p.name)}</td><td>${escHtml(p.client)}</td><td><span class="badge ${badgeClass(p.status)}">${p.status}</span></td><td>${fmtCurrency(p.budget)}</td>
-    ${canEdit?`<td class="row-actions"><button class="icon-btn edit" data-editp="${p.id}" title="Edit">✎</button>${canDel?`<button class="icon-btn" data-delp="${p.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}</tbody></table>
+    ${canEdit?`<td class="row-actions"><button class="icon-btn edit" data-editp="${p.id}" title="Edit">✎</button>${canDel?`<button class="icon-btn" data-delp="${p.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}</tbody></table>` : `<div class="empty-state">
+      <p>No projects yet.</p>
+      ${canEdit?'<button class="btn accent small" id="emptyAddProjBtn">+ Add your first project</button>':''}
+    </div>`}
   </div>`;
   if(canEdit) document.getElementById('addProjBtn').onclick = ()=> openProjectModal(null);
+  if(canEdit && document.getElementById('emptyAddProjBtn')) document.getElementById('emptyAddProjBtn').onclick = ()=> openProjectModal(null);
   document.getElementById('exportBtn').onclick = ()=> exportCsv('projects');
   document.querySelectorAll('[data-editp]').forEach(btn=>{
     btn.onclick = ()=>{ const p = PROJECTS.find(x=>x.id===btn.dataset.editp); openProjectModal(p); };
