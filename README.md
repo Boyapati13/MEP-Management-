@@ -36,7 +36,7 @@ The application was originally scaffolded in Google AI Studio (see `metadata.jso
 
 **Documents & Drawings**
 - Drawing/document register with revision tracking
-- On-drawing markup tooling (`pdf.js` for rendering PDFs, `jsPDF` for exporting marked-up sheets)
+- On-drawing markup tooling (`pdf.js` for rendering PDFs, `jsPDF` for exporting marked-up sheets) - both self-hosted from /public/vendor, not loaded from a CDN
 - AI-assisted Q&A directly against an uploaded drawing image
 
 **Commercial**
@@ -70,7 +70,7 @@ The application was originally scaffolded in Google AI Studio (see `metadata.jso
 
 | Layer | Technology |
 |---|---|
-| Frontend | Server-rendered `index.html` single-page app (vanilla JS + CSS), `pdf.js` and `jsPDF` for drawing tooling |
+| Frontend | Server-rendered `index.html` single-page app (vanilla JS + CSS), `pdf.js` (v4, ESM) and `jsPDF` (UMD) for drawing tooling, both self-hosted under /public/vendor |
 | Frontend scaffold (unused) | Vite 6 + React 19 + TypeScript + Tailwind 4 (`src/`) |
 | Backend | Node.js + Express 4, single TypeScript file (`server.ts`), run directly via `tsx` in dev |
 | Database | SQLite via Node's built-in `node:sqlite` module (`DatabaseSync`) — no native driver dependency |
@@ -261,6 +261,8 @@ These are worth addressing before any production/internet-facing deployment. Ear
 - **No MFA/SSO.** Authentication is username + password only.
 - **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, and now triggers an in-app notification when set - but the Planner UI still doesn't expose a way to pick an assignee from the task detail modal; it can only be set via a direct API call.
 - **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
+- **`alert()` is used for error handling** in a few places (e.g. the Drawing Markup Studio's PDF-load failure message) - functional, but a native blocking browser dialog is a dated pattern for a polished app; an inline error banner would look and behave better, and not incidentally block headless browser automation the way it blocked screenshot testing during this pass.
+- **The Drawing Markup Studio toolbar has three buttons styled with the same "accent" primary-action color** (Sample MEP PDF, Ask Worker AI, Create Snag from Markup) - not wrong, but three simultaneous "primary" actions dilutes which one is actually primary.
 - **Notifications are in-app only** - no email/push/SMS layer. The `createNotification()` helper is a natural place to add an email send (e.g. via `nodemailer`) behind an `SMTP_*` env var check, following the same "works without it, better with it" pattern as `GEMINI_API_KEY` - not built yet.
 - **Notification bell dropdown uses fixed positioning** near the top-left rather than anchoring precisely under the bell icon - functional, not pixel-perfect.
 - **Single SQLite file** for the whole database, and file attachments are stored as base64 inside it rather than in separate object storage. Fine for one team's internal use; won't hold up as a scaled, multi-tenant product.
@@ -278,6 +280,15 @@ These are worth addressing before any production/internet-facing deployment. Ear
 **Added this round (feature parity with generic PM tools):**
 - **Real drag-and-drop** on the Planner board - dragging a task card to a different bucket column calls `PUT /api/plan_tasks/:id` to move it, instead of only being possible through a dropdown in the detail modal.
 - **In-app notifications.** New `notifications` table plus a generic hook in the shared `PUT /api/:table/:id` handler: whenever a record's status changes to something "decision-worthy" (Approved, Rejected, Answered, Completed, Closed, Rectified, Certified), the record's creator (looked up via the existing `record_owners` table - no new per-table columns needed) gets a notification, unless they made the change themselves. Also fires when a record's `assigned_to` changes. Surfaced via a bell icon with an unread-count badge, polling every 45 seconds, plus `GET /api/notifications`, `PUT /api/notifications/:id/read`, and `PUT /api/notifications/read-all`.
+
+**Fixed this round (visual/UX audit, done via actual screenshots - see below):**
+- Removed leftover hardcoded "DLI / OPERATIONS PLATFORM" placeholder branding from the login screen.
+- Fixed the notification bell (added last round) rendering as a bare, unstyled text link - replaced with a real SVG icon in a proper button, fixed `.user-chip`'s layout (wasn't actually `flex`, so `margin-left:auto` was silently doing nothing), and fixed the dropdown's position (first guess overlapped the sidebar header).
+- Added a proper empty-state treatment (bordered panel, message, call-to-action button) to the shared table renderer used by most modules, plus the Dashboard and Projects views. Previously these just showed a sparse line of text above a large empty void.
+- Found and fixed `renderProjects` rendering a bare `<table>` with zero empty-state handling at all - worse than every other view.
+- **Self-hosted pdf.js and jsPDF instead of loading them from cdnjs.cloudflare.com.** This was found while trying to screenshot the Drawing Markup Studio: it hung indefinitely because the CDN was unreachable and the resulting error surfaced as a blocking native `alert()`. Real construction sites often have restricted or unreliable internet, so a hard dependency on a third-party CDN for a core feature was a genuine reliability risk, not just a sandbox artifact. Also found and removed pdf.js being loaded three separate times (duplicate `<script>` tag, three separate `workerSrc` assignments scattered across the file). Upgraded to the latest patched versions in the process (the CDN-pinned versions had 1 high and 1 critical unpatched vulnerability between them). pdf.js ships ESM-only from v4 onward, so it's loaded via dynamic `import()` and attached to `window.pdfjsLib`, keeping every existing call site unchanged.
+
+**How the visual audit was done:** a real headless-Chrome screenshot pipeline (`puppeteer-core` driving a pre-cached Chrome binary already present in the sandbox), rather than editing HTML/CSS and assuming the result - every fix above was confirmed with a before/after screenshot, not just a passing type-check. Screens actually inspected so far: login, dashboard, Projects, Documents, and the Drawing Markup Studio. Not yet inspected: Punch List floor-plan view, Gantt/schedule, the AI advisor drawer, User admin/Personnel Directory, the Planner Kanban board, and the remaining generic-CRUD module tables (RFIs, submittals, BOQ, NCRs, etc.).
 
 ## License
 

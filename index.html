@@ -8,9 +8,19 @@
 <meta property="og:title" content="MEP Project Manager" />
 <meta property="og:description" content="Full-stack MEP (Mechanical, Electrical, Plumbing) project management system with portfolio tracking, tasks, BOQ, submittals, RFIs, attendance, site logs, and commissioning." />
 <meta property="og:type" content="website" />
-<!-- PDF Rendering & PDF Generation Engines for Hand Drawing on Blueprints -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- PDF Rendering & PDF Generation Engines for Hand Drawing on Blueprints.
+     Self-hosted (not loaded from a CDN) so the Drawing Markup Studio still
+     works on a restricted/offline site network - a real concern for
+     construction-site users. pdf.js ships ESM-only from v4 onward, so it's
+     loaded via dynamic import() and attached to window.pdfjsLib to keep the
+     rest of the app's code (which expects a global) unchanged. -->
+<script src="/vendor/jspdf/jspdf.umd.min.js"></script>
+<script>
+  import('/vendor/pdfjs/pdf.min.mjs').then(mod => {
+    window.pdfjsLib = mod;
+    mod.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+  }).catch(err => console.error('Failed to load PDF library:', err));
+</script>
 <style>
   :root{
     --primary:#4fa8e0; --secondary:#2c6e91; --accent:#f5a623; --bg:#0a1420;
@@ -401,12 +411,6 @@
   .role-card-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
   .role-card-scope { font-size: 11px; color: var(--primary); font-weight: 600; padding: 4px 8px; background: rgba(111,211,193,0.08); border-radius: 6px; border: 1px solid rgba(111,211,193,0.2); }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-  if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  }
-</script>
 </head>
 <body>
 
@@ -2378,9 +2382,6 @@ function renderSimpleMarkdown(md){
   return html;
 }
 
-if(window.pdfjsLib){
-  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
 
 let studioState = {
   activeTool: 'hand_pen', // 'hand_pen' | 'highlighter' | 'cloud' | 'eraser' | 'arrow' | 'rect' | 'text' | 'pin' | 'pan'
