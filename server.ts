@@ -726,6 +726,26 @@ function initDb() {
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL, task_id TEXT NOT NULL, label TEXT,
       is_checked INTEGER DEFAULT 0, order_index INTEGER
     );
+
+    -- Performance Optimization: Database Indexes
+    -- Adding indexes on project_id and user_id for frequently queried tables to avoid O(N) full table scans
+    CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_rfis_project ON rfis(project_id);
+    CREATE INDEX IF NOT EXISTS idx_submittals_project ON submittals(project_id);
+    CREATE INDEX IF NOT EXISTS idx_punchlist_project ON punchlist(project_id);
+    CREATE INDEX IF NOT EXISTS idx_dailylogs_project ON dailylogs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
+    CREATE INDEX IF NOT EXISTS idx_costs_project ON costs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_boq_items_project ON boq_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_change_orders_project ON change_orders(project_id);
+    CREATE INDEX IF NOT EXISTS idx_purchase_orders_project ON purchase_orders(project_id);
+    CREATE INDEX IF NOT EXISTS idx_safety_incidents_project ON safety_incidents(project_id);
+    CREATE INDEX IF NOT EXISTS idx_dependencies_project ON dependencies(project_id);
+    CREATE INDEX IF NOT EXISTS idx_procurement_items_project ON procurement_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_plan_buckets_project ON plan_buckets(project_id);
+    CREATE INDEX IF NOT EXISTS idx_plan_tasks_project ON plan_tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_plan_task_checklist_project ON plan_task_checklist(project_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
   `);
 
   try { db.exec("ALTER TABLE documents ADD COLUMN subcontractor_id TEXT;"); } catch {}

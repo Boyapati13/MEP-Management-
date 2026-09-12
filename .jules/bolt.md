@@ -1,0 +1,3 @@
+## 2025-05-18 - Database Indexing for Project-Scoped Queries
+**Learning:** Tables filtered frequently by `project_id` or `user_id` across REST endpoints (`/api/tasks`, `/api/rfis`, `/api/punchlist`, `/api/notifications`, etc.) were performing full table scans (`SCAN table_name`). Adding explicit `CREATE INDEX IF NOT EXISTS` statements during database initialization converts these lookups to `SEARCH USING INDEX` operations, preventing query latency growth as project data scales.
+**Action:** Always check `EXPLAIN QUERY PLAN` on SQLite databases for foreign key and scope fields (`project_id`, `user_id`) to ensure indexed lookups.
