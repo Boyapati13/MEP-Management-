@@ -4410,7 +4410,12 @@ async function renderCrud(table, label, cols){
 }
 
 async function renderPlanner(){
-  const buckets = await apiFetch(`/api/projects/${currentProjectId}/planner`);
+  const plannerProjectId = currentProjectId === 'ALL' ? (PROJECTS[0]?.id || '') : currentProjectId;
+  if(!plannerProjectId){
+    document.getElementById('viewContent').innerHTML = `<div class="panel"><h3><span>Planner</span></h3><div class="empty-state"><p>Select a project above to view its Planner board.</p></div></div>`;
+    return;
+  }
+  const buckets = await apiFetch(`/api/projects/${plannerProjectId}/planner`);
   const canEditPlanner = ME.permissions.edit.includes('planner');
   const priorityColor = { Urgent: '#ef4444', Important: '#f59e0b', Low: '#6fd3c1' };
 
