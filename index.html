@@ -1499,19 +1499,30 @@ async function renderPunchList(){
   const canEdit = ME.permissions.edit.includes('punchlist');
   const canDel = ME.permissions.delete && canEdit;
   const allItems = await apiFetch(`/api/punchlist?project_id=${currentProjectId}`);
-  
-  const activePlan = FLOOR_PLANS[currentFloor] || FLOOR_PLANS.L2;
-  
+
   let displayedItems = allItems.slice();
   if(punchTradeFilter !== 'ALL') displayedItems = displayedItems.filter(i => i.trade === punchTradeFilter);
   if(punchPriorityFilter !== 'ALL') displayedItems = displayedItems.filter(i => i.priority === punchPriorityFilter);
   if(punchStatusFilter !== 'ALL') displayedItems = displayedItems.filter(i => i.status === punchStatusFilter);
-  
-  if(selectedPlanZone){
-    const zoneObj = activePlan.zones.find(z => z.name === selectedPlanZone);
-    if(zoneObj){
-      displayedItems = displayedItems.filter(i => matchItemToZone(i, zoneObj));
+
+  const UNSPECIFIED_ZONE = 'Unspecified Location';
+  const normLoc = (loc) => (loc || '').trim().toLowerCase();
+
+  // Zones are derived entirely from the real Location text on each project's
+  // own punch items - never a fixed/fictional room list. A project with no
+  // locations recorded yet simply has no zones, which is the honest state.
+  const zoneMap = new Map();
+  allItems.forEach(item => {
+    const key = normLoc(item.location) || '__unspecified__';
+    if(!zoneMap.has(key)){
+      zoneMap.set(key, { name: item.location && item.location.trim() ? item.location.trim() : UNSPECIFIED_ZONE, items: [] });
     }
+    zoneMap.get(key).items.push(item);
+  });
+  const zones = Array.from(zoneMap.values()).sort((a,b) => b.items.length - a.items.length);
+
+  if(selectedPlanZone){
+    displayedItems = displayedItems.filter(i => (normLoc(i.location) || '__unspecified__') === (normLoc(selectedPlanZone) || '__unspecified__') || (selectedPlanZone === UNSPECIFIED_ZONE && !i.location));
   }
 
   const totalCount = allItems.length;
@@ -1519,23 +1530,24 @@ async function renderPunchList(){
   const criticalCount = allItems.filter(i => i.priority === 'Critical' && i.status !== 'Closed').length;
   const resolvedCount = allItems.filter(i => i.status === 'Resolved' || i.status === 'Closed').length;
 
+  const zoneAccentColor = (zone) => {
+    const open = zone.items.filter(i => i.status !== 'Closed');
+    if(open.some(i => i.priority === 'Critical')) return '#ef6a63';
+    if(open.some(i => i.priority === 'High')) return '#f3b562';
+    if(open.length === 0) return 'var(--success)';
+    return '#6fd3c1';
+  };
+
   document.getElementById('viewContent').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:14px;">
-      
-      <!-- Top Floor Selection & Actions Toolbar -->
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <div class="floor-nav-pills">
-          ${Object.values(FLOOR_PLANS).map(fl => `
-            <button class="floor-pill ${fl.id===currentFloor?'active':''}" data-floor-select="${fl.id}">
-              <span>${escHtml(fl.shortName)}</span>
-            </button>
-          `).join('')}
-        </div>
 
+      <!-- Top Actions Toolbar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <h3 style="margin:0;">Punch List</h3>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div class="view-mode-toggle">
             <button class="view-mode-btn ${planViewMode==='split'?'active':''}" data-view-mode="split" title="Split Plan and Table">⊞ Split</button>
-            <button class="view-mode-btn ${planViewMode==='plan'?'active':''}" data-view-mode="plan" title="Floor Plan Only">Plan</button>
+            <button class="view-mode-btn ${planViewMode==='plan'?'active':''}" data-view-mode="plan" title="Locations Only">By Location</button>
             <button class="view-mode-btn ${planViewMode==='table'?'active':''}" data-view-mode="table" title="Table Only">☰ Table</button>
           </div>
           ${canEdit ? `
@@ -1568,20 +1580,19 @@ async function renderPunchList(){
 
       <!-- Main Layout: Split, Plan or Table -->
       <div class="punch-main-split">
-        
-        <!-- Floor Plan Card (shown in split or plan mode) -->
+
+        <!-- Locations Card (shown in split or plan mode) -->
         ${planViewMode !== 'table' ? `
           <div class="floor-plan-card" id="floorPlanSection">
             <div class="floor-plan-header">
               <div>
-                <h4 style="margin:0 0 3px 0;color:var(--primary);">${escHtml(activePlan.name)}</h4>
-                <div style="font-size:11px;color:var(--muted);">Interactive Architectural Drawing · Click any room/zone to filter snags</div>
+                <h4 style="margin:0 0 3px 0;color:var(--primary);">Snags by Location</h4>
+                <div style="font-size:11px;color:var(--muted);">Grouped automatically from the Location entered on each punch item · click a location to filter</div>
               </div>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <button class="btn accent small" id="planAskAiBtn" style="font-size:11px;" title="Ask AI technical questions about this drawing">Ask Worker AI</button>
-                <button class="btn ghost small" id="planMarkupBtn" style="font-size:11px;" title="Open Drawing & PDF Markup Studio">✏️ Draw / Markup</button>
+                <button class="btn accent small" id="planAskAiBtn" style="font-size:11px;" title="Ask AI technical questions about this punch list">Ask Worker AI</button>
                 ${selectedPlanZone ? `
-                  <button class="btn ghost small" id="clearZoneBtn" style="font-size:11px;">✕ Clear Zone</button>
+                  <button class="btn ghost small" id="clearZoneBtn" style="font-size:11px;">✕ Clear Location</button>
                   ${canEdit ? `
                     <button class="btn accent small" id="cameraZoneBtn" style="font-size:11px;">Snap Snag</button>
                     <button class="btn ghost small" id="addSnagToZoneBtn" style="font-size:11px;">+ Add Here</button>
@@ -1596,43 +1607,58 @@ async function renderPunchList(){
             ${selectedPlanZone ? `
               <div style="background:rgba(243,181,98,0.14);border:1px solid #f3b562;padding:8px 12px;border-radius:6px;margin:8px 16px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                 <span style="font-size:12px;color:#f3b562;">
-                  <b>Filtered Zone:</b> ${escHtml(selectedPlanZone)} (${displayedItems.length} snags)
+                  <b>Filtered:</b> ${escHtml(selectedPlanZone)} (${displayedItems.length} snags)
                 </span>
                 <div style="display:flex;gap:6px;align-items:center;">
-                  <button class="btn ghost small" id="zoneAskAiBtn" style="font-size:11px;padding:3px 8px;border-color:#f3b562;color:#f3b562;" title="Ask AI questions specifically about this zone">Ask AI about ${escHtml(selectedPlanZone)}</button>
-                  <button class="btn ghost small" id="zoneMarkupBtn" style="font-size:11px;padding:3px 8px;" title="Annotate this zone drawing">✏️ Markup Zone</button>
+                  <button class="btn ghost small" id="zoneAskAiBtn" style="font-size:11px;padding:3px 8px;border-color:#f3b562;color:#f3b562;" title="Ask AI questions specifically about this location">Ask AI about ${escHtml(selectedPlanZone)}</button>
                 </div>
               </div>
             ` : ''}
 
-            <!-- SVG Blueprint Map -->
-            <div class="floor-plan-viewport">
-              ${generateFloorPlanSvg(currentFloor, allItems, selectedPlanZone)}
+            <!-- Location Cards Grid -->
+            <div style="padding:16px;">
+              ${zones.length ? `
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+                  ${zones.map(z => {
+                    const openInZone = z.items.filter(i => i.status !== 'Closed').length;
+                    const accent = zoneAccentColor(z);
+                    return `
+                      <div class="plan-zone" data-zone-name="${escHtml(z.name)}" style="cursor:pointer;background:rgba(255,255,255,0.03);border:1px solid ${selectedPlanZone===z.name?accent:'var(--border)'};border-left:3px solid ${accent};border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${escHtml(z.name)}</div>
+                        <div style="font-size:11px;color:var(--muted);">${z.items.length} snag${z.items.length===1?'':'s'} · ${openInZone} open</div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : `
+                <div class="empty-state">
+                  <p>No punch items with a Location recorded yet.</p>
+                  ${canEdit?'<p style="font-size:11px;">Add a punch item and fill in its Location field - locations will be grouped here automatically as you use them.</p>':''}
+                </div>
+              `}
             </div>
 
             <!-- Zone Quick-Filter Chips -->
-            <div class="zone-filter-chips">
-              <button class="zone-chip ${!selectedPlanZone?'active':''}" data-zone-filter="ALL">
-                All Zones (${allItems.length})
-              </button>
-              ${activePlan.zones.map(z => {
-                const zCount = allItems.filter(i => matchItemToZone(i, z)).length;
-                return `
+            ${zones.length ? `
+              <div class="zone-filter-chips">
+                <button class="zone-chip ${!selectedPlanZone?'active':''}" data-zone-filter="ALL">
+                  All Locations (${allItems.length})
+                </button>
+                ${zones.map(z => `
                   <button class="zone-chip ${selectedPlanZone===z.name?'active':''}" data-zone-filter="${escHtml(z.name)}">
-                    ${escHtml(z.label)} (${zCount})
+                    ${escHtml(z.name)} (${z.items.length})
                   </button>
-                `;
-              }).join('')}
-            </div>
+                `).join('')}
+              </div>
+            ` : ''}
 
-            <!-- Floor Plan Legend -->
+            <!-- Legend -->
             <div class="plan-legend">
               <span style="color:var(--muted);font-size:11px;font-weight:700;">LEGEND:</span>
-              <div class="legend-item"><span class="legend-swatch" style="background:#ef6a63;"></span> Critical</div>
-              <div class="legend-item"><span class="legend-swatch" style="background:#f3b562;"></span> High</div>
-              <div class="legend-item"><span class="legend-swatch" style="background:#6fd3c1;"></span> Medium</div>
-              <div class="legend-item"><span class="legend-swatch" style="background:#6fd3a0;"></span> Low</div>
-              <div class="legend-item" style="margin-left:auto;"><span style="color:var(--muted);">Letters: <b>H</b>=HVAC <b>E</b>=Elec <b>P</b>=Plumb <b>F</b>=Fire <b>B</b>=BMS</span></div>
+              <div class="legend-item"><span class="legend-swatch" style="background:#ef6a63;"></span> Critical open</div>
+              <div class="legend-item"><span class="legend-swatch" style="background:#f3b562;"></span> High open</div>
+              <div class="legend-item"><span class="legend-swatch" style="background:#6fd3c1;"></span> Other open</div>
+              <div class="legend-item"><span class="legend-swatch" style="background:var(--success);"></span> All closed</div>
             </div>
           </div>
         ` : ''}
@@ -1724,8 +1750,8 @@ async function renderPunchList(){
               </div>
             ` : `
               <div class="empty">
-                No punch items match the current zone or filters.
-                ${selectedPlanZone ? `<div style="margin-top:8px;"><button class="btn ghost small" id="emptyClearZoneBtn">Clear Zone Filter</button></div>` : ''}
+                No punch items match the current location or filters.
+                ${selectedPlanZone ? `<div style="margin-top:8px;"><button class="btn ghost small" id="emptyClearZoneBtn">Clear Filter</button></div>` : ''}
               </div>
             `}
           </div>
@@ -1734,14 +1760,6 @@ async function renderPunchList(){
       </div>
     </div>
   `;
-
-  document.querySelectorAll('[data-floor-select]').forEach(btn => {
-    btn.onclick = () => {
-      currentFloor = btn.dataset.floorSelect;
-      selectedPlanZone = null;
-      renderPunchList();
-    };
-  });
 
   document.querySelectorAll('[data-view-mode]').forEach(btn => {
     btn.onclick = () => {
@@ -1755,15 +1773,6 @@ async function renderPunchList(){
       const zoneName = zoneEl.dataset.zoneName;
       selectedPlanZone = (selectedPlanZone === zoneName) ? null : zoneName;
       renderPunchList();
-    };
-  });
-
-  document.querySelectorAll('.plan-pin').forEach(pinEl => {
-    pinEl.onclick = (e) => {
-      e.stopPropagation();
-      const pinId = pinEl.dataset.pinId;
-      const targetItem = allItems.find(r => r.id === pinId);
-      if(targetItem) openPunchDetailsModal(targetItem, canEdit, canDel);
     };
   });
 
@@ -1790,12 +1799,12 @@ async function renderPunchList(){
 
   if(document.getElementById('addPunchBtn')){
     document.getElementById('addPunchBtn').onclick = () => {
-      openAddModal('punchlist', 'Punch Item', null, selectedPlanZone ? { location: selectedPlanZone } : null);
+      openAddModal('punchlist', 'Punch Item', null, selectedPlanZone && selectedPlanZone !== UNSPECIFIED_ZONE ? { location: selectedPlanZone } : null);
     };
   }
   if(document.getElementById('addSnagToZoneBtn')){
     document.getElementById('addSnagToZoneBtn').onclick = () => {
-      openAddModal('punchlist', 'Punch Item', null, { location: selectedPlanZone });
+      openAddModal('punchlist', 'Punch Item', null, { location: selectedPlanZone === UNSPECIFIED_ZONE ? '' : selectedPlanZone });
     };
   }
 
@@ -1811,47 +1820,29 @@ async function renderPunchList(){
   }
   if(document.getElementById('cameraPlanBtn')){
     document.getElementById('cameraPlanBtn').onclick = () => {
-      openCameraCaptureModal({ context: 'punchlist', defaultZone: activePlan?.shortName || '' });
+      openCameraCaptureModal({ context: 'punchlist', defaultZone: '' });
     };
   }
 
   if(document.getElementById('planAskAiBtn')){
     document.getElementById('planAskAiBtn').onclick = () => {
-      const plan = FLOOR_PLANS[currentFloor] || FLOOR_PLANS.L2;
-      const zoneObj = selectedPlanZone ? plan.zones.find(z => z.name === selectedPlanZone) : null;
       openWorkerAiDrawer({
-        drawingTitle: plan.name,
-        zoneName: selectedPlanZone || `${plan.shortName} (All Zones)`,
-        zoneSub: zoneObj ? zoneObj.sub : '',
-        openItems: displayedItems,
-        floorKey: currentFloor
+        drawingTitle: 'Punch List',
+        zoneName: selectedPlanZone || 'All Locations',
+        zoneSub: '',
+        openItems: displayedItems
       });
     };
   }
 
   if(document.getElementById('zoneAskAiBtn')){
     document.getElementById('zoneAskAiBtn').onclick = () => {
-      const plan = FLOOR_PLANS[currentFloor] || FLOOR_PLANS.L2;
-      const zoneObj = plan.zones.find(z => z.name === selectedPlanZone);
       openWorkerAiDrawer({
-        drawingTitle: plan.name,
+        drawingTitle: 'Punch List',
         zoneName: selectedPlanZone,
-        zoneSub: zoneObj ? zoneObj.sub : '',
-        openItems: displayedItems,
-        floorKey: currentFloor
+        zoneSub: '',
+        openItems: displayedItems
       });
-    };
-  }
-
-  if(document.getElementById('planMarkupBtn')){
-    document.getElementById('planMarkupBtn').onclick = () => {
-      openDrawingMarkupStudio({ floorKey: currentFloor, zone: selectedPlanZone });
-    };
-  }
-
-  if(document.getElementById('zoneMarkupBtn')){
-    document.getElementById('zoneMarkupBtn').onclick = () => {
-      openDrawingMarkupStudio({ floorKey: currentFloor, zone: selectedPlanZone });
     };
   }
 
