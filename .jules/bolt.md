@@ -1,0 +1,3 @@
+## 2026-03-30 - Database Indexes for Project-Scoped SQLite Tables
+**Learning:** SQLite database tables initialized in `server.ts` without explicit `CREATE INDEX` statements caused full table scans on every `WHERE project_id=?` and `WHERE user_id=?` query. In multi-project aggregate endpoints (like `/api/portfolio` and `/api/dashboard`), executing full table scans across 30+ tables for every project significantly increased response latency.
+**Action:** Always ensure foreign key and frequently filtered columns (`project_id`, `user_id`, `task_id`) have explicit `CREATE INDEX IF NOT EXISTS` statements during database schema initialization.
