@@ -387,6 +387,7 @@
   .badge-role-safety { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.35); }
   .badge-role-sub { background: rgba(249, 115, 22, 0.15); color: #fb923c; border-color: rgba(249, 115, 22, 0.35); }
   .badge-role-consultant { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border-color: rgba(139, 92, 246, 0.35); }
+  .badge-role-client { background: rgba(8, 145, 178, 0.15); color: #22d3ee; border-color: rgba(8, 145, 178, 0.35); }
 
   .badge-status { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
   .badge-status.active { background: rgba(34, 197, 94, 0.16); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
@@ -444,6 +445,7 @@
     <div id="notifDropdown"></div>
     <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Overview <span>⌃</span></button>
       <div class="nav-item active" data-view="dashboard">Dashboard</div>
+      <div class="nav-item" data-view="client_dashboard">Client Portal</div>
       <div class="nav-item" data-view="site_today">Today on Site</div>
       <div class="nav-item" data-view="calendar">Week Calendar</div>
       <div class="nav-item" data-view="attendance">Worker Attendance</div>
@@ -737,12 +739,14 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
     }
     const data = await res.json();
     TOKEN = data.token; ME = data;
+    if(ME.role === 'Client') currentView = 'client_dashboard';
     localStorage.setItem('mep_token', TOKEN);
     localStorage.setItem('mep_api', API);
     document.getElementById('loginScreen').classList.add('hide');
     document.getElementById('app').classList.add('show');
     document.getElementById('chipName').textContent = ME.name;
     document.getElementById('chipRole').textContent = ME.role;
+    if(ME.role === 'Client') document.getElementById('viewTitle').textContent = 'Client Portal';
     buildNav();
     await loadProjectsAndRender();
     if(ME.must_change_password){
@@ -781,6 +785,13 @@ function buildNav(){
       document.getElementById('viewTitle').textContent = el.textContent.trim();
       render();
     };
+  });
+  // Hide a whole nav group (including its label) when none of its items are
+  // visible for this role - a curated role like Client should never see a
+  // row of empty section headers with nothing underneath them.
+  document.querySelectorAll('.nav-group').forEach(group=>{
+    const hasVisibleItem = Array.from(group.querySelectorAll('.nav-item')).some(el => el.style.display !== 'none');
+    group.style.display = hasVisibleItem ? '' : 'none';
   });
   document.querySelectorAll('.mobile-nav-btn[data-mobile-view]').forEach(btn=>{
     btn.onclick = ()=>{
@@ -858,7 +869,7 @@ async function render(){
   const content = document.getElementById('viewContent');
   content.innerHTML = '<div class="empty">Loading...</div>';
   const fns = {
-    dashboard: renderDashboard, site_today: renderSiteToday, calendar: renderCalendar, attendance: renderAttendance, tasks: ()=>renderCrud('tasks','Task',[['title','Task'],['trade','Trade'],['assignee','Assignee'],['start','Start'],['end','End'],['progress','Progress'],['status','Status']]),
+    dashboard: renderDashboard, client_dashboard: renderClientDashboard, site_today: renderSiteToday, calendar: renderCalendar, attendance: renderAttendance, tasks: ()=>renderCrud('tasks','Task',[['title','Task'],['trade','Trade'],['assignee','Assignee'],['start','Start'],['end','End'],['progress','Progress'],['status','Status']]),
     gantt: renderGantt,
     rfis: ()=>renderCrud('rfis','RFI',[['number','No.'],['subject','Subject'],['trade','Trade'],['due_date','Due'],['status','Status']]),
     submittals: ()=>renderCrud('submittals','Submittal',[['number','No.'],['item','Item'],['trade','Trade'],['due_date','Due'],['status','Status']]),
@@ -3606,7 +3617,8 @@ const USER_ROLES_META = {
   QAQC: { name: 'QA/QC & Commissioning Lead', icon: '', badge: 'badge-role-qaqc', cat: 'Quality & Compliance', scope: 'Assigned Projects', desc: 'Site inspections, Non-Conformance Reports (NCRs), testing & balancing witness sheets, and system handover closeout.' },
   SafetyOfficer: { name: 'Site HSE & Safety Manager', icon: '', badge: 'badge-role-safety', cat: 'Health, Safety & Environment', scope: 'Assigned Projects', desc: 'HSE compliance, safety incident reporting, hazard mitigation, safety audits, and worker safety briefing tracking.' },
   Subcontractor: { name: 'Specialist Trade Subcontractor', icon: '', badge: 'badge-role-sub', cat: 'Trade Contractor', scope: 'Project & Trade Restricted', desc: 'Execute assigned trade tasks, report progress, submit floor plan snags, create material requests, and upload trade documents.' },
-  Consultant: { name: 'Supervising MEP Consultant', icon: '', badge: 'badge-role-consultant', cat: 'Client & Design Oversight', scope: 'Assigned Projects (Witness/Review)', desc: 'Design compliance review, RFI responses, submittal approvals, inspection witness sign-off, and handover acceptance.' }
+  Consultant: { name: 'Supervising MEP Consultant', icon: '', badge: 'badge-role-consultant', cat: 'Client & Design Oversight', scope: 'Assigned Projects (Witness/Review)', desc: 'Design compliance review, RFI responses, submittal approvals, inspection witness sign-off, and handover acceptance.' },
+  Client: { name: 'Client / Project Owner', icon: '', badge: 'badge-role-client', cat: 'Client & Design Oversight', scope: 'Assigned Projects (Published Data Only)', desc: 'Curated project health, milestones, and only the documents and change orders explicitly published to the client.' }
 };
 
 let userAdminState = {
@@ -4368,7 +4380,7 @@ async function renderCrud(table, label, cols){
         if(c[0]==='status'||c[0]==='result') return `<td><span class="badge ${badgeClass(v)}">${v}</span></td>`;
         if(c[0]==='planned'||c[0]==='actual'||c[0]==='cost_impact'||c[0]==='amount') return `<td>${fmtCurrency(v)}</td>`;
         return `<td>${v!==undefined&&v!==null?escHtml(v):''}</td>`;
-      }).join('')}${canEdit?`<td class="row-actions">${table==='procurement_items'&&!r.po_number?`<button class="icon-btn" data-create-po="${r.id}" title="Create purchase order">PO</button>`:''}${WORKFLOW_NEXT[table]&&WORKFLOW_NEXT[table][r.status]?`<button class="icon-btn" data-transition="${r.id}" title="Advance to ${WORKFLOW_NEXT[table][r.status]}">▶</button>`:''}${canEdit?`<button class="icon-btn edit" data-edit="${r.id}" title="Edit">✎</button>`:''}${canDel?`<button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}
+      }).join('')}${canEdit?`<td class="row-actions">${table==='procurement_items'&&!r.po_number?`<button class="icon-btn" data-create-po="${r.id}" title="Create purchase order">PO</button>`:''}${'visibility' in r?`<button class="icon-btn" data-toggle-publish="${r.id}" data-current-visibility="${r.visibility||'Internal'}" title="${(r.visibility==='Client'||r.visibility==='All')?'Published to Client - click to unpublish':'Publish to Client'}">${(r.visibility==='Client'||r.visibility==='All')?'Published':'Publish'}</button>`:''}${WORKFLOW_NEXT[table]&&WORKFLOW_NEXT[table][r.status]?`<button class="icon-btn" data-transition="${r.id}" title="Advance to ${WORKFLOW_NEXT[table][r.status]}">▶</button>`:''}${canEdit?`<button class="icon-btn edit" data-edit="${r.id}" title="Edit">✎</button>`:''}${canDel?`<button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}
     </tbody></table>` : `<div class="empty-state">
       <p>No ${label.toLowerCase()}s recorded yet for this project.</p>
       ${canEdit?`<button class="btn accent small" id="emptyAddBtn">+ Add the first ${label}</button>`:''}
@@ -4399,6 +4411,15 @@ async function renderCrud(table, label, cols){
       render();
     };
   });
+  document.querySelectorAll('[data-toggle-publish]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const isPublished = btn.dataset.currentVisibility === 'Client' || btn.dataset.currentVisibility === 'All';
+      const newVisibility = isPublished ? 'Internal' : 'Client';
+      if(!isPublished && !confirm(`Publish this ${label.toLowerCase()} to the client? They will be able to see it in their Client Portal.`)) return;
+      await apiFetch(`/api/${table}/${btn.dataset.togglePublish}`, {method:'PUT', body:JSON.stringify({visibility:newVisibility})});
+      render();
+    };
+  });
   document.querySelectorAll('[data-del]').forEach(btn=>{
     btn.onclick = async ()=>{
       const ok = await confirmAction(`Delete this ${label.toLowerCase()}? This cannot be undone.`);
@@ -4407,6 +4428,67 @@ async function renderCrud(table, label, cols){
       render();
     };
   });
+}
+
+async function renderClientDashboard(){
+  const projectId = currentProjectId === 'ALL' ? (PROJECTS[0]?.id || '') : currentProjectId;
+  if(!projectId){
+    document.getElementById('viewContent').innerHTML = `<div class="panel"><h3><span>Client Portal</span></h3><div class="empty-state"><p>No project has been shared with you yet.</p></div></div>`;
+    return;
+  }
+  const summary = await apiFetch(`/api/projects/${projectId}/client-summary`);
+
+  document.getElementById('viewContent').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="panel">
+        <h3>
+          <span>${escHtml(summary.project.name)}</span>
+          <span style="font-size:12px;color:var(--muted);font-weight:400;">${escHtml(summary.project.client||'')}</span>
+        </h3>
+        <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+          <div class="stat-card">
+            <div class="num" style="color:var(--primary);">${summary.overall_progress}%</div>
+            <div class="lbl">Overall Progress</div>
+          </div>
+          <div class="stat-card ${summary.open_client_items.decisions_required>0?'warn':''}">
+            <div class="num" style="color:${summary.open_client_items.decisions_required>0?'#f3b562':'var(--text)'};">${summary.open_client_items.decisions_required}</div>
+            <div class="lbl">Decisions Required</div>
+          </div>
+          <div class="stat-card">
+            <div class="num">${summary.open_client_items.documents_published}</div>
+            <div class="lbl">Documents Shared</div>
+          </div>
+        </div>
+        ${summary.next_milestone ? `
+          <div style="margin-top:14px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;">
+            <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Next Milestone</div>
+            <div style="font-size:16px;font-weight:700;margin-top:4px;">${escHtml(summary.next_milestone.title)}</div>
+            <div style="font-size:12px;color:var(--muted);">${escHtml(summary.next_milestone.date)}</div>
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="panel">
+        <h3><span>Documents Shared With You</span></h3>
+        ${summary.published_documents.length ? `
+          <table><thead><tr><th>Name</th><th>Category</th><th>Rev.</th><th>Shared</th></tr></thead>
+          <tbody>${summary.published_documents.map(d => `
+            <tr><td>${escHtml(d.name)}</td><td>${escHtml(d.category||'')}</td><td>${escHtml(d.revision||'')}</td><td>${d.published_at ? new Date(d.published_at).toLocaleDateString() : ''}</td></tr>
+          `).join('')}</tbody></table>
+        ` : `<div class="empty-state"><p>No documents have been shared with you yet.</p></div>`}
+      </div>
+
+      <div class="panel">
+        <h3><span>Change Orders Shared With You</span></h3>
+        ${summary.published_change_orders.length ? `
+          <table><thead><tr><th>No.</th><th>Title</th><th>Cost Impact</th><th>Schedule Impact</th><th>Status</th></tr></thead>
+          <tbody>${summary.published_change_orders.map(c => `
+            <tr><td>${escHtml(c.number)}</td><td>${escHtml(c.title)}</td><td>${fmtCurrency(c.cost_impact)}</td><td>${c.schedule_impact_days ? c.schedule_impact_days+' days' : '-'}</td><td><span class="badge ${badgeClass(c.status)}">${escHtml(c.status)}</span></td></tr>
+          `).join('')}</tbody></table>
+        ` : `<div class="empty-state"><p>No change orders have been shared with you yet.</p></div>`}
+      </div>
+    </div>
+  `;
 }
 
 async function renderPlanner(){
@@ -4671,7 +4753,7 @@ async function renderDocuments(){
               ` : ''}
             </div>
           </td>
-          ${canEdit?`<td class="row-actions"><button class="icon-btn edit" data-edit="${r.id}" title="Edit">✎</button>${canDel?`<button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>`:''}</td>`:''}
+          ${canEdit?`<td class="row-actions">${canEdit?`<button class="icon-btn" data-toggle-doc-publish="${r.id}" data-current-visibility="${r.visibility||'Internal'}" title="${(r.visibility==='Client'||r.visibility==='All')?'Published to Client - click to unpublish':'Publish to Client'}">${(r.visibility==='Client'||r.visibility==='All')?'Published':'Publish'}</button>`:''}<button class="icon-btn edit" data-edit="${r.id}" title="Edit">✎</button>${canDel?`<button class="icon-btn" data-del="${r.id}" title="Delete">✕</button>`:''}</td>`:''}
         </tr>`;
       }).join('')}
     </tbody></table>` : '<div class="empty">No documents found for this project.</div>'}
@@ -4706,6 +4788,19 @@ async function renderDocuments(){
           zoneSub: doc.category,
           openItems: []
         });
+      }
+    };
+  });
+  document.querySelectorAll('[data-toggle-doc-publish]').forEach(btn=>{
+    btn.onclick = async () => {
+      const isPublished = btn.dataset.currentVisibility === 'Client' || btn.dataset.currentVisibility === 'All';
+      const newVisibility = isPublished ? 'Internal' : 'Client';
+      if(!isPublished && !confirm('Publish this document to the client? They will be able to see and download it in their Client Portal.')) return;
+      try {
+        await apiFetch(`/api/documents/${btn.dataset.toggleDocPublish}`, {method:'PUT', body: JSON.stringify({visibility:newVisibility})});
+        renderDocuments();
+      } catch(err) {
+        alert('Could not update publish status: ' + err.message);
       }
     };
   });
@@ -5119,6 +5214,7 @@ document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.ta
     API = savedApi;
     try{
       ME = await apiFetch('/api/me');
+      if(ME.role === 'Client' && currentView === 'dashboard') currentView = 'client_dashboard';
       document.getElementById('loginScreen').classList.add('hide');
       document.getElementById('app').classList.add('show');
       document.getElementById('chipName').textContent = ME.name;

@@ -385,6 +385,64 @@ async function runTests() {
     assert(consultantNotifs.status === 200 && !(consultantNotifs.body || []).some((n: any) => n.record_id === notifRfiId),
       'The person who made the change does not get notified of their own action');
 
+    console.log('\nSection 13: Client role - visibility, publishing, and API-level enforcement');
+    const clientUser = await createRoleUser(adminToken, 'Client', [projectId]);
+    let clientToken = '';
+    if(clientUser.id){
+      const login = await req({ path: '/api/login', method: 'POST', body: { username: clientUser.username, password: clientUser.password } });
+      assert(login.status === 200 && !!login.body.token, 'Log in as newly-created Client test account');
+      clientToken = login.body?.token;
+    }
+
+    const clientDoc = await req({
+      path: '/api/documents', method: 'POST', token: tokens['SiteEngineer'],
+      body: { project_id: projectId, name: `client_test_${RUN_ID}.pdf`, category: 'Certificate' }
+    });
+    const clientDocId = clientDoc.body?.id;
+
+    const sneakyCreate = await req({
+      path: '/api/documents', method: 'POST', token: tokens['SiteEngineer'],
+      body: { project_id: projectId, name: `sneaky_${RUN_ID}.pdf`, visibility: 'Client', published_by: 'spoofed-id' }
+    });
+    assert(sneakyCreate.status === 201 && sneakyCreate.body.visibility !== 'Client' && !sneakyCreate.body.published_by,
+      'visibility/published_by cannot be set at document creation time, even if supplied in the request body');
+
+    const clientBeforePublish = await req({ path: `/api/documents?project_id=${projectId}`, token: clientToken });
+    assert(clientBeforePublish.status === 200 && clientBeforePublish.body.length === 0,
+      'Client sees zero documents before anything is published (API-enforced, not just UI-hidden)');
+
+    const clientDirectFetchBefore = await req({ path: `/api/drawings/${clientDocId}`, token: clientToken });
+    assert(clientDirectFetchBefore.status === 403, 'Client forbidden from fetching an unpublished document directly by ID (403)');
+
+    const clientNoRfiAccess = await req({ path: `/api/rfis?project_id=${projectId}`, token: clientToken });
+    assert(clientNoRfiAccess.status === 403, 'Client has no view access to modules outside their curated set (403 on RFIs)');
+
+    const clientCannotPublish = await req({ path: `/api/documents/${clientDocId}`, method: 'PUT', token: clientToken, body: { visibility: 'Client' } });
+    assert(clientCannotPublish.status === 403, 'Client cannot publish documents themselves - only someone with edit access can (403)');
+
+    const publishSpoof = await req({
+      path: `/api/documents/${clientDocId}`, method: 'PUT', token: tokens['ProjectManager'],
+      body: { visibility: 'Client', published_by: 'spoofed-id', published_at: '2000-01-01T00:00:00.000Z' }
+    });
+    assert(publishSpoof.status === 200 && publishSpoof.body.published_by !== 'spoofed-id' && !publishSpoof.body.published_at.startsWith('2000'),
+      'Publishing stamps the real user/timestamp server-side and ignores any client-supplied published_by/published_at');
+
+    const clientAfterPublish = await req({ path: `/api/documents?project_id=${projectId}`, token: clientToken });
+    assert(clientAfterPublish.status === 200 && clientAfterPublish.body.length === 1 && clientAfterPublish.body[0].id === clientDocId,
+      'Client sees exactly the one published document after it is published');
+
+    const clientDirectFetchAfter = await req({ path: `/api/drawings/${clientDocId}`, token: clientToken });
+    assert(clientDirectFetchAfter.status === 200, 'Client can now fetch the published document directly by ID');
+
+    const clientSummary = await req({ path: `/api/projects/${projectId}/client-summary`, token: clientToken });
+    assert(clientSummary.status === 200 && Array.isArray(clientSummary.body.published_documents) && clientSummary.body.published_documents.length === 1,
+      'Client summary endpoint reflects the published document');
+
+    await req({ path: `/api/documents/${clientDocId}`, method: 'PUT', token: tokens['ProjectManager'], body: { visibility: 'Internal' } });
+    const clientAfterUnpublish = await req({ path: `/api/documents?project_id=${projectId}`, token: clientToken });
+    assert(clientAfterUnpublish.status === 200 && clientAfterUnpublish.body.length === 0,
+      'Un-publishing immediately revokes the client\'s access to the document');
+
   } finally {
     await cleanup(adminToken);
   }

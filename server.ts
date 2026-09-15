@@ -219,6 +219,14 @@ const ROLE_DEFINITIONS = [
     description: "Consultant review & technical approval: technical reviews of RFIs, submittals, inspection witness sign-offs, and compliance auditing.",
     scope: "Assigned Projects",
   },
+  {
+    role: "Client",
+    title: "Client / Project Owner",
+    category: "Consultants & Clients",
+    badgeColor: "#0891b2",
+    description: "Curated, read-only project visibility: overall health, milestones, and only the documents and change orders the project team has explicitly published to the client. Never sees raw internal records.",
+    scope: "Assigned Projects (Published Data Only)",
+  },
 ];
 
 const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boolean }> = {
@@ -336,6 +344,17 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
     ],
     delete: false,
   },
+  // Deliberately minimal: a Client only ever sees client_dashboard (the
+  // curated Project Health summary), plus documents/change_orders/gantt -
+  // and for those last three, only records explicitly published to them
+  // (enforced in the query layer, not just hidden in the UI - see the
+  // visibility filtering in the generic GET handlers below). No edit access
+  // anywhere yet; a real approve/reject workflow is a deferred follow-up.
+  Client: {
+    view: ["client_dashboard", "documents", "change_orders"],
+    edit: [],
+    delete: false,
+  },
 };
 
 const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
@@ -364,11 +383,11 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
     module: "dailylogs",
   },
   documents: {
-    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "subcontractor_id", "uploaded_by", "markup_data"],
+    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "subcontractor_id", "uploaded_by", "markup_data", "visibility", "published_by", "published_at"],
     module: "documents",
   },
   drawings: {
-    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "subcontractor_id", "uploaded_by", "markup_data"],
+    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "subcontractor_id", "uploaded_by", "markup_data", "visibility", "published_by", "published_at"],
     module: "documents",
   },
   costs: {
@@ -384,7 +403,7 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
     module: "budget",
   },
   change_orders: {
-    cols: ["id", "project_id", "number", "title", "trade", "reason", "cost_impact", "schedule_impact_days", "date_raised", "status"],
+    cols: ["id", "project_id", "number", "title", "trade", "reason", "cost_impact", "schedule_impact_days", "date_raised", "status", "visibility", "published_by", "published_at"],
     module: "change_orders",
   },
   purchase_orders: {
@@ -753,6 +772,17 @@ function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN last_login TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0;"); } catch {}
+
+  // Publishing/visibility: which records a Client-role user is allowed to
+  // see. Defaults to "Internal" (nothing is client-visible until the
+  // project team explicitly publishes it) - enforced in the query layer,
+  // not just hidden in the UI.
+  try { db.exec("ALTER TABLE documents ADD COLUMN visibility TEXT DEFAULT 'Internal';"); } catch {}
+  try { db.exec("ALTER TABLE documents ADD COLUMN published_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE documents ADD COLUMN published_at TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE change_orders ADD COLUMN visibility TEXT DEFAULT 'Internal';"); } catch {}
+  try { db.exec("ALTER TABLE change_orders ADD COLUMN published_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE change_orders ADD COLUMN published_at TEXT;"); } catch {}
 
   seedUsers();
   seedData();
@@ -2267,6 +2297,14 @@ ${question}`;
         res.status(404).json({ error: "Drawing not found" });
         return;
       }
+      if (!hasProjectAccess(req.user!, doc.project_id)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      if (req.user!.role === "Client" && doc.visibility !== "Client" && doc.visibility !== "All") {
+        res.status(403).json({ error: "This document has not been published to you" });
+        return;
+      }
       res.json(doc);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -2574,6 +2612,62 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
+  // Client Portal summary: a curated, aggregate-only view of one project's
+  // health. Deliberately never exposes the raw tasks/documents/change_orders
+  // lists themselves here - only computed numbers and the specific published
+  // records a Client is allowed to see (documents/change_orders visibility
+  // is also enforced independently via the generic GET handlers above, so
+  // this isn't the only place that protection lives).
+  app.get("/api/projects/:id/client-summary", authRequired, (req: Request, res: Response) => {
+    try {
+      const projectId = req.params.id;
+      if (!hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      const project = db.prepare("SELECT id, name, client, status, start_date, end_date, budget FROM projects WHERE id=?").get(projectId) as any;
+      if (!project) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+
+      const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=?").all(projectId) as any[];
+      const workTasks = tasks.filter(t => !t.is_milestone && !t.is_summary);
+      const overallProgress = workTasks.length
+        ? Math.round(workTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / workTasks.length)
+        : 0;
+
+      const today = new Date().toISOString().slice(0, 10);
+      const upcomingMilestones = tasks
+        .filter(t => t.is_milestone && t.end >= today)
+        .sort((a, b) => (a.end > b.end ? 1 : -1));
+      const nextMilestone = upcomingMilestones[0]
+        ? { title: upcomingMilestones[0].title, date: upcomingMilestones[0].end }
+        : null;
+
+      const publishedDocuments = db.prepare(
+        "SELECT id, name, category, revision, date_added, published_at FROM documents WHERE project_id=? AND visibility IN ('Client','All') ORDER BY published_at DESC"
+      ).all(projectId);
+      const publishedChangeOrders = db.prepare(
+        "SELECT id, number, title, cost_impact, schedule_impact_days, status, published_at FROM change_orders WHERE project_id=? AND visibility IN ('Client','All') ORDER BY published_at DESC"
+      ).all(projectId);
+      const decisionsAwaiting = (publishedChangeOrders as any[]).filter(
+        co => !["Approved", "Rejected", "Certified", "Closed"].includes(co.status)
+      ).length;
+
+      res.json({
+        project: { id: project.id, name: project.name, client: project.client, status: project.status, start_date: project.start_date, end_date: project.end_date },
+        overall_progress: overallProgress,
+        next_milestone: nextMilestone,
+        published_documents: publishedDocuments,
+        published_change_orders: publishedChangeOrders,
+        open_client_items: { decisions_required: decisionsAwaiting, documents_published: (publishedDocuments as any[]).length },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Generic CRUD for all configured tables
   for (const [table, cfg] of Object.entries(TABLE_CONFIG)) {
     const { cols, module } = cfg;
@@ -2599,6 +2693,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           params.push(module, req.user!.user_id, module);
         }
       }
+      // Client visibility: enforced here in the query itself, not just hidden
+      // in the UI. A Client only ever sees documents/change_orders explicitly
+      // published to them - everything else stays invisible even to a
+      // direct API call, regardless of what the frontend shows or hides.
+      if (req.user!.role === "Client" && (table === "documents" || table === "drawings" || table === "change_orders")) {
+        where += " AND visibility IN ('Client', 'All')";
+      }
 
       const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
       let rows: any[];
@@ -2619,6 +2720,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     // Create
     app.post(`/api/${table}`, authRequired, (req, res) => {
       const data = req.body || {};
+      // Every record starts Internal regardless of what's in the creation
+      // payload - publishing to a Client is a deliberate, separate action
+      // (via PUT, which stamps published_by/published_at itself) not
+      // something that happens implicitly at creation time.
+      delete data.visibility;
+      delete data.published_by;
+      delete data.published_at;
       const isDoc = (table === "documents" || table === "drawings") && req.user!.role === "Subcontractor";
       if (!isDoc && !canEdit(req.user!, module)) {
         res.status(403).json({ error: `No edit access to ${module}` });
@@ -2711,6 +2819,15 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
 
       const data = req.body || {};
+      // published_by/published_at are accountability fields - always
+      // server-stamped, never trusted from the request body. Publishing
+      // (setting visibility to Client/All) records who did it and when.
+      delete data.published_by;
+      delete data.published_at;
+      if ("visibility" in data && data.visibility !== existing.visibility && (data.visibility === "Client" || data.visibility === "All")) {
+        data.published_by = req.user!.user_id;
+        data.published_at = new Date().toISOString();
+      }
       const editableCols = cols.filter(c => c !== "id" && c !== "project_id");
       const updates: string[] = [];
       const values: any[] = [];
