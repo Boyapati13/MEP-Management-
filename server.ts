@@ -784,6 +784,29 @@ function initDb() {
   try { db.exec("ALTER TABLE change_orders ADD COLUMN published_by TEXT;"); } catch {}
   try { db.exec("ALTER TABLE change_orders ADD COLUMN published_at TEXT;"); } catch {}
 
+  // Optimization: Create indexes on frequently filtered fields (project_id, user_id, task_id, bucket_id).
+  // This converts O(N) full table scans into O(log N) indexed lookups, significantly speeding up
+  // project portfolio queries, dashboard loads, and user notification checks.
+  const projectIndexedTables = [
+    "tasks", "rfis", "submittals", "punchlist", "dailylogs", "documents",
+    "costs", "boq_items", "change_orders", "purchase_orders", "safety_incidents",
+    "inspections", "meeting_minutes", "timesheets", "attendance", "equipment",
+    "wbs_items", "dependencies", "procurement_items", "material_requests", "risks",
+    "ncrs", "commissioning_tests", "handover_items", "audit_logs",
+    "notifications", "plan_buckets", "plan_tasks", "plan_task_checklist"
+  ];
+  for (const tbl of projectIndexedTables) {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_${tbl}_project_id ON ${tbl}(project_id);`);
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_attendance_user_id ON attendance(user_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_task_status_history_task_id ON task_status_history(task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_plan_tasks_bucket_id ON plan_tasks(bucket_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_plan_task_checklist_task_id ON plan_task_checklist(task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_project_memberships_project_id ON project_memberships(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_record_owners_user_module ON record_owners(user_id, module);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);");
+
   seedUsers();
   seedData();
   ensureMemberships();
