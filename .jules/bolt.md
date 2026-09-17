@@ -1,0 +1,3 @@
+## 2025-09-17 - Missing Database Indexes on Foreign Keys and Polling Queries
+**Learning:** In this full-stack Node/Express + `node:sqlite` app, `server.ts` creates ~35 tables in `initDb()` without creating any secondary indexes. Every project-scoped query (`WHERE project_id = ?`), notification polling query (`WHERE user_id = ? ORDER BY created_at DESC`), and RBAC check (`project_memberships WHERE project_id = ?`) executes as a full table scan (`SCAN`) and temporary B-tree sort (`USE TEMP B-TREE FOR ORDER BY`).
+**Action:** Always inspect `initDb()` schema definitions for missing foreign key indexes (`project_id`, `user_id`) and high-frequency polling composite indexes when optimizing database query paths.
