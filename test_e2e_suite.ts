@@ -443,6 +443,72 @@ async function runTests() {
     assert(clientAfterUnpublish.status === 200 && clientAfterUnpublish.body.length === 0,
       'Un-publishing immediately revokes the client\'s access to the document');
 
+    console.log('\nSection 14: Security review follow-up - Search/Export RBAC, markup write IDOR, publish privilege, auto-unpublish');
+
+    const secretRfi = await req({
+      path: '/api/rfis', method: 'POST', token: tokens['SiteEngineer'],
+      body: { project_id: projectId, number: `RFI-SEARCHTEST-${RUN_ID}`, subject: `SEARCHTEST${RUN_ID} confidential clash`, status: 'Open' }
+    });
+    assert(secretRfi.status === 201, 'Create an RFI containing a unique search term');
+
+    const clientSearch = await req({ path: `/api/search?q=SEARCHTEST${RUN_ID}&project_id=${projectId}`, token: clientToken });
+    assert(clientSearch.status === 200 && clientSearch.body.length === 0,
+      'Global search never returns results from a module the Client has no view access to (RFIs)');
+
+    const engineerSearch = await req({ path: `/api/search?q=SEARCHTEST${RUN_ID}&project_id=${projectId}`, token: tokens['SiteEngineer'] });
+    assert(engineerSearch.status === 200 && engineerSearch.body.length > 0,
+      'Global search still returns results for a role that does have view access to that module');
+
+    const secretDoc2 = await req({
+      path: '/api/documents', method: 'POST', token: tokens['SiteEngineer'],
+      body: { project_id: projectId, name: `unpublished_${RUN_ID}.pdf`, category: 'Report' }
+    });
+    const secretDoc2Id = secretDoc2.body?.id;
+
+    const clientSearchDocs = await req({ path: `/api/search?q=unpublished_${RUN_ID}&project_id=${projectId}`, token: clientToken });
+    assert(clientSearchDocs.status === 200 && clientSearchDocs.body.length === 0,
+      'Global search respects Client visibility filtering even for a module the Client can otherwise view (documents)');
+
+    const clientExportDocs = await req({ path: `/api/export/documents?project_id=${projectId}`, token: clientToken });
+    assert(clientExportDocs.status === 200 && !String(clientExportDocs.body).includes(`unpublished_${RUN_ID}`),
+      'CSV export of documents excludes unpublished records for a Client');
+
+    const clientMarkupWrite = await req({ path: `/api/drawings/${secretDoc2Id}/markups`, method: 'POST', token: clientToken, body: { markup_data: '{}' } });
+    assert(clientMarkupWrite.status === 403, 'Client (no documents edit access) forbidden from writing drawing markups (403)');
+
+    const outsiderMarkupWrite = await req({ path: `/api/drawings/${secretDoc2Id}/markups`, method: 'POST', token: tokens['Subcontractor'], body: { markup_data: '{}' } });
+    assert(outsiderMarkupWrite.status === 403, 'A project outsider (Subcontractor not on this project) forbidden from writing drawing markups (403)');
+
+    const engineerMarkupWrite = await req({ path: `/api/drawings/${secretDoc2Id}/markups`, method: 'POST', token: tokens['SiteEngineer'], body: { markup_data: '{"strokes":[]}' } });
+    assert(engineerMarkupWrite.status === 200, 'A real project member with documents edit access can still write markups');
+
+    const engineerTriesPublish = await req({ path: `/api/documents/${secretDoc2Id}`, method: 'PUT', token: tokens['SiteEngineer'], body: { visibility: 'Client' } });
+    assert(engineerTriesPublish.status === 403, 'A Site Engineer (has documents edit access) still cannot publish to the client - that needs Admin/PM specifically (403)');
+
+    const pmPublishes = await req({ path: `/api/documents/${secretDoc2Id}`, method: 'PUT', token: tokens['ProjectManager'], body: { visibility: 'Client' } });
+    assert(pmPublishes.status === 200 && pmPublishes.body.visibility === 'Client', 'A Project Manager can publish to the client');
+
+    const contentEditAfterPublish = await req({ path: `/api/documents/${secretDoc2Id}`, method: 'PUT', token: tokens['SiteEngineer'], body: { category: 'Revised Report' } });
+    assert(contentEditAfterPublish.status === 200 && contentEditAfterPublish.body.visibility === 'Internal' && !contentEditAfterPublish.body.published_by,
+      'Editing a published document\'s content automatically un-publishes it, rather than leaving stale content visible to the client');
+
+    const membersLockedDown = await req({ path: `/api/projects/${projectId}/members`, token: tokens['SiteEngineer'] });
+    assert(membersLockedDown.status === 403, 'GET project members is Admin-only, not any project member (403 for Site Engineer)');
+
+    const membersAdminOk = await req({ path: `/api/projects/${projectId}/members`, token: tokens['Admin'] });
+    assert(membersAdminOk.status === 200 && Array.isArray(membersAdminOk.body), 'Admin can still list real project members');
+
+    const clientSummaryLockedDown = await req({ path: `/api/projects/${projectId}/client-summary`, token: tokens['SiteEngineer'] });
+    assert(clientSummaryLockedDown.status === 403, 'Client-summary endpoint is Client-role-only, not any project member (403 for Site Engineer)');
+
+    const clientProjectsNoBudget = await req({ path: '/api/projects', token: clientToken });
+    assert(clientProjectsNoBudget.status === 200 && clientProjectsNoBudget.body.every((p: any) => !('budget' in p)),
+      'The Client never receives the internal budget figure from /api/projects');
+
+    const adminProjectsHasBudget = await req({ path: '/api/projects', token: tokens['Admin'] });
+    assert(adminProjectsHasBudget.status === 200 && adminProjectsHasBudget.body.some((p: any) => 'budget' in p),
+      'Other roles still receive budget from /api/projects as before');
+
   } finally {
     await cleanup(adminToken);
   }

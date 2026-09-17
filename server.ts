@@ -1353,16 +1353,20 @@ async function startServer() {
   });
 
   app.get("/api/projects/:id/members", authRequired, (req, res) => {
-    if (!hasProjectAccess(req.user!, req.params.id)) {
-      res.status(403).json({ error: "No access to this project" });
+    // Admin-only: this returns names/usernames/roles, which is itself
+    // sensitive to hand to a Subcontractor or Client. Also scoped to users
+    // who actually have a membership row for this project - previously this
+    // LEFT JOIN returned every user in the entire system regardless of
+    // project, which was a company-wide user-directory leak.
+    if (req.user!.role !== "Admin") {
+      res.status(403).json({ error: "Admin access required" });
       return;
     }
     const rows = db.prepare(`
-      SELECT u.id, u.name, u.username, u.role,
-        COALESCE(pm.active, 0) as active,
-        COALESCE(pm.access_role, u.role) as access_role
-      FROM users u
-      LEFT JOIN project_memberships pm ON pm.user_id = u.id AND pm.project_id = ?
+      SELECT u.id, u.name, u.username, u.role, pm.active, pm.access_role
+      FROM project_memberships pm
+      JOIN users u ON u.id = pm.user_id
+      WHERE pm.project_id = ?
       ORDER BY u.role, u.name
     `).all(req.params.id);
     res.json(rows.map(rowToDict));
@@ -1392,7 +1396,14 @@ async function startServer() {
       return;
     }
     const rows = db.prepare(`SELECT * FROM projects WHERE ${where} ORDER BY name`).all(...params);
-    res.json(rows.map(rowToDict));
+    // budget is an internal figure - never send it to a Client, even though
+    // every authenticated user (Client included) needs this endpoint just to
+    // populate the project picker.
+    const mapped = rows.map(rowToDict);
+    if (req.user!.role === "Client") {
+      for (const p of mapped as any[]) delete p!.budget;
+    }
+    res.json(mapped);
   });
 
   app.post("/api/projects", authRequired, (req, res) => {
@@ -1749,11 +1760,16 @@ async function startServer() {
     };
 
     for (const [table, columns] of Object.entries(searchable)) {
+      const searchModule = table === "projects" ? "projects" : (TABLE_CONFIG[table]?.module || table);
+      if (table !== "projects" && !canView(req.user!, searchModule)) continue;
       let scope = table === "projects" ? projWhere : where;
       const baseParams = table === "projects" ? [...projParams] : [...params];
       if (table === "documents" && req.user!.role === "Subcontractor") {
         scope += " AND (subcontractor_id = ? OR id IN (SELECT record_id FROM record_owners WHERE module='documents' AND user_id=?))";
         baseParams.push(req.user!.user_id, req.user!.user_id);
+      }
+      if ((table === "documents" || table === "change_orders") && req.user!.role === "Client") {
+        scope += " AND visibility IN ('Client', 'All')";
       }
       const clauses = columns.map(c => `${c} LIKE ?`).join(" OR ");
       const queryParams = [...baseParams, ...columns.map(() => like)];
@@ -1822,8 +1838,14 @@ async function startServer() {
       where += " AND (subcontractor_id = ? OR id IN (SELECT record_id FROM record_owners WHERE module='documents' AND user_id=?))";
       params.push(req.user!.user_id, req.user!.user_id);
     }
+    if ((table === "documents" || table === "change_orders") && req.user!.role === "Client") {
+      where += " AND visibility IN ('Client', 'All')";
+    }
     const rows = db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(...params) as any[];
-    const cols = cfg.cols.filter((c: string) => c !== "attachment_data");
+    let cols = cfg.cols.filter((c: string) => c !== "attachment_data");
+    if (table === "projects" && req.user!.role === "Client") {
+      cols = cols.filter((c: string) => c !== "budget");
+    }
     const csvHeader = cols.join(",");
     const csvRows = rows.map((r: any) =>
       cols.map((c: string) => {
@@ -2280,6 +2302,14 @@ ${question}`;
         res.status(404).json({ error: "Drawing not found" });
         return;
       }
+      if (!hasProjectAccess(req.user!, doc.project_id)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      if (!canEdit(req.user!, "documents")) {
+        res.status(403).json({ error: "No edit access to documents" });
+        return;
+      }
       db.prepare("UPDATE documents SET markup_data=? WHERE id=?").run(
         typeof markup_data === "string" ? markup_data : JSON.stringify(markup_data),
         req.params.id
@@ -2625,7 +2655,11 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: "No access to this project" });
         return;
       }
-      const project = db.prepare("SELECT id, name, client, status, start_date, end_date, budget FROM projects WHERE id=?").get(projectId) as any;
+      if (req.user!.role !== "Client") {
+        res.status(403).json({ error: "This endpoint is for the Client Portal only" });
+        return;
+      }
+      const project = db.prepare("SELECT id, name, client, status, start_date, end_date FROM projects WHERE id=?").get(projectId) as any;
       if (!project) {
         res.status(404).json({ error: "Project not found" });
         return;
@@ -2819,6 +2853,17 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
 
       const data = req.body || {};
+      // Publishing (making a record Client-visible) is a separate authority
+      // from ordinary edit access - a Site Engineer or QA/QC user can edit a
+      // document's content, but that shouldn't let them decide what a client
+      // gets to see. Restricted to the roles who actually own the client
+      // relationship, regardless of who can otherwise edit this module.
+      if ("visibility" in data && (data.visibility === "Client" || data.visibility === "All")) {
+        if (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager") {
+          res.status(403).json({ error: "Only an Admin or Project Manager can publish records to the client" });
+          return;
+        }
+      }
       // published_by/published_at are accountability fields - always
       // server-stamped, never trusted from the request body. Publishing
       // (setting visibility to Client/All) records who did it and when.
@@ -2827,6 +2872,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       if ("visibility" in data && data.visibility !== existing.visibility && (data.visibility === "Client" || data.visibility === "All")) {
         data.published_by = req.user!.user_id;
         data.published_at = new Date().toISOString();
+      }
+      // A published record whose meaningful content is edited afterward is
+      // automatically un-published, rather than silently letting the client
+      // keep seeing content that no longer matches what was reviewed under
+      // that publish timestamp. Republishing (explicitly setting visibility
+      // again in the same request) is still allowed in one step.
+      if (
+        (existing.visibility === "Client" || existing.visibility === "All") &&
+        !("visibility" in data) &&
+        Object.keys(data).some(k => k !== "id" && k !== "project_id" && k !== "visibility" && k !== "published_by" && k !== "published_at")
+      ) {
+        data.visibility = "Internal";
+        data.published_by = null;
+        data.published_at = null;
       }
       const editableCols = cols.filter(c => c !== "id" && c !== "project_id");
       const updates: string[] = [];
