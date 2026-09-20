@@ -314,7 +314,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "users", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
+      "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -325,7 +325,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
+      "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     delete: true,
   },
@@ -7014,6 +7014,54 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     db.prepare('UPDATE shift_templates SET name=COALESCE(?,name),start_time=COALESCE(?,start_time),end_time=COALESCE(?,end_time),grace_minutes=COALESCE(?,grace_minutes),break_minutes=COALESCE(?,break_minutes),regular_hours=COALESCE(?,regular_hours),ot_threshold_hours=COALESCE(?,ot_threshold_hours),status=COALESCE(?,status),working_days_json=COALESCE(?,working_days_json) WHERE id=?')
       .run(name||null, start_time||null, end_time||null, grace_minutes??null, break_minutes??null, regular_hours??null, ot_threshold_hours??null, status||null, workingDays, req.params.id);
     res.json(db.prepare('SELECT * FROM shift_templates WHERE id=?').get(req.params.id));
+  });
+
+  app.get('/api/worker_schedules', authRequired, (req, res) => {
+    const projectId = req.query.project_id as string;
+    const workerId = req.query.worker_id as string;
+    if (!projectId || !hasProjectAccess(req.user!, projectId)) { res.status(403).json({ error: 'No project access' }); return; }
+    let sql = 'SELECT ws.*, st.project_id, st.name as shift_name, st.start_time, st.end_time, st.working_days_json FROM worker_schedules ws JOIN shift_templates st ON st.id=ws.shift_template_id JOIN workers w ON w.id=ws.worker_id WHERE st.project_id=?';
+    const params: any[] = [projectId];
+    if (workerId) {
+      const worker = db.prepare('SELECT * FROM workers WHERE id=?').get(workerId) as any;
+      if (!worker || !canAccessWorker(req.user!, worker, 'view')) { res.status(403).json({ error: 'No worker access' }); return; }
+      sql += ' AND ws.worker_id=?'; params.push(workerId);
+    }
+    if (req.user!.role === 'Worker') {
+      const worker = getWorkerPrincipal(req.user!.user_id);
+      if (!worker) { res.json([]); return; }
+      sql += ' AND ws.worker_id=?'; params.push(worker.id);
+    } else if (req.user!.role === 'SiteSupervisor') {
+      sql += " AND EXISTS (SELECT 1 FROM worker_assignments wa WHERE wa.worker_id=ws.worker_id AND wa.project_id=? AND wa.supervisor_id=? AND wa.status='Active')";
+      params.push(projectId, req.user!.user_id);
+    } else if (req.user!.role === 'Subcontractor') {
+      if (!req.user!.company_id) { res.json([]); return; }
+      sql += ' AND w.company_id=?'; params.push(req.user!.company_id);
+    }
+    sql += ' ORDER BY ws.effective_from DESC';
+    res.json(db.prepare(sql).all(...params));
+  });
+
+  app.post('/api/worker_schedules', authRequired, (req, res) => {
+    if (!['Admin','ProjectManager','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No schedule authority' }); return; }
+    const { worker_id, shift_template_id, effective_from, effective_to } = req.body;
+    if (!worker_id || !shift_template_id || !effective_from) { res.status(400).json({ error: 'worker_id, shift_template_id and effective_from required' }); return; }
+    if (effective_to && effective_to < effective_from) { res.status(422).json({ error: 'effective_to cannot precede effective_from' }); return; }
+    const worker = db.prepare('SELECT * FROM workers WHERE id=?').get(worker_id) as any;
+    const shift = db.prepare('SELECT * FROM shift_templates WHERE id=?').get(shift_template_id) as any;
+    if (!worker || !shift) { res.status(404).json({ error: 'Worker or shift template not found' }); return; }
+    if (!hasProjectAccess(req.user!, shift.project_id) || (worker.project_id && worker.project_id !== shift.project_id)) {
+      res.status(403).json({ error: 'Worker and shift must be in an authorized project' }); return;
+    }
+    if (req.user!.role === 'SiteSupervisor' && !canAccessWorker(req.user!, worker, 'view')) {
+      res.status(403).json({ error: 'No worker access' }); return;
+    }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO worker_schedules (id,worker_id,shift_template_id,effective_from,effective_to,created_at) VALUES (?,?,?,?,?,?)')
+      .run(id, worker_id, shift_template_id, effective_from, effective_to||null, now);
+    writeAudit(req.user!.user_id, 'worker_schedules', id, shift.project_id, 'create', null, { worker_id, shift_template_id, effective_from, effective_to });
+    res.status(201).json(db.prepare('SELECT * FROM worker_schedules WHERE id=?').get(id));
   });
 
   app.get('/api/public_holidays', authRequired, (req, res) => {
