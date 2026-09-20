@@ -431,7 +431,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
   // Deliberately minimal: a Client sees client_dashboard (curated Project Health),
   // documents, change_orders, and published progress reports / clarifications
   Client: {
-    view: ["client_dashboard", "documents", "change_orders", "progress_reports", "clarifications"],
+    view: ["client_dashboard", "projects", "documents", "change_orders", "progress_reports", "clarifications"],
     edit: [],
     delete: false,
   },
@@ -5135,6 +5135,10 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         if (!data.due_date) data.due_date = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
       } else if (table === "drawings") {
         if (!data.category) data.category = "Drawing";
+      } else if (table === "wbs_items") {
+        if (data.active === undefined) data.active = 1;
+      } else if (table === "plan_task_checklist") {
+        if (data.is_checked === undefined) data.is_checked = 0;
       }
 
       const id = crypto.randomUUID();

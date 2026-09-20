@@ -10,7 +10,9 @@
     "lint": "tsc --noEmit",
     "test:e2e": "tsx test_e2e_suite.ts",
     "test:v1.1": "tsx test_v1_1_suite.ts",
-    "test": "tsx test_e2e_suite.ts && tsx test_v1_1_suite.ts"
+    "test:enterprise": "tsx test_enterprise_suite.ts",
+    "test:all": "tsx test_e2e_suite.ts && tsx test_v1_1_suite.ts && tsx test_enterprise_suite.ts",
+    "test": "npm run test:all"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

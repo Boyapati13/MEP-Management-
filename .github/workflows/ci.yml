@@ -46,3 +46,6 @@ jobs:
 
       - name: Run V1.1 Multi-Company & Isolation Test Suite
         run: npm run test:v1.1
+
+      - name: Run Master Enterprise End-to-End Test Suite
+        run: npm run test:enterprise
