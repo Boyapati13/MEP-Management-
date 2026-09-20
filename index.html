@@ -4872,7 +4872,7 @@ async function openDocumentModal(record){
   const html = `<div class="form-grid">
     ${projectPicker}
     <div class="full"><label>Document Name</label><input id="f_name" value="${record?escHtml(record.name):''}" placeholder="e.g. Electrical Submittal, Safety Plan, Shop Drawing"></div>
-    <div><label>Category</label><select id="f_category">${['Drawing','Specification','Contract','Report','Submittal','Safety','Site Photo','Other'].map(c=>`<option ${record&&record.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div><label>Category</label><select id="f_category">${['Drawing','Specification','Contract','Tender','BOQ','Programme','Report','Submittal','Safety','Site Photo','Other'].map(c=>`<option ${record&&record.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
     <div><label>Revision</label><input id="f_revision" value="${record?escHtml(record.revision):'Rev 0'}"></div>
     <div><label>Date Added</label><input type="date" id="f_date_added" value="${record?escHtml(record.date_added):new Date().toISOString().slice(0,10)}"></div>
     ${subOptions}
@@ -4943,30 +4943,167 @@ async function renderProjects(){
   });
 }
 
-function openProjectModal(record){
-  const isEdit = !!record;
-  const html = `<div class="form-grid"><div class="full"><label>Name</label><input id="f_name" value="${record?escHtml(record.name):''}"></div>
-    <div><label>Client</label><input id="f_client" value="${record?escHtml(record.client):''}"></div>
-    <div><label>Status</label><select id="f_status">${['Active','On Hold','Completed'].map(s=>`<option ${record&&record.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
-    <div><label>Start Date</label><input type="date" id="f_start_date" value="${record?escHtml(record.start_date):''}"></div>
-    <div><label>End Date</label><input type="date" id="f_end_date" value="${record?escHtml(record.end_date):''}"></div>
-    <div><label>Budget (€)</label><input type="number" id="f_budget" value="${record?record.budget:''}"></div></div>`;
-  openModal(isEdit?'Edit Project':'Add Project', html, async ()=>{
-    const payload = {
-      name: document.getElementById('f_name').value,
-      client: document.getElementById('f_client').value,
-      status: document.getElementById('f_status').value,
-      start_date: document.getElementById('f_start_date').value,
-      end_date: document.getElementById('f_end_date').value,
-      budget: document.getElementById('f_budget').value
-    };
-    if(isEdit){
-      await apiFetch(`/api/projects/${record.id}`, {method:'PUT', body: JSON.stringify(payload)});
-    }else{
-      await apiFetch('/api/projects', {method:'POST', body: JSON.stringify(payload)});
+function inferProjectSetupCategory(filename){
+  const n=String(filename||'').toLowerCase();
+  if(n.includes('boq') || n.includes('bill of quantities')) return 'BOQ';
+  if(n.includes('tender')) return 'Tender';
+  if(n.includes('programme') || n.includes('program') || n.includes('schedule')) return 'Programme';
+  if(n.includes('spec')) return 'Specification';
+  if(n.includes('contract') || n.includes('agreement')) return 'Contract';
+  if(n.includes('drawing') || n.match(/(^|[_\-\s])(dwg|mep|elec|hvac|plumb)([_\-\s]|$)/)) return 'Drawing';
+  return 'Other';
+}
+
+function readProjectSetupFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result);
+    reader.onerror=()=>reject(new Error('Could not read '+file.name));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadProjectSetupFiles(projectId, files){
+  const documentIds=[];
+  const MAX_FILE_MB=100;
+  for(const file of files){
+    if(file.size > MAX_FILE_MB * 1024 * 1024){
+      throw new Error(file.name+' is '+(file.size/1024/1024).toFixed(1)+' MB. The maximum is '+MAX_FILE_MB+' MB per document.');
+    }
+    const attachment_data=await readProjectSetupFile(file);
+    const created=await apiFetch('/api/documents',{
+      method:'POST',
+      body:JSON.stringify({
+        project_id:projectId,
+        name:file.name.replace(/\.[^.]+$/,''),
+        category:inferProjectSetupCategory(file.name),
+        revision:'Rev 0',
+        date_added:new Date().toISOString().slice(0,10),
+        attachment_name:file.name,
+        attachment_data
+      })
+    });
+    if(created&&created.id) documentIds.push(created.id);
+  }
+  return documentIds;
+}
+
+function openProjectSetupReview(projectId, analysis){
+  const suggestions=Array.isArray(analysis&&analysis.suggestions)?analysis.suggestions:[];
+  if(!suggestions.length){
+    alert('The project documents were uploaded successfully, but no project fields could be extracted confidently. You can review the files in Documents.');
+    return;
+  }
+  const labels={name:'Project Name',client:'Client / Employer',start_date:'Start / Commencement Date',end_date:'Completion Date',budget:'Contract Value / Budget'};
+  const current=PROJECTS.find(p=>p.id===projectId)||{};
+  const rows=suggestions.map((s,idx)=>{
+    const type=s.field==='budget'?'number':(s.field==='start_date'||s.field==='end_date'?'date':'text');
+    const val=s.value===undefined||s.value===null?'':String(s.value);
+    const currentVal=current[s.field]===undefined||current[s.field]===null?'':String(current[s.field]);
+    return '<div class="full" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;">'
+      +'<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><input type="checkbox" id="setup_accept_'+idx+'" checked> <b>'+escHtml(labels[s.field]||s.field)+'</b> <span class="badge progress">'+escHtml(s.confidence||'Medium')+'</span></label>'
+      +'<input type="'+type+'" id="setup_value_'+idx+'" value="'+escHtml(val)+'">'
+      +(currentVal&&currentVal!==val?'<div style="font-size:11px;color:var(--muted);margin-top:5px;">Current value: '+escHtml(currentVal)+'</div>':'')
+      +'<div style="font-size:11px;color:var(--muted);margin-top:7px;"><b>Source:</b> '+escHtml(s.source_document_name||'Uploaded document')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4;">'+escHtml(s.source_excerpt||'')+'</div>'
+      +'</div>';
+  }).join('');
+
+  const html='<div class="api-banner show" style="margin-bottom:12px;">Review every extracted value before applying it. Nothing from the documents is written automatically.</div>'
+    +'<div class="form-grid">'+rows+'</div>';
+  openModal('Review Extracted Project Data',html,async()=>{
+    const payload={};
+    suggestions.forEach((s,idx)=>{
+      const accept=document.getElementById('setup_accept_'+idx);
+      if(!accept||!accept.checked) return;
+      const input=document.getElementById('setup_value_'+idx);
+      if(!input) return;
+      let value=input.value;
+      if(s.field==='budget') value=Number(value||0);
+      payload[s.field]=value;
+    });
+    if(Object.keys(payload).length){
+      await apiFetch('/api/projects/'+projectId,{method:'PUT',body:JSON.stringify(payload)});
     }
     await loadProjectsAndRender();
   });
+}
+
+function openProjectModal(record){
+  const isEdit=!!record;
+  const setupLabel=isEdit?'Add More Project Documents':'Project Setup Documents';
+  const html='<div class="form-grid">'
+    +'<div class="full"><label>Name</label><input id="f_name" value="'+(record?escHtml(record.name):'')+'" placeholder="Optional — can be extracted from the uploaded documents"></div>'
+    +'<div><label>Client</label><input id="f_client" value="'+(record?escHtml(record.client):'')+'" placeholder="Can be extracted from contract/tender documents"></div>'
+    +'<div><label>Status</label><select id="f_status">'+['Active','On Hold','Completed'].map(s=>'<option '+(record&&record.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select></div>'
+    +'<div><label>Start Date</label><input type="date" id="f_start_date" value="'+(record?escHtml(record.start_date):'')+'"></div>'
+    +'<div><label>End Date</label><input type="date" id="f_end_date" value="'+(record?escHtml(record.end_date):'')+'"></div>'
+    +'<div><label>Budget (€)</label><input type="number" id="f_budget" value="'+(record?record.budget:'')+'" placeholder="Can be extracted from contract/tender documents"></div>'
+    +'<div class="full" style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border);">'
+      +'<label>'+setupLabel+'</label>'
+      +'<input type="file" id="f_project_docs" multiple accept=".pdf,.docx,.csv,.txt,.tsv,.xlsx,.xls,image/*">'
+      +'<div style="font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px;">Upload contract, tender, BOQ, programme, specifications or drawings. PDF, DOCX, CSV and TXT files can be scanned for project data. Other files are still saved in Documents. Extracted values always require your approval.</div>'
+      +'<div id="f_project_docs_list" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>'
+    +'</div>'
+    +'</div>';
+
+  openModal(isEdit?'Edit Project':'Add Project',html,async()=>{
+    const files=Array.from(document.getElementById('f_project_docs')?.files||[]);
+    const payload={
+      name:document.getElementById('f_name').value,
+      client:document.getElementById('f_client').value,
+      status:document.getElementById('f_status').value,
+      start_date:document.getElementById('f_start_date').value,
+      end_date:document.getElementById('f_end_date').value,
+      budget:document.getElementById('f_budget').value
+    };
+
+    let projectId=record?record.id:null;
+    if(isEdit){
+      await apiFetch('/api/projects/'+record.id,{method:'PUT',body:JSON.stringify(payload)});
+    }else{
+      const created=await apiFetch('/api/projects',{method:'POST',body:JSON.stringify(payload)});
+      projectId=created&&created.id;
+      if(!projectId) throw new Error('Project was created but the server did not return its ID');
+    }
+
+    let analysis=null;
+    let analysisError=null;
+    if(files.length){
+      const documentIds=await uploadProjectSetupFiles(projectId,files);
+      if(documentIds.length){
+        try{
+          analysis=await apiFetch('/api/projects/'+projectId+'/extract-setup-data',{
+            method:'POST',
+            body:JSON.stringify({document_ids:documentIds})
+          });
+        }catch(e){
+          analysisError=e;
+        }
+      }
+    }
+
+    await loadProjectsAndRender();
+    if(analysis&&Array.isArray(analysis.suggestions)&&analysis.suggestions.length){
+      setTimeout(()=>openProjectSetupReview(projectId,analysis),120);
+    }else if(files.length){
+      const msg=analysisError
+        ? 'Project and documents were saved, but automatic extraction could not complete: '+(analysisError.message||'Unknown error')+'. You can still use the files from Documents.'
+        : 'Project and documents were saved. No project fields were extracted confidently; you can review the files in Documents.';
+      setTimeout(()=>alert(msg),120);
+    }
+  });
+
+  const fileInput=document.getElementById('f_project_docs');
+  const fileList=document.getElementById('f_project_docs_list');
+  if(fileInput&&fileList){
+    fileInput.onchange=()=>{
+      const files=Array.from(fileInput.files||[]);
+      fileList.innerHTML=files.length
+        ? files.map(f=>'• '+escHtml(f.name)+' — '+(f.size/1024/1024).toFixed(1)+' MB').join('<br>')
+        : '';
+    };
+  }
 }
 
 function openModal(title, html, onSave){
