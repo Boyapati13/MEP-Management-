@@ -52,6 +52,9 @@ jobs:
           java-version: '21'
           cache: gradle
 
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x android/gradlew
+
       - name: Build debug APK
         run: npm run mobile:build:android
 
