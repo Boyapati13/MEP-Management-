@@ -93,7 +93,12 @@ async function runMigrationSuite() {
       'users', 'projects', 'companies', 'project_companies', 'project_memberships',
       'tasks', 'documents', 'rfis', 'submittals', 'punchlist', 'change_orders',
       'clarifications', 'clarification_comments', 'progress_reports', 'progress_submissions',
-      'sessions', 'audit_logs'
+      'sessions', 'audit_logs',
+      'sites', 'workers', 'worker_assignments', 'shift_templates', 'worker_schedules',
+      'attendance', 'attendance_adjustments', 'public_holidays',
+      'leave_types', 'leave_requests', 'leave_balances',
+      'payroll_profiles', 'payroll_periods', 'payroll_entries', 'payroll_adjustments',
+      'site_instructions', 'site_instruction_updates', 'site_instruction_attachments'
     ];
 
     for (const t of requiredTables) {
@@ -220,6 +225,37 @@ async function runMigrationSuite() {
 
     const rfiCols = (upgradedDb.prepare("PRAGMA table_info(rfis)").all() as any[]).map(c => c.name);
     assert(rfiCols.includes('source_clarification_id'), 'Migration added source_clarification_id column to rfis');
+
+    // Verify V1.2.1 workforce/payroll migration schema on upgraded database
+    const attendanceCols = (upgradedDb.prepare("PRAGMA table_info(attendance)").all() as any[]).map(c => c.name);
+    for (const col of [
+      'site_id', 'worker_id', 'company_id', 'work_package_id', 'supervisor_id',
+      'elapsed_minutes', 'regular_minutes', 'break_minutes',
+      'raw_overtime_minutes', 'approved_overtime_minutes',
+      'late_minutes', 'attendance_status', 'ot_status', 'ot_reject_reason'
+    ]) {
+      assert(attendanceCols.includes(col), `Migration added attendance.${col}`);
+    }
+
+    const shiftCols = (upgradedDb.prepare("PRAGMA table_info(shift_templates)").all() as any[]).map(c => c.name);
+    assert(shiftCols.includes('working_days_json'), 'Migration added working_days_json to shift_templates');
+
+    const payrollEntryCols = (upgradedDb.prepare("PRAGMA table_info(payroll_entries)").all() as any[]).map(c => c.name);
+    for (const col of [
+      'elapsed_minutes', 'regular_minutes', 'break_minutes',
+      'raw_overtime_minutes', 'approved_overtime_minutes'
+    ]) {
+      assert(payrollEntryCols.includes(col), `Migration added payroll_entries.${col}`);
+    }
+
+    const workforceTables = (upgradedDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[]).map(t => t.name);
+    for (const table of [
+      'sites', 'workers', 'worker_assignments', 'shift_templates', 'worker_schedules',
+      'public_holidays', 'leave_requests', 'payroll_profiles', 'payroll_periods',
+      'payroll_entries', 'site_instructions'
+    ]) {
+      assert(workforceTables.includes(table), `Migration created workforce table '${table}'`);
+    }
 
     // Verify pre-existing data is completely intact
     const legacyUser = upgradedDb.prepare("SELECT * FROM users WHERE id='legacy-pm-01'").get() as any;
