@@ -266,6 +266,18 @@ async function runWorkforceSuite() {
     });
     assert(unassignedAssign.status === 201, 'Explicit assignment can be added after access is denied');
 
+    const legacyPunchBypass = await req({
+      path: '/api/attendance/punch-in', method: 'POST', token: unassignedToken,
+      body: { project_id: projectA }
+    });
+    assert(legacyPunchBypass.status === 410, 'Worker cannot bypass GPS/assignment policy through legacy punch-in endpoint');
+
+    const missingGpsPunch = await req({
+      path: '/api/attendance/gps-punch-in', method: 'POST', token: unassignedToken,
+      body: { project_id: projectA, site_id: siteA }
+    });
+    assert(missingGpsPunch.status === 400, 'GPS punch-in requires valid coordinates and accuracy');
+
     const wrongSitePunch = await req({
       path: '/api/attendance/gps-punch-in', method: 'POST', token: unassignedToken,
       body: { project_id: projectA, site_id: siteA2, lat: 35.9000, lng: 14.5000, accuracy: 10 }
