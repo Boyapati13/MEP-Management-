@@ -1,0 +1,16 @@
+services:
+  mep-platform:
+    build: .
+    container_name: mep-management-platform
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MEP_DB_PATH=/data/mep_pm.db
+      - NODE_ENV=production
+    volumes:
+      - mep-data:/data
+    restart: unless-stopped
+
+volumes:
+  mep-data:

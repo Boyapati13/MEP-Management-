@@ -12,7 +12,8 @@
     "test:v1.1": "tsx test_v1_1_suite.ts",
     "test:enterprise": "tsx test_enterprise_suite.ts",
     "test:migration": "tsx test_migration_suite.ts",
-    "test:all": "tsx test_migration_suite.ts && tsx test_e2e_suite.ts && tsx test_v1_1_suite.ts && tsx test_enterprise_suite.ts",
+    "test:workforce": "tsx test_workforce_suite.ts",
+    "test:all": "tsx test_migration_suite.ts && tsx test_e2e_suite.ts && tsx test_v1_1_suite.ts && tsx test_enterprise_suite.ts && tsx test_workforce_suite.ts",
     "test": "npm run test:all"
   },
   "dependencies": {

@@ -33,6 +33,10 @@ declare global {
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DB_PATH = process.env.MEP_DB_PATH || path.join(process.cwd(), "mep_pm.db");
 const db = new DatabaseSync(DB_PATH);
+try {
+  db.exec("PRAGMA journal_mode = WAL;");
+  db.exec("PRAGMA busy_timeout = 10000;");
+} catch {}
 
 // Helper for row mapping
 function rowToDict(row: any): Record<string, any> | null {
@@ -307,7 +311,9 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "inspections", "meeting_minutes", "timesheets", "equipment",
       "dependencies", "procurement", "material_requests", "risks", "ncrs",
       "commissioning", "handover", "wbs", "audit", "users", "site_today", "calendar", "attendance",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -316,7 +322,9 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "inspections", "meeting_minutes", "timesheets", "equipment",
       "dependencies", "procurement", "material_requests", "risks", "ncrs",
       "commissioning", "handover", "wbs", "attendance",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
     ],
     delete: true,
   },
@@ -328,7 +336,9 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "inspections", "meeting_minutes", "timesheets", "equipment",
       "dependencies", "procurement", "material_requests", "risks", "ncrs",
       "commissioning", "handover", "wbs", "audit", "site_today", "calendar", "attendance",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -337,7 +347,9 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "inspections", "meeting_minutes", "timesheets", "equipment",
       "dependencies", "procurement", "material_requests", "risks", "ncrs",
       "commissioning", "handover", "wbs", "attendance",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
     ],
     delete: true,
   },
@@ -349,14 +361,16 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "inspections", "meeting_minutes", "timesheets", "equipment",
       "dependencies", "material_requests", "ncrs", "commissioning",
       "wbs", "site_today", "calendar", "attendance",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "attendance_adjustments", "worker_assignments"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "dailylogs", "documents",
       "change_orders", "safety_incidents", "inspections",
       "meeting_minutes", "timesheets", "equipment", "material_requests",
       "commissioning", "attendance",
-      "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "site_instructions", "leave_requests", "attendance_adjustments"
     ],
     delete: false,
   },
@@ -365,12 +379,14 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "costs", "budget", "change_orders", "purchase_orders",
       "procurement", "material_requests", "dependencies", "risks",
       "handover", "documents", "projects", "gantt", "wbs", "tasks", "planner", "submittals",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "payroll_periods", "payroll_entries", "payroll_profiles"
     ],
     edit: [
       "costs", "budget", "change_orders", "purchase_orders",
       "procurement", "material_requests", "risks", "handover", "documents",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
+      "payroll_periods", "payroll_entries", "payroll_profiles"
     ],
     delete: false,
   },
@@ -393,7 +409,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "safety_incidents", "risks", "inspections",
       "dailylogs", "timesheets", "attendance", "site_today",
       "documents", "equipment", "tasks", "planner",
-      "companies", "work_packages", "clarifications", "progress_reports"
+      "companies", "work_packages", "clarifications", "progress_reports",
+      "workforce", "sites", "workers"
     ],
     edit: [
       "safety_incidents", "risks", "inspections", "dailylogs",
@@ -406,12 +423,13 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "tasks", "planner", "submittals", "punchlist", "dailylogs", "documents",
       "safety_incidents", "timesheets", "equipment", "dependencies",
       "material_requests", "site_today", "calendar", "attendance",
-      "companies", "work_packages", "clarifications", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "transmittals", "progress_submissions",
+      "site_instructions", "leave_requests", "workers"
     ],
     edit: [
       "tasks", "planner", "submittals", "punchlist", "dailylogs", "documents", "safety_incidents",
       "timesheets", "dependencies", "material_requests", "attendance",
-      "clarifications", "progress_submissions"
+      "clarifications", "progress_submissions", "leave_requests"
     ],
     delete: false,
   },
@@ -433,6 +451,32 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
   Client: {
     view: ["client_dashboard", "projects", "documents", "change_orders", "progress_reports", "clarifications"],
     edit: [],
+    delete: false,
+  },
+  // Worker role: field-level access — own punch clock, tasks assigned to them,
+  // own leave requests, own attendance history. Cannot see other workers' data.
+  Worker: {
+    view: [
+      "attendance", "tasks", "site_instructions", "leave_requests",
+      "timesheets", "documents", "workforce", "sites"
+    ],
+    edit: [
+      "attendance", "site_instructions", "leave_requests", "timesheets"
+    ],
+    delete: false,
+  },
+  // SiteSupervisor: all Worker perms + oversight of supervised workers,
+  // site control, OT/leave/correction approval.
+  SiteSupervisor: {
+    view: [
+      "attendance", "tasks", "site_instructions", "leave_requests",
+      "timesheets", "documents", "workforce", "sites", "workers",
+      "attendance_adjustments", "shift_templates", "worker_assignments"
+    ],
+    edit: [
+      "attendance", "site_instructions", "leave_requests", "timesheets",
+      "attendance_adjustments", "tasks"
+    ],
     delete: false,
   },
 };
@@ -680,6 +724,35 @@ const WORKFLOW_STATUSES: Record<string, Record<string, string[]>> = {
     Approved: ["Closed"],
     "Approved with Adjustments": ["Closed"],
     Rejected: ["Submitted"],
+  },
+  // Site instruction 7-stage FSM
+  site_instructions: {
+    Draft: ["Assigned"],
+    Assigned: ["Acknowledged", "Draft"],
+    Acknowledged: ["In Progress"],
+    "In Progress": ["Ready for Verification"],
+    "Ready for Verification": ["Verified", "In Progress"],
+    Verified: ["Closed"],
+    Closed: [],
+  },
+  // Leave request approval FSM
+  leave_requests: {
+    Pending: ["Approved", "Rejected"],
+    Approved: ["Cancelled"],
+    Rejected: ["Pending"],
+    Cancelled: [],
+  },
+  // Attendance adjustment FSM
+  attendance_adjustments: {
+    Pending: ["Approved", "Rejected"],
+    Approved: [],
+    Rejected: ["Pending"],
+  },
+  // Overtime approval FSM (on attendance records)
+  overtime_approval: {
+    Pending: ["Approved", "Rejected"],
+    Approved: [],
+    Rejected: ["Pending"],
   },
 };
 
@@ -1018,7 +1091,257 @@ function initDb() {
       approved_at TEXT,
       created_at TEXT
     );
+    -- =====================================================
+    -- WORKFORCE MODULE TABLES (V1.2)
+    -- =====================================================
+    CREATE TABLE IF NOT EXISTS sites (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      address TEXT,
+      city TEXT,
+      country TEXT,
+      latitude REAL,
+      longitude REAL,
+      geofence_radius_m REAL DEFAULT 100,
+      geofence_warning_radius_m REAL DEFAULT 150,
+      timezone TEXT DEFAULT 'UTC',
+      status TEXT DEFAULT 'Active',
+      created_by TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS workers (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      site_id TEXT,
+      company_id TEXT,
+      user_id TEXT,
+      name TEXT NOT NULL,
+      employee_id TEXT,
+      trade TEXT,
+      employment_type TEXT DEFAULT 'Permanent',
+      nationality TEXT,
+      phone TEXT,
+      email TEXT,
+      supervisor_id TEXT,
+      work_package_id TEXT,
+      status TEXT DEFAULT 'Active',
+      hired_date TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS worker_assignments (
+      id TEXT PRIMARY KEY,
+      worker_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      site_id TEXT,
+      work_package_id TEXT,
+      supervisor_id TEXT,
+      role_on_site TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      status TEXT DEFAULT 'Active',
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS shift_templates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      grace_minutes INTEGER DEFAULT 15,
+      break_minutes INTEGER DEFAULT 60,
+      regular_hours REAL DEFAULT 8,
+      ot_threshold_hours REAL DEFAULT 8,
+      status TEXT DEFAULT 'Active',
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS worker_schedules (
+      id TEXT PRIMARY KEY,
+      worker_id TEXT NOT NULL,
+      shift_template_id TEXT NOT NULL,
+      effective_from TEXT NOT NULL,
+      effective_to TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS site_instructions (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      site_id TEXT,
+      work_package_id TEXT,
+      instruction_number TEXT,
+      instruction_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      priority TEXT DEFAULT 'Medium',
+      status TEXT DEFAULT 'Draft',
+      assigned_worker_id TEXT,
+      assigned_supervisor_id TEXT,
+      issued_by TEXT,
+      issued_at TEXT,
+      acknowledged_at TEXT,
+      started_at TEXT,
+      evidence_submitted_at TEXT,
+      verified_by TEXT,
+      verified_at TEXT,
+      closed_at TEXT,
+      due_date TEXT,
+      location TEXT,
+      related_document_id TEXT,
+      related_drawing_id TEXT,
+      related_rfi_id TEXT,
+      related_ncr_id TEXT,
+      related_boq_item_id TEXT,
+      attachment_name TEXT,
+      attachment_data TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS site_instruction_updates (
+      id TEXT PRIMARY KEY,
+      instruction_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT,
+      update_type TEXT DEFAULT 'Comment',
+      content TEXT NOT NULL,
+      old_status TEXT,
+      new_status TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS site_instruction_attachments (
+      id TEXT PRIMARY KEY,
+      instruction_id TEXT NOT NULL,
+      uploaded_by TEXT NOT NULL,
+      attachment_name TEXT,
+      attachment_data TEXT,
+      attachment_type TEXT DEFAULT 'Evidence',
+      caption TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS leave_types (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL UNIQUE,
+      is_paid INTEGER DEFAULT 1,
+      default_days_per_year INTEGER DEFAULT 0,
+      requires_approval INTEGER DEFAULT 1,
+      description TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS leave_requests (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      worker_id TEXT,
+      user_id TEXT NOT NULL,
+      leave_type_id TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      days_requested REAL NOT NULL DEFAULT 1,
+      reason TEXT,
+      status TEXT DEFAULT 'Pending',
+      approved_by TEXT,
+      approved_at TEXT,
+      reject_reason TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS leave_balances (
+      id TEXT PRIMARY KEY,
+      worker_id TEXT,
+      user_id TEXT NOT NULL,
+      leave_type_id TEXT NOT NULL,
+      year INTEGER NOT NULL,
+      entitlement_days REAL DEFAULT 0,
+      taken_days REAL DEFAULT 0,
+      pending_days REAL DEFAULT 0,
+      balance_days REAL DEFAULT 0,
+      updated_at TEXT,
+      UNIQUE(user_id, leave_type_id, year)
+    );
+    CREATE TABLE IF NOT EXISTS attendance_adjustments (
+      id TEXT PRIMARY KEY,
+      attendance_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      worker_id TEXT,
+      user_id TEXT NOT NULL,
+      original_punch_in TEXT,
+      original_punch_out TEXT,
+      adjusted_punch_in TEXT,
+      adjusted_punch_out TEXT,
+      adjustment_reason TEXT NOT NULL,
+      status TEXT DEFAULT 'Pending',
+      submitted_by TEXT NOT NULL,
+      approved_by TEXT,
+      approved_at TEXT,
+      reject_reason TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS payroll_profiles (
+      id TEXT PRIMARY KEY,
+      worker_id TEXT NOT NULL UNIQUE,
+      basic_daily_rate REAL DEFAULT 0,
+      basic_monthly_rate REAL DEFAULT 0,
+      rate_type TEXT DEFAULT 'Daily',
+      currency TEXT DEFAULT 'USD',
+      ot_multiplier REAL DEFAULT 1.5,
+      housing_allowance REAL DEFAULT 0,
+      transport_allowance REAL DEFAULT 0,
+      food_allowance REAL DEFAULT 0,
+      bank_account TEXT,
+      bank_name TEXT,
+      effective_from TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS payroll_periods (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      period_name TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      status TEXT DEFAULT 'Open',
+      locked_by TEXT,
+      locked_at TEXT,
+      total_gross REAL DEFAULT 0,
+      total_net REAL DEFAULT 0,
+      created_by TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS payroll_entries (
+      id TEXT PRIMARY KEY,
+      payroll_period_id TEXT NOT NULL,
+      worker_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      regular_days REAL DEFAULT 0,
+      regular_hours REAL DEFAULT 0,
+      overtime_hours REAL DEFAULT 0,
+      absent_days REAL DEFAULT 0,
+      leave_days REAL DEFAULT 0,
+      basic_pay REAL DEFAULT 0,
+      overtime_pay REAL DEFAULT 0,
+      housing_allowance REAL DEFAULT 0,
+      transport_allowance REAL DEFAULT 0,
+      food_allowance REAL DEFAULT 0,
+      gross_pay REAL DEFAULT 0,
+      deductions REAL DEFAULT 0,
+      net_pay REAL DEFAULT 0,
+      currency TEXT DEFAULT 'USD',
+      notes TEXT,
+      computed_at TEXT,
+      created_at TEXT,
+      UNIQUE(payroll_period_id, worker_id)
+    );
+    CREATE TABLE IF NOT EXISTS payroll_adjustments (
+      id TEXT PRIMARY KEY,
+      payroll_entry_id TEXT NOT NULL,
+      payroll_period_id TEXT NOT NULL,
+      worker_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      is_deduction INTEGER DEFAULT 0,
+      created_by TEXT,
+      created_at TEXT
+    );
   `);
+
 
   try { db.exec("ALTER TABLE tasks ADD COLUMN work_package_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN company_id TEXT;"); } catch {}
@@ -1075,10 +1398,49 @@ function initDb() {
   try { db.exec("ALTER TABLE rfis ADD COLUMN source_clarification_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE change_orders ADD COLUMN source_clarification_id TEXT;"); } catch {}
 
+  // V1.2 Workforce: GPS + OT columns on attendance
+  try { db.exec("ALTER TABLE attendance ADD COLUMN site_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN worker_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_in_lat REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_in_lng REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_in_accuracy REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_in_geofence_status TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_in_distance_m REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_out_lat REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_out_lng REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_out_accuracy REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_out_geofence_status TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN punch_out_distance_m REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN supervisor_override INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN override_reason TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN shift_template_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN regular_hours REAL;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN overtime_hours REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN ot_status TEXT DEFAULT 'Pending';"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN ot_approved_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE attendance ADD COLUMN ot_approved_at TEXT;"); } catch {}
+
+  // V1.2 Workforce: site/assignment columns on tasks
+  try { db.exec("ALTER TABLE tasks ADD COLUMN site_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN assigned_worker_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN assigned_supervisor_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN instruction_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'Medium';"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN completion_evidence_required INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN verified_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN verified_at TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN completion_percent REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN completion_notes TEXT;"); } catch {}
+
+  // V1.2 Workforce: worker_id linkage on users
+  try { db.exec("ALTER TABLE users ADD COLUMN worker_id TEXT;"); } catch {}
+
   seedUsers();
+  seedLeaveTypes();
   seedData();
   // ensureMemberships removed: Auto-granting and reactivation on restart violates explicit project membership model.
 }
+
 
 function seedUsers() {
   // Single bootstrap administrator account only. No demo company, no
@@ -1100,6 +1462,26 @@ function seedData() {
   // Intentionally a no-op: no demo/sample projects, tasks, RFIs, etc.
   // are created on startup. New installs start with zero projects;
   // the bootstrap admin account creates real projects from the UI.
+}
+
+function seedLeaveTypes() {
+  // Bootstrap default leave types idempotently (unique constraint on name/code prevents duplicates)
+  const defaults = [
+    { name: "Annual Leave",   code: "AL",  is_paid: 1, days: 21, requires_approval: 1 },
+    { name: "Sick Leave",     code: "SL",  is_paid: 1, days: 14, requires_approval: 0 },
+    { name: "Unpaid Leave",   code: "UL",  is_paid: 0, days: 0,  requires_approval: 1 },
+    { name: "Public Holiday", code: "PH",  is_paid: 1, days: 0,  requires_approval: 0 },
+    { name: "Rest Day",       code: "RD",  is_paid: 1, days: 0,  requires_approval: 0 },
+    { name: "Compassionate",  code: "CL",  is_paid: 1, days: 3,  requires_approval: 1 },
+  ];
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO leave_types (id, name, code, is_paid, default_days_per_year, requires_approval, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const now = new Date().toISOString();
+  for (const lt of defaults) {
+    stmt.run(crypto.randomUUID(), lt.name, lt.code, lt.is_paid, lt.days, lt.requires_approval, now);
+  }
 }
 
 // Permissions & Scope Helpers
@@ -1245,6 +1627,23 @@ function externalRecordDto(record: any, user: AuthenticatedUser, module: string)
     }
   }
 
+  // Phase 3: Payroll compensation isolation - only Admin and CommercialManager see compensation
+  if (user.role !== "Admin" && user.role !== "CommercialManager") {
+    delete dto.basic_daily_rate;
+    delete dto.basic_monthly_rate;
+    delete dto.basic_pay;
+    delete dto.overtime_pay;
+    delete dto.housing_allowance;
+    delete dto.transport_allowance;
+    delete dto.food_allowance;
+    delete dto.gross_pay;
+    delete dto.net_pay;
+    delete dto.deductions;
+    delete dto.bank_account;
+    delete dto.bank_name;
+    delete dto.ot_multiplier;
+  }
+
   return dto;
 }
 
@@ -1258,6 +1657,40 @@ function canAccessRecord(
   if (!record) return false;
   if (record.project_id && !canAccessProject(user, record.project_id)) return false;
   if (user.role === "Admin") return true;
+
+  // Phase 3: Worker role scoping - can only view/edit records associated with themselves
+  if (user.role === "Worker") {
+    if (module === "workers") {
+      return record.user_id === user.user_id || record.id === user.worker_id;
+    }
+    if (module === "attendance") {
+      return record.user_id === user.user_id || record.worker_id === user.worker_id;
+    }
+    if (module === "site_instructions") {
+      return record.assigned_worker_id === user.worker_id || record.assigned_worker_id === user.user_id;
+    }
+    if (module === "leave_requests") {
+      return record.user_id === user.user_id || record.worker_id === user.worker_id;
+    }
+    if (module === "payroll_entries" || module === "payroll_profiles" || module === "payroll_periods") {
+      return false;
+    }
+  }
+
+  // Phase 3: SiteSupervisor role scoping
+  if (user.role === "SiteSupervisor") {
+    if (module === "workers") {
+      return record.supervisor_id === user.user_id || record.supervisor_id === user.worker_id;
+    }
+    if (module === "payroll_entries" || module === "payroll_profiles" || module === "payroll_periods") {
+      return false;
+    }
+  }
+
+  // Phase 3: Payroll modules - strictly Admin & CommercialManager
+  if (module === "payroll_profiles" || module === "payroll_entries" || module === "payroll_adjustments") {
+    if (user.role !== "Admin" && user.role !== "CommercialManager") return false;
+  }
 
   if (action === "view" && !canView(user, module)) return false;
   if ((action === "edit" || action === "create") && !canEdit(user, module)) {
@@ -1449,6 +1882,24 @@ function authRequired(req: Request, res: Response, next: NextFunction): void {
 
 async function startServer() {
   initDb();
+
+  // Haversine formula: returns distance in metres between two lat/lng points
+  function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371000; // Earth radius in metres
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // Compute geofence status given distance and site config
+  function geofenceStatus(distanceM: number, site: any, accuracyM?: number): string {
+    if (accuracyM && accuracyM > 50) return 'GPS Accuracy Poor';
+    if (distanceM <= site.geofence_radius_m) return 'Valid';
+    if (distanceM <= site.geofence_warning_radius_m) return 'Warning';
+    return 'Outside Geofence';
+  }
+
   const app = express();
 
   // 150mb accounts for base64 encoding inflating a file by ~33% - so this
@@ -1490,7 +1941,7 @@ async function startServer() {
   });
 
   // Auth Endpoints
-  app.post("/api/login", (req, res) => {
+  app.post(["/api/login", "/api/auth/login"], (req, res) => {
     const { username, password } = req.body || {};
     if (!username || !password) {
       res.status(400).json({ error: "Username and password required" });
@@ -2357,7 +2808,7 @@ async function startServer() {
     const now = new Date().toISOString();
     const today = now.split("T")[0];
     const notes = req.body?.shift_notes || req.body?.notes || "";
-    db.prepare("INSERT INTO attendance VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', ?)").run(
+    db.prepare("INSERT INTO attendance (id, project_id, user_id, worker, work_date, punch_in, punch_out, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', ?)").run(
       id, projectId, req.user!.user_id, req.user!.name, today, now, null, notes
     );
     writeAudit(req.user!.user_id, "attendance", id, projectId, "punch_in", null, { worker: req.user!.name, punch_in: now });
@@ -5367,6 +5818,840 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // =====================================================================
+  // WORKFORCE MODULE API (V1.2)
+  // =====================================================================
+
+  // --- SITES ---
+  app.get('/api/sites', authRequired, (req, res) => {
+    if (!canView(req.user!, 'sites')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const { where, params } = projectScopeSql(req.user!, projectId);
+    if (!where) { res.status(403).json({ error: 'No project access' }); return; }
+    const rows = db.prepare(`SELECT * FROM sites WHERE ${where} ORDER BY name`).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/sites', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'sites')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { project_id, name, address, city, country, latitude, longitude, geofence_radius_m, geofence_warning_radius_m, timezone } = req.body;
+    if (!project_id || !name) { res.status(400).json({ error: 'project_id and name required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO sites (id,project_id,name,address,city,country,latitude,longitude,geofence_radius_m,geofence_warning_radius_m,timezone,status,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, project_id, name, address||null, city||null, country||null, latitude||null, longitude||null, geofence_radius_m||100, geofence_warning_radius_m||150, timezone||'UTC', 'Active', req.user!.user_id, now);
+    writeAudit(req.user!.user_id, 'sites', id, project_id, 'create', null, { name });
+    res.status(201).json(db.prepare('SELECT * FROM sites WHERE id=?').get(id));
+  });
+
+  app.get('/api/sites/:id', authRequired, (req, res) => {
+    if (!canView(req.user!, 'sites')) { res.status(403).json({ error: 'No access' }); return; }
+    const site = db.prepare('SELECT * FROM sites WHERE id=?').get(req.params.id) as any;
+    if (!site) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, site.project_id)) { res.status(403).json({ error: 'No access' }); return; }
+    res.json(site);
+  });
+
+  app.put('/api/sites/:id', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'sites')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const site = db.prepare('SELECT * FROM sites WHERE id=?').get(req.params.id) as any;
+    if (!site) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, site.project_id)) { res.status(403).json({ error: 'No access' }); return; }
+    const { name, address, city, country, latitude, longitude, geofence_radius_m, geofence_warning_radius_m, timezone, status } = req.body;
+    db.prepare(`UPDATE sites SET name=COALESCE(?,name),address=COALESCE(?,address),city=COALESCE(?,city),country=COALESCE(?,country),latitude=COALESCE(?,latitude),longitude=COALESCE(?,longitude),geofence_radius_m=COALESCE(?,geofence_radius_m),geofence_warning_radius_m=COALESCE(?,geofence_warning_radius_m),timezone=COALESCE(?,timezone),status=COALESCE(?,status) WHERE id=?`)
+      .run(name||null, address||null, city||null, country||null, latitude||null, longitude||null, geofence_radius_m||null, geofence_warning_radius_m||null, timezone||null, status||null, req.params.id);
+    writeAudit(req.user!.user_id, 'sites', req.params.id, site.project_id, 'update', site, req.body);
+    res.json(db.prepare('SELECT * FROM sites WHERE id=?').get(req.params.id));
+  });
+
+  // Site control screen
+  app.get('/api/sites/:id/control', authRequired, (req, res) => {
+    if (!canView(req.user!, 'sites')) { res.status(403).json({ error: 'No access' }); return; }
+    const site = db.prepare('SELECT * FROM sites WHERE id=?').get(req.params.id) as any;
+    if (!site) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, site.project_id)) { res.status(403).json({ error: 'No access' }); return; }
+    const today = new Date().toISOString().split('T')[0];
+    const presentWorkers = db.prepare(
+      `SELECT a.*, w.trade, w.employment_type, w.employee_id FROM attendance a LEFT JOIN workers w ON w.id = a.worker_id WHERE a.site_id=? AND a.work_date=? AND a.punch_out IS NULL`
+    ).all(req.params.id, today);
+    const todayAttendance = db.prepare(
+      `SELECT a.*, w.trade FROM attendance a LEFT JOIN workers w ON w.id = a.worker_id WHERE a.site_id=? AND a.work_date=?`
+    ).all(req.params.id, today);
+    const openInstructions = db.prepare(
+      `SELECT * FROM site_instructions WHERE site_id=? AND status NOT IN ('Closed') ORDER BY priority DESC, created_at DESC`
+    ).all(req.params.id);
+    const pendingLeave = db.prepare(
+      `SELECT lr.*, lt.name as leave_type_name FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.project_id=? AND lr.status='Pending' ORDER BY lr.created_at DESC`
+    ).all(site.project_id);
+    res.json({ site, present_workers: presentWorkers, today_attendance: todayAttendance, open_instructions: openInstructions, pending_leave: pendingLeave, today: today });
+  });
+
+  // --- WORKERS ---
+  app.get('/api/workers', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workers')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const siteId = req.query.site_id as string;
+    const role = req.user!.role;
+    let where = '1=1';
+    const params: any[] = [];
+    if (projectId) { where += ' AND w.project_id=?'; params.push(projectId); }
+    if (siteId) { where += ' AND w.site_id=?'; params.push(siteId); }
+    // SiteSupervisor only sees workers they supervise
+    if (role === 'SiteSupervisor') {
+      where += ' AND w.supervisor_id=?'; params.push(req.user!.user_id);
+    }
+    // Worker only sees themselves
+    if (role === 'Worker') {
+      where += ' AND w.user_id=?'; params.push(req.user!.user_id);
+    }
+    const rows = db.prepare(`SELECT w.*, c.name as company_name FROM workers w LEFT JOIN companies c ON c.id=w.company_id WHERE ${where} ORDER BY w.name`).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/workers', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'workers')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { project_id, site_id, company_id, user_id, name, employee_id, trade, employment_type, nationality, phone, email, supervisor_id, work_package_id } = req.body;
+    if (!name) { res.status(400).json({ error: 'name required' }); return; }
+    if (project_id && !hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO workers (id,project_id,site_id,company_id,user_id,name,employee_id,trade,employment_type,nationality,phone,email,supervisor_id,work_package_id,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, project_id||null, site_id||null, company_id||null, user_id||null, name, employee_id||null, trade||null, employment_type||'Permanent', nationality||null, phone||null, email||null, supervisor_id||null, work_package_id||null, 'Active', now);
+    // If user_id supplied, link the user's worker_id
+    if (user_id) { db.prepare('UPDATE users SET worker_id=? WHERE id=?').run(id, user_id); }
+    writeAudit(req.user!.user_id, 'workers', id, project_id||null, 'create', null, { name });
+    res.status(201).json(db.prepare('SELECT * FROM workers WHERE id=?').get(id));
+  });
+
+  app.get('/api/workers/:id', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workers')) { res.status(403).json({ error: 'No access' }); return; }
+    const worker = db.prepare('SELECT w.*, c.name as company_name FROM workers w LEFT JOIN companies c ON c.id=w.company_id WHERE w.id=?').get(req.params.id) as any;
+    if (!worker) { res.status(404).json({ error: 'Not found' }); return; }
+    const role = req.user!.role;
+    if (role === 'Worker' && worker.user_id !== req.user!.user_id) { res.status(403).json({ error: 'No access' }); return; }
+    if (role === 'SiteSupervisor' && worker.supervisor_id !== req.user!.user_id) { res.status(403).json({ error: 'No access' }); return; }
+    res.json(worker);
+  });
+
+  app.put('/api/workers/:id', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'workers')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const worker = db.prepare('SELECT * FROM workers WHERE id=?').get(req.params.id) as any;
+    if (!worker) { res.status(404).json({ error: 'Not found' }); return; }
+    const { name, trade, employment_type, nationality, phone, email, supervisor_id, site_id, status, work_package_id } = req.body;
+    db.prepare(`UPDATE workers SET name=COALESCE(?,name),trade=COALESCE(?,trade),employment_type=COALESCE(?,employment_type),nationality=COALESCE(?,nationality),phone=COALESCE(?,phone),email=COALESCE(?,email),supervisor_id=COALESCE(?,supervisor_id),site_id=COALESCE(?,site_id),status=COALESCE(?,status),work_package_id=COALESCE(?,work_package_id) WHERE id=?`)
+      .run(name||null, trade||null, employment_type||null, nationality||null, phone||null, email||null, supervisor_id||null, site_id||null, status||null, work_package_id||null, req.params.id);
+    writeAudit(req.user!.user_id, 'workers', req.params.id, worker.project_id, 'update', worker, req.body);
+    res.json(db.prepare('SELECT * FROM workers WHERE id=?').get(req.params.id));
+  });
+
+  // Worker full profile (tabbed)
+  app.get('/api/workers/:id/profile', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workers')) { res.status(403).json({ error: 'No access' }); return; }
+    const worker = db.prepare('SELECT w.*, c.name as company_name FROM workers w LEFT JOIN companies c ON c.id=w.company_id WHERE w.id=?').get(req.params.id) as any;
+    if (!worker) { res.status(404).json({ error: 'Not found' }); return; }
+    const role = req.user!.role;
+    if (role === 'Worker' && worker.user_id !== req.user!.user_id) { res.status(403).json({ error: 'No access' }); return; }
+    const recentAttendance = db.prepare('SELECT * FROM attendance WHERE worker_id=? ORDER BY work_date DESC LIMIT 30').all(req.params.id);
+    const tasks = db.prepare('SELECT * FROM tasks WHERE assigned_worker_id=? ORDER BY start DESC LIMIT 20').all(req.params.id);
+    const instructions = db.prepare('SELECT * FROM site_instructions WHERE assigned_worker_id=? ORDER BY created_at DESC LIMIT 20').all(req.params.id);
+    const leaveRequests = db.prepare('SELECT lr.*, lt.name as leave_type_name FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.worker_id=? ORDER BY lr.created_at DESC LIMIT 20').all(req.params.id);
+    const payrollEntries = (role === 'Admin' || role === 'CommercialManager')
+      ? db.prepare('SELECT pe.*, pp.period_name, pp.period_start, pp.period_end FROM payroll_entries pe JOIN payroll_periods pp ON pp.id=pe.payroll_period_id WHERE pe.worker_id=? ORDER BY pp.period_start DESC LIMIT 12').all(req.params.id)
+      : [];
+    res.json({ worker, attendance: recentAttendance, tasks, instructions, leave_requests: leaveRequests, payroll_entries: payrollEntries });
+  });
+
+  // --- WORKER ASSIGNMENTS ---
+  app.get('/api/worker_assignments', authRequired, (req, res) => {
+    if (!canView(req.user!, 'worker_assignments')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const { where, params } = projectScopeSql(req.user!, projectId);
+    if (!where) { res.status(403).json({ error: 'No project access' }); return; }
+    const rows = db.prepare(`SELECT wa.*, w.name as worker_name, w.trade, s.name as site_name FROM worker_assignments wa LEFT JOIN workers w ON w.id=wa.worker_id LEFT JOIN sites s ON s.id=wa.site_id WHERE ${where} ORDER BY wa.created_at DESC`).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/worker_assignments', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'worker_assignments')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { worker_id, project_id, site_id, work_package_id, supervisor_id, role_on_site, start_date, end_date } = req.body;
+    if (!worker_id || !project_id) { res.status(400).json({ error: 'worker_id and project_id required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO worker_assignments (id,worker_id,project_id,site_id,work_package_id,supervisor_id,role_on_site,start_date,end_date,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, worker_id, project_id, site_id||null, work_package_id||null, supervisor_id||null, role_on_site||null, start_date||null, end_date||null, 'Active', now);
+    writeAudit(req.user!.user_id, 'worker_assignments', id, project_id, 'create', null, req.body);
+    res.status(201).json(db.prepare('SELECT * FROM worker_assignments WHERE id=?').get(id));
+  });
+
+  app.delete('/api/worker_assignments/:id', authRequired, (req, res) => {
+    if (!canDelete(req.user!)) { res.status(403).json({ error: 'No delete access' }); return; }
+    const wa = db.prepare('SELECT * FROM worker_assignments WHERE id=?').get(req.params.id) as any;
+    if (!wa) { res.status(404).json({ error: 'Not found' }); return; }
+    db.prepare('DELETE FROM worker_assignments WHERE id=?').run(req.params.id);
+    writeAudit(req.user!.user_id, 'worker_assignments', req.params.id, wa.project_id, 'delete', wa, null);
+    res.json({ ok: true });
+  });
+
+  // --- LIVE WORKFORCE DASHBOARD ---
+  app.get('/api/workforce/today', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const siteId = req.query.site_id as string;
+    if (projectId && !hasProjectAccess(req.user!, projectId)) { res.status(403).json({ error: 'No project access' }); return; }
+    const today = new Date().toISOString().split('T')[0];
+    let whereClause = 'a.work_date=?';
+    const params: any[] = [today];
+    if (projectId) { whereClause += ' AND a.project_id=?'; params.push(projectId); }
+    if (siteId) { whereClause += ' AND a.site_id=?'; params.push(siteId); }
+    const role = req.user!.role;
+    if (role === 'SiteSupervisor') { whereClause += ' AND w.supervisor_id=?'; params.push(req.user!.user_id); }
+    const present = db.prepare(`SELECT a.*, w.trade, w.employment_type, w.employee_id, c.name as company_name, s.name as site_name FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id LEFT JOIN companies c ON c.id=w.company_id LEFT JOIN sites s ON s.id=a.site_id WHERE ${whereClause} AND a.punch_out IS NULL ORDER BY a.punch_in DESC`).all(...params);
+    const completed = db.prepare(`SELECT COUNT(*) as cnt FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id WHERE ${whereClause} AND a.punch_out IS NOT NULL`).get(...params) as any;
+    const exceptions = db.prepare(`SELECT a.*, w.trade FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id WHERE ${whereClause} AND (a.punch_in_geofence_status='Outside Geofence' OR a.punch_in_geofence_status='GPS Accuracy Poor')`).all(...params);
+    const otPending = db.prepare(`SELECT a.*, w.name as worker_name FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id WHERE ${whereClause} AND a.overtime_hours > 0 AND a.ot_status='Pending'`).all(...params);
+    res.json({ today, present_count: (present as any[]).length, completed_count: completed.cnt, present_workers: present, exceptions, pending_overtime: otPending });
+  });
+
+  // Workforce calendar (per worker per day P/L/A status)
+  app.get('/api/workforce/calendar', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, worker_id, month, year } = req.query as any;
+    if (!project_id) { res.status(400).json({ error: 'project_id required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const y = parseInt(year || new Date().getFullYear().toString());
+    const m = parseInt(month || (new Date().getMonth()+1).toString());
+    const startDate = `${y}-${String(m).padStart(2,'0')}-01`;
+    const endDate = `${y}-${String(m).padStart(2,'0')}-31`;
+    let where = 'a.project_id=? AND a.work_date>=? AND a.work_date<=?';
+    const params: any[] = [project_id, startDate, endDate];
+    if (worker_id) { where += ' AND a.worker_id=?'; params.push(worker_id); }
+    if (req.user!.role === 'Worker') {
+      const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+      if (workerRow) { where += ' AND a.worker_id=?'; params.push(workerRow.id); }
+    }
+    const attendance = db.prepare(`SELECT a.work_date, a.worker_id, a.punch_in, a.punch_out, a.status, a.regular_hours, a.overtime_hours, w.name as worker_name FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id WHERE ${where} ORDER BY a.work_date, w.name`).all(...params);
+    const leaves = db.prepare(`SELECT lr.*, lt.code as leave_code FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.project_id=? AND lr.start_date<=? AND lr.end_date>=? AND lr.status='Approved'`).all(project_id, endDate, startDate);
+    res.json({ year: y, month: m, attendance, approved_leaves: leaves });
+  });
+
+  // GPS-aware punch-in (server-time authority, server-side Haversine geofencing)
+  app.post('/api/attendance/gps-punch-in', authRequired, (req, res) => {
+    let projectId = req.body?.project_id;
+    if (!projectId) {
+      const defaultProj = db.prepare('SELECT project_id FROM project_memberships WHERE user_id=? AND active=1 LIMIT 1').get(req.user!.user_id) as any;
+      if (defaultProj) projectId = defaultProj.project_id;
+    }
+    if (!projectId || !hasProjectAccess(req.user!, projectId)) { res.status(403).json({ error: 'No project access' }); return; }
+    if (!canEdit(req.user!, 'attendance')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const active = db.prepare('SELECT id FROM attendance WHERE user_id=? AND punch_out IS NULL').get(req.user!.user_id);
+    if (active) { res.status(409).json({ error: 'Already punched in' }); return; }
+    const { site_id, lat, lng, accuracy } = req.body;
+    // Server-time authority: punch_in is ALWAYS server time
+    const now = new Date().toISOString();
+    const today = now.split('T')[0];
+    let geofence: string | null = null;
+    let distanceM: number | null = null;
+    // GPS geofence check (server-side Haversine)
+    if (site_id && lat != null && lng != null) {
+      const site = db.prepare('SELECT * FROM sites WHERE id=?').get(site_id) as any;
+      if (site && site.latitude != null && site.longitude != null) {
+        distanceM = haversineDistance(parseFloat(lat), parseFloat(lng), site.latitude, site.longitude);
+        geofence = geofenceStatus(distanceM, site, accuracy ? parseFloat(accuracy) : undefined);
+      }
+    }
+    // Find worker record
+    const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+    const worker_id = workerRow?.id || null;
+    // Find shift template
+    const schedRow = db.prepare(`SELECT ws.shift_template_id FROM worker_schedules ws JOIN workers w ON w.id=ws.worker_id WHERE w.user_id=? AND ws.effective_from<=? AND (ws.effective_to IS NULL OR ws.effective_to>=?) ORDER BY ws.effective_from DESC LIMIT 1`).get(req.user!.user_id, today, today) as any;
+    const shift_template_id = schedRow?.shift_template_id || null;
+    const notes = req.body?.shift_notes || req.body?.notes || '';
+    const id = crypto.randomUUID();
+    db.prepare(`INSERT INTO attendance (id,project_id,user_id,worker,work_date,punch_in,punch_out,status,notes,site_id,worker_id,punch_in_lat,punch_in_lng,punch_in_accuracy,punch_in_geofence_status,punch_in_distance_m,shift_template_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, projectId, req.user!.user_id, req.user!.name, today, now, null, 'Open', notes, site_id||null, worker_id, lat!=null?parseFloat(lat):null, lng!=null?parseFloat(lng):null, accuracy!=null?parseFloat(accuracy):null, geofence, distanceM, shift_template_id);
+    writeAudit(req.user!.user_id, 'attendance', id, projectId, 'gps_punch_in', null, { worker: req.user!.name, punch_in: now, geofence, distance_m: distanceM });
+    res.status(201).json(db.prepare('SELECT * FROM attendance WHERE id=?').get(id));
+  });
+
+  // GPS-aware punch-out (server-time authority, server-side Haversine geofencing)
+  app.post('/api/attendance/gps-punch-out', authRequired, (req, res) => {
+    const active = db.prepare('SELECT * FROM attendance WHERE user_id=? AND punch_out IS NULL').get(req.user!.user_id) as any;
+    if (!active) { res.status(409).json({ error: 'Not punched in' }); return; }
+    const { lat, lng, accuracy } = req.body;
+    // Server-time authority
+    const now = new Date().toISOString();
+    let geofence: string | null = null;
+    let distanceM: number | null = null;
+    if (active.site_id && lat != null && lng != null) {
+      const site = db.prepare('SELECT * FROM sites WHERE id=?').get(active.site_id) as any;
+      if (site && site.latitude != null && site.longitude != null) {
+        distanceM = haversineDistance(parseFloat(lat), parseFloat(lng), site.latitude, site.longitude);
+        geofence = geofenceStatus(distanceM, site, accuracy ? parseFloat(accuracy) : undefined);
+      }
+    }
+    // Compute hours
+    const punchIn = new Date(active.punch_in);
+    const punchOut = new Date(now);
+    const totalHours = Math.round((punchOut.getTime() - punchIn.getTime()) / 3600000 * 100) / 100;
+    // Determine regular vs OT from shift template
+    let regularHours = totalHours;
+    let overtimeHours = 0;
+    if (active.shift_template_id) {
+      const shift = db.prepare('SELECT * FROM shift_templates WHERE id=?').get(active.shift_template_id) as any;
+      if (shift) {
+        const otThreshold = shift.ot_threshold_hours || 8;
+        regularHours = Math.min(totalHours, otThreshold);
+        overtimeHours = Math.max(0, totalHours - otThreshold);
+      }
+    }
+    db.prepare(`UPDATE attendance SET punch_out=?,status='Closed',punch_out_lat=?,punch_out_lng=?,punch_out_accuracy=?,punch_out_geofence_status=?,punch_out_distance_m=?,regular_hours=?,overtime_hours=?,ot_status=? WHERE id=?`)
+      .run(now, lat!=null?parseFloat(lat):null, lng!=null?parseFloat(lng):null, accuracy!=null?parseFloat(accuracy):null, geofence, distanceM, regularHours, overtimeHours, overtimeHours > 0 ? 'Pending' : 'None', active.id);
+    writeAudit(req.user!.user_id, 'attendance', active.id, active.project_id, 'gps_punch_out', active, { punch_out: now, regular_hours: regularHours, overtime_hours: overtimeHours });
+    const updated = db.prepare('SELECT * FROM attendance WHERE id=?').get(active.id) as any;
+    res.json(updated);
+  });
+
+  // Attendance exceptions (missing punch / geofence violations)
+  app.get('/api/attendance/exceptions', authRequired, (req, res) => {
+    if (!canView(req.user!, 'attendance')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    if (projectId && !hasProjectAccess(req.user!, projectId)) { res.status(403).json({ error: 'No project access' }); return; }
+    const days = parseInt(req.query.days as string || '7');
+    const since = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+    let where = 'a.work_date>=?';
+    const params: any[] = [since];
+    if (projectId) { where += ' AND a.project_id=?'; params.push(projectId); }
+    const exceptions = db.prepare(`SELECT a.*, w.name as worker_name, w.trade, s.name as site_name FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id LEFT JOIN sites s ON s.id=a.site_id WHERE ${where} AND (a.punch_out IS NULL AND a.work_date < date('now') OR a.punch_in_geofence_status IN ('Outside Geofence','GPS Accuracy Poor') OR a.punch_out_geofence_status IN ('Outside Geofence')) ORDER BY a.work_date DESC`).all(...params);
+    res.json(exceptions);
+  });
+
+  // Overtime approval (blocks self-approval)
+  app.post('/api/attendance/:id/overtime-approve', authRequired, (req, res) => {
+    const role = req.user!.role;
+    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    const record = db.prepare('SELECT * FROM attendance WHERE id=?').get(req.params.id) as any;
+    if (!record) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, record.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    // Block self-approval
+    if (record.user_id === req.user!.user_id) { res.status(403).json({ error: 'Cannot approve own overtime' }); return; }
+    const { action, reject_reason } = req.body;
+    if (!['Approved','Rejected'].includes(action)) { res.status(400).json({ error: 'action must be Approved or Rejected' }); return; }
+    const now = new Date().toISOString();
+    db.prepare('UPDATE attendance SET ot_status=?,ot_approved_by=?,ot_approved_at=? WHERE id=?').run(action, req.user!.user_id, now, req.params.id);
+    writeAudit(req.user!.user_id, 'attendance', req.params.id, record.project_id, `ot_${action.toLowerCase()}`, record, { action });
+    createNotification(record.user_id, record.project_id, 'attendance', req.params.id, `Overtime ${action}`, `Your overtime for ${record.work_date} was ${action.toLowerCase()} by ${req.user!.name}`);
+    res.json(db.prepare('SELECT * FROM attendance WHERE id=?').get(req.params.id));
+  });
+
+  // Attendance adjustment (correction request)
+  app.post('/api/attendance/:id/adjust', authRequired, (req, res) => {
+    const record = db.prepare('SELECT * FROM attendance WHERE id=?').get(req.params.id) as any;
+    if (!record) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, record.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const { adjusted_punch_in, adjusted_punch_out, adjustment_reason } = req.body;
+    if (!adjustment_reason) { res.status(400).json({ error: 'adjustment_reason required' }); return; }
+    const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(record.user_id) as any;
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO attendance_adjustments (id,attendance_id,project_id,worker_id,user_id,original_punch_in,original_punch_out,adjusted_punch_in,adjusted_punch_out,adjustment_reason,status,submitted_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, req.params.id, record.project_id, workerRow?.id||null, record.user_id, record.punch_in, record.punch_out, adjusted_punch_in||null, adjusted_punch_out||null, adjustment_reason, 'Pending', req.user!.user_id, now);
+    writeAudit(req.user!.user_id, 'attendance_adjustments', id, record.project_id, 'submit', null, req.body);
+    res.status(201).json(db.prepare('SELECT * FROM attendance_adjustments WHERE id=?').get(id));
+  });
+
+  // Attendance adjustment approval (blocks self-approval)
+  app.post('/api/attendance_adjustments/:id/approve', authRequired, (req, res) => {
+    const role = req.user!.role;
+    if (!['Admin','ProjectManager','SiteEngineer'].includes(role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    const adj = db.prepare('SELECT * FROM attendance_adjustments WHERE id=?').get(req.params.id) as any;
+    if (!adj) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, adj.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    // Block self-approval
+    if (adj.submitted_by === req.user!.user_id) { res.status(403).json({ error: 'Cannot approve own adjustment' }); return; }
+    const { action, reject_reason } = req.body;
+    if (!['Approved','Rejected'].includes(action)) { res.status(400).json({ error: 'action must be Approved or Rejected' }); return; }
+    const now = new Date().toISOString();
+    db.prepare('UPDATE attendance_adjustments SET status=?,approved_by=?,approved_at=?,reject_reason=? WHERE id=?').run(action, req.user!.user_id, now, reject_reason||null, req.params.id);
+    // If approved, update the attendance record
+    if (action === 'Approved') {
+      if (adj.adjusted_punch_in) db.prepare('UPDATE attendance SET punch_in=? WHERE id=?').run(adj.adjusted_punch_in, adj.attendance_id);
+      if (adj.adjusted_punch_out) db.prepare('UPDATE attendance SET punch_out=? WHERE id=?').run(adj.adjusted_punch_out, adj.attendance_id);
+    }
+    writeAudit(req.user!.user_id, 'attendance_adjustments', req.params.id, adj.project_id, `${action.toLowerCase()}`, adj, { action });
+    createNotification(adj.user_id, adj.project_id, 'attendance', adj.attendance_id, `Attendance Adjustment ${action}`, `Your attendance correction request was ${action.toLowerCase()}`);
+    res.json(db.prepare('SELECT * FROM attendance_adjustments WHERE id=?').get(req.params.id));
+  });
+
+  // --- SHIFT TEMPLATES ---
+  app.get('/api/shift_templates', authRequired, (req, res) => {
+    if (!canView(req.user!, 'shift_templates')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const { where, params } = projectScopeSql(req.user!, projectId);
+    if (!where) { res.status(403).json({ error: 'No project access' }); return; }
+    res.json(db.prepare(`SELECT * FROM shift_templates WHERE ${where} ORDER BY name`).all(...params));
+  });
+
+  app.post('/api/shift_templates', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'shift_templates')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { project_id, name, start_time, end_time, grace_minutes, break_minutes, regular_hours, ot_threshold_hours } = req.body;
+    if (!project_id || !name || !start_time || !end_time) { res.status(400).json({ error: 'project_id, name, start_time, end_time required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO shift_templates (id,project_id,name,start_time,end_time,grace_minutes,break_minutes,regular_hours,ot_threshold_hours,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, project_id, name, start_time, end_time, grace_minutes||15, break_minutes||60, regular_hours||8, ot_threshold_hours||8, 'Active', now);
+    res.status(201).json(db.prepare('SELECT * FROM shift_templates WHERE id=?').get(id));
+  });
+
+  app.put('/api/shift_templates/:id', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'shift_templates')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const tmpl = db.prepare('SELECT * FROM shift_templates WHERE id=?').get(req.params.id) as any;
+    if (!tmpl) { res.status(404).json({ error: 'Not found' }); return; }
+    const { name, start_time, end_time, grace_minutes, break_minutes, regular_hours, ot_threshold_hours, status } = req.body;
+    db.prepare(`UPDATE shift_templates SET name=COALESCE(?,name),start_time=COALESCE(?,start_time),end_time=COALESCE(?,end_time),grace_minutes=COALESCE(?,grace_minutes),break_minutes=COALESCE(?,break_minutes),regular_hours=COALESCE(?,regular_hours),ot_threshold_hours=COALESCE(?,ot_threshold_hours),status=COALESCE(?,status) WHERE id=?`)
+      .run(name||null, start_time||null, end_time||null, grace_minutes||null, break_minutes||null, regular_hours||null, ot_threshold_hours||null, status||null, req.params.id);
+    res.json(db.prepare('SELECT * FROM shift_templates WHERE id=?').get(req.params.id));
+  });
+
+  // --- SITE INSTRUCTIONS ---
+  app.get('/api/site_instructions', authRequired, (req, res) => {
+    if (!canView(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const { where, params } = projectScopeSql(req.user!, projectId);
+    if (!where) { res.status(403).json({ error: 'No project access' }); return; }
+    let extraWhere = '';
+    // Worker only sees own instructions
+    if (req.user!.role === 'Worker') { extraWhere = ' AND si.assigned_worker_id IN (SELECT id FROM workers WHERE user_id=?)'; params.push(req.user!.user_id); }
+    const rows = db.prepare(`SELECT si.*, w.name as assigned_worker_name, s.name as site_name FROM site_instructions si LEFT JOIN workers w ON w.id=si.assigned_worker_id LEFT JOIN sites s ON s.id=si.site_id WHERE ${where}${extraWhere} ORDER BY si.created_at DESC`).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/site_instructions', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { project_id, site_id, work_package_id, instruction_type, title, description, priority, assigned_worker_id, assigned_supervisor_id, due_date, location, related_document_id, related_rfi_id, related_ncr_id, related_boq_item_id } = req.body;
+    if (!project_id || !instruction_type || !title) { res.status(400).json({ error: 'project_id, instruction_type, title required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    // Auto-generate instruction number
+    const countRow = db.prepare('SELECT COUNT(*) as cnt FROM site_instructions WHERE project_id=?').get(project_id) as any;
+    const instrNum = `SI-${String((countRow.cnt||0)+1).padStart(4,'0')}`;
+    db.prepare(`INSERT INTO site_instructions (id,project_id,site_id,work_package_id,instruction_number,instruction_type,title,description,priority,status,assigned_worker_id,assigned_supervisor_id,issued_by,issued_at,due_date,location,related_document_id,related_rfi_id,related_ncr_id,related_boq_item_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, project_id, site_id||null, work_package_id||null, instrNum, instruction_type, title, description||null, priority||'Medium', 'Draft', assigned_worker_id||null, assigned_supervisor_id||null, req.user!.user_id, now, due_date||null, location||null, related_document_id||null, related_rfi_id||null, related_ncr_id||null, related_boq_item_id||null, now);
+    writeAudit(req.user!.user_id, 'site_instructions', id, project_id, 'create', null, { title, instruction_type });
+    if (assigned_worker_id) {
+      const w = db.prepare('SELECT user_id FROM workers WHERE id=?').get(assigned_worker_id) as any;
+      if (w?.user_id) createNotification(w.user_id, project_id, 'site_instructions', id, `New Instruction: ${title}`, `You have been assigned a new site instruction: ${title}`);
+    }
+    res.status(201).json(db.prepare('SELECT * FROM site_instructions WHERE id=?').get(id));
+  });
+
+  app.get('/api/site_instructions/:id', authRequired, (req, res) => {
+    if (!canView(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No access' }); return; }
+    const instr = db.prepare('SELECT si.*, w.name as assigned_worker_name, s.name as site_name FROM site_instructions si LEFT JOIN workers w ON w.id=si.assigned_worker_id LEFT JOIN sites s ON s.id=si.site_id WHERE si.id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, instr.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    if (req.user!.role === 'Worker') {
+      const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+      if (!workerRow || instr.assigned_worker_id !== workerRow.id) { res.status(403).json({ error: 'No access' }); return; }
+    }
+    const updates = db.prepare('SELECT * FROM site_instruction_updates WHERE instruction_id=? ORDER BY created_at ASC').all(req.params.id);
+    const attachments = db.prepare('SELECT * FROM site_instruction_attachments WHERE instruction_id=? ORDER BY created_at ASC').all(req.params.id);
+    res.json({ ...instr, updates, attachments });
+  });
+
+  app.put('/api/site_instructions/:id', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, instr.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    if (!['Draft','Assigned'].includes(instr.status)) { res.status(400).json({ error: 'Can only edit Draft or Assigned instructions' }); return; }
+    const { title, description, priority, due_date, location, assigned_worker_id, assigned_supervisor_id } = req.body;
+    db.prepare(`UPDATE site_instructions SET title=COALESCE(?,title),description=COALESCE(?,description),priority=COALESCE(?,priority),due_date=COALESCE(?,due_date),location=COALESCE(?,location),assigned_worker_id=COALESCE(?,assigned_worker_id),assigned_supervisor_id=COALESCE(?,assigned_supervisor_id) WHERE id=?`)
+      .run(title||null, description||null, priority||null, due_date||null, location||null, assigned_worker_id||null, assigned_supervisor_id||null, req.params.id);
+    writeAudit(req.user!.user_id, 'site_instructions', req.params.id, instr.project_id, 'update', instr, req.body);
+    res.json(db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id));
+  });
+
+  // Site instruction FSM helper
+  function advanceInstruction(instrId: string, newStatus: string, userId: string, userName: string, updateType: string, content: string, extraFields?: Record<string,any>): { error?: string; ok?: boolean; instruction?: any } {
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(instrId) as any;
+    const now = new Date().toISOString();
+    const allowed = ((WORKFLOW_STATUSES.site_instructions as any)[instr.status] || []) as string[];
+    if (!allowed.includes(newStatus)) return { error: `Cannot move from ${instr.status} to ${newStatus}` };
+    const updateData: any = { status: newStatus, ...(extraFields||{}) };
+    const setClauses = Object.keys(updateData).map((k: string) => `${k}=?`).join(',');
+    db.prepare(`UPDATE site_instructions SET ${setClauses} WHERE id=?`).run(...(Object.values(updateData) as any[]), instrId);
+    db.prepare(`INSERT INTO site_instruction_updates (id,instruction_id,user_id,user_name,update_type,content,old_status,new_status,created_at) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(crypto.randomUUID(), instrId, userId, userName, updateType, content, instr.status, newStatus, now);
+    return { ok: true, instruction: db.prepare('SELECT * FROM site_instructions WHERE id=?').get(instrId) };
+  }
+
+  app.post('/api/site_instructions/:id/assign', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    const { assigned_worker_id, assigned_supervisor_id } = req.body;
+    db.prepare('UPDATE site_instructions SET assigned_worker_id=?,assigned_supervisor_id=?,issued_at=? WHERE id=?').run(assigned_worker_id||null, assigned_supervisor_id||null, new Date().toISOString(), req.params.id);
+    const result = advanceInstruction(req.params.id, 'Assigned', req.user!.user_id, req.user!.name, 'Assignment', `Assigned by ${req.user!.name}`);
+    if (result.error) { res.status(400).json(result); return; }
+    if (assigned_worker_id) {
+      const w = db.prepare('SELECT user_id FROM workers WHERE id=?').get(assigned_worker_id) as any;
+      if (w?.user_id) createNotification(w.user_id, instr.project_id, 'site_instructions', req.params.id, `Instruction Assigned: ${instr.title}`, `You have been assigned instruction ${instr.instruction_number}`);
+    }
+    writeAudit(req.user!.user_id, 'site_instructions', req.params.id, instr.project_id, 'assign', instr, req.body);
+    res.json(result.instruction);
+  });
+
+  app.post('/api/site_instructions/:id/acknowledge', authRequired, (req, res) => {
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+    if (!workerRow || instr.assigned_worker_id !== workerRow.id) { res.status(403).json({ error: 'Not assigned to you' }); return; }
+    const now = new Date().toISOString();
+    db.prepare('UPDATE site_instructions SET acknowledged_at=? WHERE id=?').run(now, req.params.id);
+    const result = advanceInstruction(req.params.id, 'Acknowledged', req.user!.user_id, req.user!.name, 'Acknowledgement', req.body.comment||'Acknowledged');
+    if (result.error) { res.status(400).json(result); return; }
+    writeAudit(req.user!.user_id, 'site_instructions', req.params.id, instr.project_id, 'acknowledge', instr, {});
+    res.json(result.instruction);
+  });
+
+  app.post('/api/site_instructions/:id/start', authRequired, (req, res) => {
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+    if (!workerRow || instr.assigned_worker_id !== workerRow.id) { res.status(403).json({ error: 'Not assigned to you' }); return; }
+    db.prepare('UPDATE site_instructions SET started_at=? WHERE id=?').run(new Date().toISOString(), req.params.id);
+    const result = advanceInstruction(req.params.id, 'In Progress', req.user!.user_id, req.user!.name, 'Started', req.body.comment||'Work started');
+    if (result.error) { res.status(400).json(result); return; }
+    res.json(result.instruction);
+  });
+
+  app.post('/api/site_instructions/:id/evidence', authRequired, (req, res) => {
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+    if (!workerRow || instr.assigned_worker_id !== workerRow.id) { res.status(403).json({ error: 'Not assigned to you' }); return; }
+    const { comment, attachment_name, attachment_data } = req.body;
+    const now = new Date().toISOString();
+    db.prepare('UPDATE site_instructions SET evidence_submitted_at=? WHERE id=?').run(now, req.params.id);
+    if (attachment_name && attachment_data) {
+      db.prepare(`INSERT INTO site_instruction_attachments (id,instruction_id,uploaded_by,attachment_name,attachment_data,attachment_type,created_at) VALUES (?,?,?,?,?,?,?)`)
+        .run(crypto.randomUUID(), req.params.id, req.user!.user_id, attachment_name, attachment_data, 'Evidence', now);
+    }
+    const result = advanceInstruction(req.params.id, 'Ready for Verification', req.user!.user_id, req.user!.name, 'Evidence', comment||'Evidence submitted');
+    if (result.error) { res.status(400).json(result); return; }
+    res.json(result.instruction);
+  });
+
+  app.post('/api/site_instructions/:id/verify', authRequired, (req, res) => {
+    const role = req.user!.role;
+    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(role)) { res.status(403).json({ error: 'No verification authority' }); return; }
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, instr.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const { action, comment } = req.body;
+    if (!['Verified','In Progress'].includes(action)) { res.status(400).json({ error: 'action must be Verified or In Progress (reject back)' }); return; }
+    const now = new Date().toISOString();
+    if (action === 'Verified') {
+      db.prepare('UPDATE site_instructions SET verified_by=?,verified_at=? WHERE id=?').run(req.user!.user_id, now, req.params.id);
+    }
+    const result = advanceInstruction(req.params.id, action, req.user!.user_id, req.user!.name, action === 'Verified' ? 'Verification' : 'Rejection', comment||`${action} by ${req.user!.name}`);
+    if (result.error) { res.status(400).json(result); return; }
+    writeAudit(req.user!.user_id, 'site_instructions', req.params.id, instr.project_id, action.toLowerCase(), instr, { action, comment });
+    res.json(result.instruction);
+  });
+
+  app.post('/api/site_instructions/:id/close', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const instr = db.prepare('SELECT * FROM site_instructions WHERE id=?').get(req.params.id) as any;
+    if (!instr) { res.status(404).json({ error: 'Not found' }); return; }
+    const now = new Date().toISOString();
+    db.prepare('UPDATE site_instructions SET closed_at=? WHERE id=?').run(now, req.params.id);
+    const result = advanceInstruction(req.params.id, 'Closed', req.user!.user_id, req.user!.name, 'Closure', req.body.comment||'Closed');
+    if (result.error) { res.status(400).json(result); return; }
+    res.json(result.instruction);
+  });
+
+  // Site instruction updates (append-only audit trail)
+  app.get('/api/site_instructions/:id/updates', authRequired, (req, res) => {
+    if (!canView(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No access' }); return; }
+    res.json(db.prepare('SELECT * FROM site_instruction_updates WHERE instruction_id=? ORDER BY created_at ASC').all(req.params.id));
+  });
+
+  app.post('/api/site_instructions/:id/updates', authRequired, (req, res) => {
+    if (!canView(req.user!, 'site_instructions')) { res.status(403).json({ error: 'No access' }); return; }
+    const { content, update_type } = req.body;
+    if (!content) { res.status(400).json({ error: 'content required' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO site_instruction_updates (id,instruction_id,user_id,user_name,update_type,content,created_at) VALUES (?,?,?,?,?,?,?)`)
+      .run(id, req.params.id, req.user!.user_id, req.user!.name, update_type||'Comment', content, now);
+    res.status(201).json(db.prepare('SELECT * FROM site_instruction_updates WHERE id=?').get(id));
+  });
+
+  // --- LEAVE MANAGEMENT ---
+  app.get('/api/leave_types', authRequired, (req, res) => {
+    res.json(db.prepare('SELECT * FROM leave_types ORDER BY name').all());
+  });
+
+  app.get('/api/leave_requests', authRequired, (req, res) => {
+    if (!canView(req.user!, 'leave_requests')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    let where = '1=1';
+    const params: any[] = [];
+    if (projectId) {
+      if (!hasProjectAccess(req.user!, projectId)) { res.status(403).json({ error: 'No project access' }); return; }
+      where += ' AND lr.project_id=?'; params.push(projectId);
+    }
+    // Workers only see own requests
+    if (req.user!.role === 'Worker') { where += ' AND lr.user_id=?'; params.push(req.user!.user_id); }
+    // Supervisors see requests from supervised workers
+    else if (req.user!.role === 'SiteSupervisor') {
+      where += ' AND lr.worker_id IN (SELECT id FROM workers WHERE supervisor_id=?)'; params.push(req.user!.user_id);
+    }
+    const rows = db.prepare(`SELECT lr.*, lt.name as leave_type_name, lt.code as leave_type_code, lt.is_paid FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE ${where} ORDER BY lr.created_at DESC`).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/leave_requests', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'leave_requests')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { project_id, leave_type_id, start_date, end_date, reason } = req.body;
+    if (!project_id || !leave_type_id || !start_date || !end_date) { res.status(400).json({ error: 'project_id, leave_type_id, start_date, end_date required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const workerRow = db.prepare('SELECT id FROM workers WHERE user_id=?').get(req.user!.user_id) as any;
+    // Calculate days (simple calendar days)
+    const msPerDay = 86400000;
+    const days = Math.round((new Date(end_date).getTime() - new Date(start_date).getTime()) / msPerDay) + 1;
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO leave_requests (id,project_id,worker_id,user_id,leave_type_id,start_date,end_date,days_requested,reason,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, project_id, workerRow?.id||null, req.user!.user_id, leave_type_id, start_date, end_date, days, reason||null, 'Pending', now);
+    // Update pending balance
+    const yr = new Date(start_date).getFullYear();
+    db.prepare(`INSERT INTO leave_balances (id,worker_id,user_id,leave_type_id,year,pending_days,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id,leave_type_id,year) DO UPDATE SET pending_days=pending_days+?, updated_at=?`)
+      .run(crypto.randomUUID(), workerRow?.id||null, req.user!.user_id, leave_type_id, yr, days, now, days, now);
+    writeAudit(req.user!.user_id, 'leave_requests', id, project_id, 'submit', null, req.body);
+    res.status(201).json(db.prepare('SELECT lr.*, lt.name as leave_type_name FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.id=?').get(id));
+  });
+
+  app.get('/api/leave_requests/:id', authRequired, (req, res) => {
+    if (!canView(req.user!, 'leave_requests')) { res.status(403).json({ error: 'No access' }); return; }
+    const lr = db.prepare('SELECT lr.*, lt.name as leave_type_name FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.id=?').get(req.params.id) as any;
+    if (!lr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (req.user!.role === 'Worker' && lr.user_id !== req.user!.user_id) { res.status(403).json({ error: 'No access' }); return; }
+    res.json(lr);
+  });
+
+  // Leave approval (blocks self-approval)
+  app.post('/api/leave_requests/:id/approve', authRequired, (req, res) => {
+    const role = req.user!.role;
+    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    const lr = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id) as any;
+    if (!lr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, lr.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    // Block self-approval
+    if (lr.user_id === req.user!.user_id) { res.status(403).json({ error: 'Cannot approve own leave request' }); return; }
+    if (lr.status !== 'Pending') { res.status(400).json({ error: 'Leave request is not pending' }); return; }
+    const now = new Date().toISOString();
+    db.prepare('UPDATE leave_requests SET status=?,approved_by=?,approved_at=? WHERE id=?').run('Approved', req.user!.user_id, now, req.params.id);
+    // Update balances: move pending to taken
+    const yr = new Date(lr.start_date).getFullYear();
+    db.prepare(`UPDATE leave_balances SET pending_days=MAX(0,pending_days-?), taken_days=taken_days+?, balance_days=balance_days-?, updated_at=? WHERE user_id=? AND leave_type_id=? AND year=?`)
+      .run(lr.days_requested, lr.days_requested, lr.days_requested, now, lr.user_id, lr.leave_type_id, yr);
+    createNotification(lr.user_id, lr.project_id, 'leave_requests', req.params.id, 'Leave Approved', `Your ${lr.days_requested}-day leave request has been approved`);
+    writeAudit(req.user!.user_id, 'leave_requests', req.params.id, lr.project_id, 'approve', lr, { action: 'Approved' });
+    res.json(db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id));
+  });
+
+  // Leave rejection (blocks self-rejection)
+  app.post('/api/leave_requests/:id/reject', authRequired, (req, res) => {
+    const role = req.user!.role;
+    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    const lr = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id) as any;
+    if (!lr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (lr.user_id === req.user!.user_id) { res.status(403).json({ error: 'Cannot reject own leave request' }); return; }
+    if (lr.status !== 'Pending') { res.status(400).json({ error: 'Leave request is not pending' }); return; }
+    const { reject_reason } = req.body;
+    const now = new Date().toISOString();
+    db.prepare('UPDATE leave_requests SET status=?,approved_by=?,approved_at=?,reject_reason=? WHERE id=?').run('Rejected', req.user!.user_id, now, reject_reason||null, req.params.id);
+    const yr = new Date(lr.start_date).getFullYear();
+    db.prepare(`UPDATE leave_balances SET pending_days=MAX(0,pending_days-?), updated_at=? WHERE user_id=? AND leave_type_id=? AND year=?`).run(lr.days_requested, now, lr.user_id, lr.leave_type_id, yr);
+    createNotification(lr.user_id, lr.project_id, 'leave_requests', req.params.id, 'Leave Rejected', `Your leave request was rejected. Reason: ${reject_reason||'Not specified'}`);
+    res.json(db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id));
+  });
+
+  app.get('/api/leave_balances', authRequired, (req, res) => {
+    if (!canView(req.user!, 'leave_requests')) { res.status(403).json({ error: 'No access' }); return; }
+    let where = '1=1';
+    const params: any[] = [];
+    if (req.user!.role === 'Worker') { where += ' AND lb.user_id=?'; params.push(req.user!.user_id); }
+    const year = req.query.year || new Date().getFullYear();
+    where += ' AND lb.year=?'; params.push(year);
+    const rows = db.prepare(`SELECT lb.*, lt.name as leave_type_name, lt.code FROM leave_balances lb JOIN leave_types lt ON lt.id=lb.leave_type_id WHERE ${where} ORDER BY lt.name`).all(...params);
+    res.json(rows);
+  });
+
+  // --- PAYROLL (Admin & CommercialManager only) ---
+  app.get('/api/payroll_profiles', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access to payroll' }); return; }
+    const workerId = req.query.worker_id as string;
+    if (workerId) { res.json([db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(workerId)]); return; }
+    res.json(db.prepare('SELECT pp.*, w.name as worker_name FROM payroll_profiles pp JOIN workers w ON w.id=pp.worker_id ORDER BY w.name').all());
+  });
+
+  app.post('/api/payroll_profiles', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const { worker_id, basic_daily_rate, basic_monthly_rate, rate_type, currency, ot_multiplier, housing_allowance, transport_allowance, food_allowance, bank_account, bank_name, effective_from } = req.body;
+    if (!worker_id) { res.status(400).json({ error: 'worker_id required' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT OR REPLACE INTO payroll_profiles (id,worker_id,basic_daily_rate,basic_monthly_rate,rate_type,currency,ot_multiplier,housing_allowance,transport_allowance,food_allowance,bank_account,bank_name,effective_from,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, worker_id, basic_daily_rate||0, basic_monthly_rate||0, rate_type||'Daily', currency||'USD', ot_multiplier||1.5, housing_allowance||0, transport_allowance||0, food_allowance||0, bank_account||null, bank_name||null, effective_from||null, now, now);
+    res.status(201).json(db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(worker_id));
+  });
+
+  app.put('/api/payroll_profiles/:id', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const profile = db.prepare('SELECT * FROM payroll_profiles WHERE id=?').get(req.params.id) as any;
+    if (!profile) { res.status(404).json({ error: 'Not found' }); return; }
+    const now = new Date().toISOString();
+    const { basic_daily_rate, basic_monthly_rate, rate_type, currency, ot_multiplier, housing_allowance, transport_allowance, food_allowance, bank_account, bank_name } = req.body;
+    db.prepare(`UPDATE payroll_profiles SET basic_daily_rate=COALESCE(?,basic_daily_rate),basic_monthly_rate=COALESCE(?,basic_monthly_rate),rate_type=COALESCE(?,rate_type),currency=COALESCE(?,currency),ot_multiplier=COALESCE(?,ot_multiplier),housing_allowance=COALESCE(?,housing_allowance),transport_allowance=COALESCE(?,transport_allowance),food_allowance=COALESCE(?,food_allowance),bank_account=COALESCE(?,bank_account),bank_name=COALESCE(?,bank_name),updated_at=? WHERE id=?`)
+      .run(basic_daily_rate??null, basic_monthly_rate??null, rate_type||null, currency||null, ot_multiplier??null, housing_allowance??null, transport_allowance??null, food_allowance??null, bank_account||null, bank_name||null, now, req.params.id);
+    res.json(db.prepare('SELECT * FROM payroll_profiles WHERE id=?').get(req.params.id));
+  });
+
+  app.get('/api/payroll_periods', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access to payroll' }); return; }
+    const projectId = req.query.project_id as string;
+    const { where, params } = projectScopeSql(req.user!, projectId);
+    if (!where) { res.status(403).json({ error: 'No project access' }); return; }
+    res.json(db.prepare(`SELECT * FROM payroll_periods WHERE ${where} ORDER BY period_start DESC`).all(...params));
+  });
+
+  app.post('/api/payroll_periods', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, period_name, period_start, period_end } = req.body;
+    if (!project_id || !period_name || !period_start || !period_end) { res.status(400).json({ error: 'project_id, period_name, period_start, period_end required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO payroll_periods (id,project_id,period_name,period_start,period_end,status,created_by,created_at) VALUES (?,?,?,?,?,?,?,?)`)
+      .run(id, project_id, period_name, period_start, period_end, 'Open', req.user!.user_id, now);
+    res.status(201).json(db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(id));
+  });
+
+  app.get('/api/payroll_periods/:id', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const period = db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(req.params.id) as any;
+    if (!period) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, period.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const entries = db.prepare('SELECT pe.*, w.name as worker_name, w.trade, w.employee_id FROM payroll_entries pe JOIN workers w ON w.id=pe.worker_id WHERE pe.payroll_period_id=? ORDER BY w.name').all(req.params.id);
+    const adjustments = db.prepare('SELECT * FROM payroll_adjustments WHERE payroll_period_id=?').all(req.params.id);
+    res.json({ ...period, entries, adjustments });
+  });
+
+  app.post('/api/payroll_periods/:id/lock', authRequired, (req, res) => {
+    if (req.user!.role !== 'Admin') { res.status(403).json({ error: 'Only Admin can lock payroll' }); return; }
+    const period = db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(req.params.id) as any;
+    if (!period) { res.status(404).json({ error: 'Not found' }); return; }
+    if (period.status === 'Locked') { res.status(400).json({ error: 'Already locked' }); return; }
+    const now = new Date().toISOString();
+    db.prepare('UPDATE payroll_periods SET status=?,locked_by=?,locked_at=? WHERE id=?').run('Locked', req.user!.user_id, now, req.params.id);
+    writeAudit(req.user!.user_id, 'payroll_periods', req.params.id, period.project_id, 'lock', period, { locked_at: now });
+    res.json(db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(req.params.id));
+  });
+
+  // Compute payroll entries from attendance data
+  app.post('/api/payroll_periods/:id/compute', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const period = db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(req.params.id) as any;
+    if (!period) { res.status(404).json({ error: 'Not found' }); return; }
+    if (period.status === 'Locked') { res.status(400).json({ error: 'Period is locked' }); return; }
+    if (!hasProjectAccess(req.user!, period.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    // Get all attendance records in this period for this project
+    const attendance = db.prepare(`SELECT a.*, w.id as wid FROM attendance a JOIN workers w ON w.user_id=a.user_id WHERE a.project_id=? AND a.work_date>=? AND a.work_date<=? AND a.punch_out IS NOT NULL`).all(period.project_id, period.period_start, period.period_end) as any[];
+    // Group by worker
+    const byWorker = new Map<string, any[]>();
+    for (const row of attendance) {
+      if (!row.wid) continue;
+      if (!byWorker.has(row.wid)) byWorker.set(row.wid, []);
+      byWorker.get(row.wid)!.push(row);
+    }
+    const now = new Date().toISOString();
+    let totalGross = 0;
+    let totalNet = 0;
+    for (const [workerId, rows] of byWorker) {
+      const profile = db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(workerId) as any;
+      if (!profile) continue;
+      const regularHours = rows.reduce((s: number, r: any) => s + (r.regular_hours||0), 0);
+      const overtimeHours = rows.reduce((s: number, r: any) => s + (r.overtime_hours||0), 0);
+      const regularDays = regularHours / 8;
+      const basicPay = profile.rate_type === 'Daily' ? regularDays * profile.basic_daily_rate : profile.basic_monthly_rate;
+      const overtimePay = overtimeHours * (profile.basic_daily_rate / 8) * profile.ot_multiplier;
+      const grossPay = basicPay + overtimePay + profile.housing_allowance + profile.transport_allowance + profile.food_allowance;
+      const netPay = grossPay;
+      totalGross += grossPay;
+      totalNet += netPay;
+      db.prepare(`INSERT OR REPLACE INTO payroll_entries (id,payroll_period_id,worker_id,project_id,regular_days,regular_hours,overtime_hours,basic_pay,overtime_pay,housing_allowance,transport_allowance,food_allowance,gross_pay,net_pay,currency,computed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(crypto.randomUUID(), period.id, workerId, period.project_id, Math.round(regularDays*100)/100, Math.round(regularHours*100)/100, Math.round(overtimeHours*100)/100, Math.round(basicPay*100)/100, Math.round(overtimePay*100)/100, profile.housing_allowance, profile.transport_allowance, profile.food_allowance, Math.round(grossPay*100)/100, Math.round(netPay*100)/100, profile.currency||'USD', now, now);
+    }
+    db.prepare('UPDATE payroll_periods SET total_gross=?,total_net=? WHERE id=?').run(Math.round(totalGross*100)/100, Math.round(totalNet*100)/100, period.id);
+    writeAudit(req.user!.user_id, 'payroll_periods', period.id, period.project_id, 'compute', null, { workers: byWorker.size, total_gross: totalGross });
+    res.json({ ok: true, workers_computed: byWorker.size, total_gross: Math.round(totalGross*100)/100, total_net: Math.round(totalNet*100)/100 });
+  });
+
+  // Payroll adjustments (bonuses, deductions)
+  app.post('/api/payroll_adjustments', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const { payroll_entry_id, payroll_period_id, worker_id, type, description, amount, is_deduction } = req.body;
+    if (!payroll_entry_id || !worker_id || !type || !description || amount == null) { res.status(400).json({ error: 'Missing required fields' }); return; }
+    const period = db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(payroll_period_id) as any;
+    if (period?.status === 'Locked') { res.status(400).json({ error: 'Period is locked' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(`INSERT INTO payroll_adjustments (id,payroll_entry_id,payroll_period_id,worker_id,type,description,amount,is_deduction,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, payroll_entry_id, payroll_period_id, worker_id, type, description, amount, is_deduction?1:0, req.user!.user_id, now);
+    // Apply to entry
+    const delta = is_deduction ? -Math.abs(amount) : Math.abs(amount);
+    db.prepare('UPDATE payroll_entries SET deductions=deductions+?,net_pay=net_pay+?,gross_pay=gross_pay+? WHERE id=?').run(is_deduction?Math.abs(amount):0, delta, is_deduction?0:delta, payroll_entry_id);
+    res.status(201).json(db.prepare('SELECT * FROM payroll_adjustments WHERE id=?').get(id));
+  });
+
+  // --- WORKFORCE REPORTS ---
+  app.get('/api/reports/workforce/daily', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, date, site_id } = req.query as any;
+    if (!project_id) { res.status(400).json({ error: 'project_id required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const reportDate = date || new Date().toISOString().split('T')[0];
+    let where = 'a.project_id=? AND a.work_date=?';
+    const params: any[] = [project_id, reportDate];
+    if (site_id) { where += ' AND a.site_id=?'; params.push(site_id); }
+    const attendance = db.prepare(`SELECT a.*, w.name as worker_name, w.trade, w.employee_id, w.employment_type, c.name as company_name, s.name as site_name FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id LEFT JOIN companies c ON c.id=w.company_id LEFT JOIN sites s ON s.id=a.site_id WHERE ${where} ORDER BY w.name`).all(...params);
+    const summary = {
+      date: reportDate,
+      total_present: (attendance as any[]).filter(r => r.punch_in).length,
+      total_completed: (attendance as any[]).filter(r => r.punch_out).length,
+      total_regular_hours: Math.round((attendance as any[]).reduce((s: number, r: any) => s+(r.regular_hours||0), 0)*100)/100,
+      total_overtime_hours: Math.round((attendance as any[]).reduce((s: number, r: any) => s+(r.overtime_hours||0), 0)*100)/100,
+      geofence_violations: (attendance as any[]).filter(r => r.punch_in_geofence_status === 'Outside Geofence').length,
+    };
+    res.json({ summary, records: attendance });
+  });
+
+  app.get('/api/reports/workforce/payroll-hours', authRequired, (req, res) => {
+    if (!['Admin','CommercialManager','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, period_start, period_end } = req.query as any;
+    if (!project_id || !period_start || !period_end) { res.status(400).json({ error: 'project_id, period_start, period_end required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const rows = db.prepare(`SELECT w.id as worker_id, w.name as worker_name, w.trade, w.employee_id, SUM(a.regular_hours) as total_regular_hours, SUM(a.overtime_hours) as total_overtime_hours, COUNT(a.id) as days_worked FROM attendance a JOIN workers w ON w.user_id=a.user_id WHERE a.project_id=? AND a.work_date>=? AND a.work_date<=? AND a.punch_out IS NOT NULL GROUP BY w.id ORDER BY w.name`).all(project_id, period_start, period_end);
+    res.json({ project_id, period_start, period_end, workers: rows });
   });
 
   // Generic CRUD for all configured tables
