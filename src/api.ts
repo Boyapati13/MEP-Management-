@@ -168,10 +168,30 @@ export const projectsApi = {
   update: (id: string, data: any) => api.put<any>(`/api/projects/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/projects/${id}`),
   overview: (id: string) => api.get<any>(`/api/projects/${id}/overview`),
+  master: (id: string) => api.get<any>(`/api/projects/${id}/master`),
+  wbsTree: (id: string) => api.get<any>(`/api/projects/${id}/wbs-tree`),
   feed: (id: string) => api.get<any[]>(`/api/projects/${id}/feed`),
   portfolio: () => api.get<any[]>('/api/portfolio'),
   members: (id: string) => api.get<any[]>(`/api/projects/${id}/members`),
   companies: (id: string) => api.get<any[]>(`/api/projects/${id}/companies`),
+};
+
+// Work Packages
+export const workPackagesApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/work_packages${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/work_packages/${id}`),
+  create: (data: any) => api.post<any>('/api/work_packages', data),
+  update: (id: string, data: any) => api.put<any>(`/api/work_packages/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/work_packages/${id}`),
+};
+
+// WBS Items
+export const wbsApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/wbs_items${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/wbs_items/${id}`),
+  create: (data: any) => api.post<any>('/api/wbs_items', data),
+  update: (id: string, data: any) => api.put<any>(`/api/wbs_items/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/wbs_items/${id}`),
 };
 
 // Dashboard

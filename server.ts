@@ -478,7 +478,15 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
 
 const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
   tasks: {
-    cols: ["id", "project_id", "title", "description", "trade", "assignee", "assigned_worker_id", "start", "end", "progress", "status", "priority", "wbs_code", "duration", "is_summary", "is_milestone", "work_package_id", "company_id"],
+    cols: [
+      "id", "project_id", "title", "description", "trade", "assignee", "assigned_worker_id",
+      "start", "end", "progress", "status", "priority", "wbs_code", "wbs_item_id", "duration",
+      "is_summary", "is_milestone", "work_package_id", "company_id", "site_id", "supervisor_id",
+      "baseline_start_date", "baseline_end_date", "forecast_start_date", "forecast_end_date",
+      "actual_start_date", "actual_end_date", "drawing_ref", "drawing_id", "boq_ref",
+      "boq_item_id", "procurement_item_id", "evidence_required", "evidence_type",
+      "evidence_url", "evidence_notes", "blocker_count"
+    ],
     module: "tasks",
   },
   task_blockers: {
@@ -558,6 +566,10 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
     module: "equipment",
   },
   wbs_items: {
+    cols: ["id", "project_id", "parent_id", "code", "name", "level", "discipline", "system", "active"],
+    module: "wbs",
+  },
+  wbs: {
     cols: ["id", "project_id", "parent_id", "code", "name", "level", "discipline", "system", "active"],
     module: "wbs",
   },
@@ -1399,12 +1411,51 @@ function initDb() {
   try { db.exec("ALTER TABLE projects ADD COLUMN location TEXT;"); } catch {}
   try { db.exec("ALTER TABLE projects ADD COLUMN description TEXT;"); } catch {}
   try { db.exec("ALTER TABLE projects ADD COLUMN progress INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN project_code TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN currency TEXT DEFAULT 'USD';"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN contract_value REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN contract_type TEXT DEFAULT 'Lump Sum';"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN stage TEXT DEFAULT 'Construction';"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN client_name TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN main_contractor TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN consultant TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN project_manager_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN project_manager_name TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN site_address TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN city TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN country TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN baseline_start_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN baseline_end_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN forecast_end_date TEXT;"); } catch {}
+
   try { db.exec("ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'Medium';"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN description TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN assigned_worker_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN work_package_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN company_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN site_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN wbs_item_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN supervisor_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN baseline_start_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN baseline_end_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN forecast_start_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN forecast_end_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN actual_start_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN actual_end_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN drawing_ref TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN drawing_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN boq_ref TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN boq_item_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN procurement_item_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN evidence_required INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN evidence_type TEXT DEFAULT 'None';"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN evidence_url TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN evidence_notes TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN blocker_count INTEGER DEFAULT 0;"); } catch {}
+
+  try { db.exec("ALTER TABLE work_packages ADD COLUMN site_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE work_packages ADD COLUMN wbs_item_id TEXT;"); } catch {}
+
   try { db.exec("ALTER TABLE dependencies ADD COLUMN predecessor_task_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE dependencies ADD COLUMN dependency_type TEXT DEFAULT 'Finish-to-Start';"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN work_package_id TEXT;"); } catch {}
@@ -2978,27 +3029,53 @@ async function startServer() {
     }
     const data = req.body || {};
     const id = crypto.randomUUID();
-    const cols = ["id", "name", "client", "status", "start_date", "end_date", "budget", "code", "location", "description", "progress"];
+    const projectCode = data.project_code || data.code || `PRJ-${Math.floor(100 + Math.random() * 900)}`;
+    const clientName = data.client_name || data.client || "";
+    const contractVal = data.contract_value !== undefined ? parseImportNumber(data.contract_value) : parseImportNumber(data.budget);
+
+    const cols = [
+      "id", "name", "client", "status", "start_date", "end_date", "budget", "code", "location", "description", "progress",
+      "project_code", "currency", "contract_value", "contract_type", "stage", "client_name", "main_contractor",
+      "consultant", "project_manager_id", "project_manager_name", "site_address", "city", "country",
+      "baseline_start_date", "baseline_end_date", "forecast_end_date"
+    ];
     const values = [
       id,
       data.name || "Untitled Project",
-      data.client || "",
+      clientName,
       data.status || "Active",
       data.start_date || "",
       data.end_date || "",
-      parseImportNumber(data.budget),
-      data.code || null,
+      contractVal,
+      projectCode,
       data.location || null,
       data.description || null,
       data.progress ? parseInt(data.progress, 10) : 0,
+      projectCode,
+      data.currency || "USD",
+      contractVal,
+      data.contract_type || "Lump Sum",
+      data.stage || "Construction",
+      clientName,
+      data.main_contractor || null,
+      data.consultant || null,
+      data.project_manager_id || req.user!.user_id,
+      data.project_manager_name || req.user!.name,
+      data.site_address || null,
+      data.city || null,
+      data.country || null,
+      data.baseline_start_date || data.start_date || null,
+      data.baseline_end_date || data.end_date || null,
+      data.forecast_end_date || data.end_date || null
     ];
-    db.prepare(`INSERT INTO projects (${cols.join(",")}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...values);
+    db.prepare(`INSERT INTO projects (${cols.join(",")}) VALUES (${cols.map(() => '?').join(',')})`).run(...values);
     db.prepare(`
       INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role)
       VALUES (?, ?, 'Project Manager')
     `).run(req.user!.user_id, id);
     writeAudit(req.user!.user_id, "projects", id, id, "create", null, data);
-    res.status(201).json({ id, ...data });
+    const created = db.prepare("SELECT * FROM projects WHERE id=?").get(id);
+    res.status(201).json(rowToDict(created));
   });
 
   app.put("/api/projects/:id", authRequired, (req, res) => {
@@ -3012,14 +3089,49 @@ async function startServer() {
       return;
     }
     const data = req.body || {};
-    const cols = ["name", "client", "status", "start_date", "end_date", "budget", "code", "location", "description", "progress"];
+    const cols = [
+      "name", "client", "status", "start_date", "end_date", "budget", "code", "location", "description", "progress",
+      "project_code", "currency", "contract_value", "contract_type", "stage", "client_name", "main_contractor",
+      "consultant", "project_manager_id", "project_manager_name", "site_address", "city", "country",
+      "baseline_start_date", "baseline_end_date", "forecast_end_date"
+    ];
     const updates: string[] = [];
     const vals: any[] = [];
     for (const c of cols) {
       if (c in data) {
         updates.push(`${c}=?`);
-        vals.push(c === "budget" ? parseImportNumber(data[c]) : c === "progress" ? parseInt(data[c], 10) : data[c]);
+        if (c === "budget" || c === "contract_value") {
+          vals.push(parseImportNumber(data[c]));
+        } else if (c === "progress") {
+          vals.push(parseInt(data[c], 10));
+        } else {
+          vals.push(data[c]);
+        }
       }
+    }
+    // Cross-sync code and project_code
+    if (("project_code" in data) && !("code" in data)) {
+      updates.push("code=?");
+      vals.push(data.project_code);
+    } else if (("code" in data) && !("project_code" in data)) {
+      updates.push("project_code=?");
+      vals.push(data.code);
+    }
+    // Cross-sync client and client_name
+    if (("client_name" in data) && !("client" in data)) {
+      updates.push("client=?");
+      vals.push(data.client_name);
+    } else if (("client" in data) && !("client_name" in data)) {
+      updates.push("client_name=?");
+      vals.push(data.client);
+    }
+    // Cross-sync budget and contract_value
+    if (("contract_value" in data) && !("budget" in data)) {
+      updates.push("budget=?");
+      vals.push(parseImportNumber(data.contract_value));
+    } else if (("budget" in data) && !("contract_value" in data)) {
+      updates.push("contract_value=?");
+      vals.push(parseImportNumber(data.budget));
     }
     if (updates.length > 0) {
       vals.push(req.params.id);
@@ -4915,8 +5027,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       db.prepare(`
-        INSERT INTO work_packages (id, project_id, name, code, discipline, description, company_id, lead_contact, budget_allocated, status, start_date, target_date, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO work_packages (id, project_id, name, code, discipline, description, company_id, lead_contact, budget_allocated, status, start_date, target_date, created_at, site_id, wbs_item_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         data.project_id,
@@ -4930,7 +5042,9 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         data.status || "Planned",
         data.start_date || "",
         data.target_date || "",
-        now
+        now,
+        data.site_id || null,
+        data.wbs_item_id || null
       );
       writeAudit(req.user!.user_id, "work_packages", id, data.project_id, "create", null, data);
       res.status(201).json({ id, ...data, created_at: now });
@@ -4957,7 +5071,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       const data = req.body || {};
       db.prepare(`
         UPDATE work_packages
-        SET name=?, code=?, discipline=?, description=?, company_id=?, lead_contact=?, budget_allocated=?, status=?, start_date=?, target_date=?
+        SET name=?, code=?, discipline=?, description=?, company_id=?, lead_contact=?, budget_allocated=?, status=?, start_date=?, target_date=?, site_id=?, wbs_item_id=?
         WHERE id=?
       `).run(
         data.name ?? existing.name,
@@ -4970,6 +5084,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         data.status ?? existing.status,
         data.start_date ?? existing.start_date,
         data.target_date ?? existing.target_date,
+        data.site_id !== undefined ? data.site_id : existing.site_id,
+        data.wbs_item_id !== undefined ? data.wbs_item_id : existing.wbs_item_id,
         req.params.id
       );
       writeAudit(req.user!.user_id, "work_packages", req.params.id, existing.project_id, "update", existing, data);
@@ -6469,6 +6585,197 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       members,
       companies,
       recent_updates: recentUpdates,
+    });
+  });
+
+  // --- PROJECT MASTER DETAILS & GOVERNANCE ---
+  app.get('/api/projects/:id/master', authRequired, (req, res) => {
+    const projectId = req.params.id;
+    if (!hasProjectAccess(req.user!, projectId)) {
+      res.status(403).json({ error: 'No access to this project' });
+      return;
+    }
+    const project = db.prepare('SELECT * FROM projects WHERE id=?').get(projectId) as any;
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+    const sites = db.prepare('SELECT * FROM sites WHERE project_id=? ORDER BY name').all(projectId) as any[];
+    const workPackages = db.prepare(`
+      SELECT wp.*, c.name as company_name, s.name as site_name
+      FROM work_packages wp
+      LEFT JOIN companies c ON c.id = wp.company_id
+      LEFT JOIN sites s ON s.id = wp.site_id
+      WHERE wp.project_id=?
+      ORDER BY wp.code ASC
+    `).all(projectId) as any[];
+    const wbsItems = db.prepare('SELECT * FROM wbs_items WHERE project_id=? ORDER BY code ASC').all(projectId) as any[];
+    const tasks = db.prepare(`
+      SELECT t.*, s.name as site_name, wp.name as work_package_name, c.name as company_name, sup.name as supervisor_name, w.name as worker_name
+      FROM tasks t
+      LEFT JOIN sites s ON s.id = t.site_id
+      LEFT JOIN work_packages wp ON wp.id = t.work_package_id
+      LEFT JOIN companies c ON c.id = t.company_id
+      LEFT JOIN users sup ON sup.id = t.supervisor_id
+      LEFT JOIN workers w ON w.id = t.assigned_worker_id
+      WHERE t.project_id=?
+      ORDER BY t.wbs_code ASC, t.start ASC
+    `).all(projectId) as any[];
+
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => ['completed', 'closed'].includes((t.status || '').toLowerCase())).length;
+    const inProgressTasks = tasks.filter(t => ['in progress', 'under review'].includes((t.status || '').toLowerCase())).length;
+    const blockedTasks = tasks.filter(t => (t.status || '').toLowerCase() === 'blocked').length;
+    const avgProgress = totalTasks ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / totalTasks) : (project.progress || 0);
+
+    let scheduleVarianceDays = 0;
+    const targetEnd = project.forecast_end_date || project.end_date;
+    if (project.baseline_end_date && targetEnd) {
+      const baseMs = new Date(project.baseline_end_date).getTime();
+      const targetMs = new Date(targetEnd).getTime();
+      if (!isNaN(baseMs) && !isNaN(targetMs)) {
+        scheduleVarianceDays = Math.round((targetMs - baseMs) / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    const trades = ['HVAC', 'Electrical', 'Plumbing', 'Fire Fighting', 'ELV'];
+    const tradeDistribution: Record<string, { total: number; completed: number; in_progress: number; progress_avg: number }> = {};
+    for (const tr of trades) {
+      const trTasks = tasks.filter(t => (t.trade || '').toLowerCase() === tr.toLowerCase());
+      const trComp = trTasks.filter(t => ['completed', 'closed'].includes((t.status || '').toLowerCase())).length;
+      const trProg = trTasks.length ? Math.round(trTasks.reduce((s, t) => s + (t.progress || 0), 0) / trTasks.length) : 0;
+      tradeDistribution[tr] = {
+        total: trTasks.length,
+        completed: trComp,
+        in_progress: trTasks.filter(t => ['in progress', 'under review'].includes((t.status || '').toLowerCase())).length,
+        progress_avg: trProg
+      };
+    }
+
+    res.json({
+      ...rowToDict(project),
+      id: project.id,
+      name: project.name,
+      project_code: project.project_code || project.code,
+      contract_value: project.contract_value ?? project.budget ?? 0,
+      currency: project.currency || 'USD',
+      stage: project.stage || 'Construction',
+      contract_type: project.contract_type || 'Lump Sum',
+      calculated_progress: avgProgress,
+      schedule_variance_days: scheduleVarianceDays,
+      variance_days: scheduleVarianceDays,
+      sites_count: sites.length,
+      work_packages_count: workPackages.length,
+      tasks_count: totalTasks,
+      trades_breakdown: trades.map(tr => ({
+        trade: tr,
+        total_tasks: tradeDistribution[tr]?.total || 0,
+        completed_tasks: tradeDistribution[tr]?.completed || 0,
+        in_progress: tradeDistribution[tr]?.in_progress || 0,
+        avg_progress: tradeDistribution[tr]?.progress_avg || 0
+      })),
+      project: {
+        ...project,
+        project_code: project.project_code || project.code,
+        contract_value: project.contract_value ?? project.budget ?? 0,
+        currency: project.currency || 'USD',
+        stage: project.stage || 'Construction',
+        contract_type: project.contract_type || 'Lump Sum',
+        calculated_progress: avgProgress,
+        schedule_variance_days: scheduleVarianceDays,
+        variance_days: scheduleVarianceDays,
+      },
+      stats: {
+        total_tasks: totalTasks,
+        completed_tasks: completedTasks,
+        in_progress_tasks: inProgressTasks,
+        blocked_tasks: blockedTasks,
+        sites_count: sites.length,
+        work_packages_count: workPackages.length,
+        wbs_count: wbsItems.length,
+      },
+      sites,
+      work_packages: workPackages,
+      wbs_items: wbsItems,
+      trade_distribution: tradeDistribution,
+    });
+  });
+
+  // --- WBS HIERARCHICAL TREE (Project -> WBS -> Work Package -> Site -> Tasks) ---
+  app.get('/api/projects/:id/wbs-tree', authRequired, (req, res) => {
+    const projectId = req.params.id;
+    if (!hasProjectAccess(req.user!, projectId)) {
+      res.status(403).json({ error: 'No access to this project' });
+      return;
+    }
+    const project = db.prepare('SELECT * FROM projects WHERE id=?').get(projectId) as any;
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+    const wbsItems = db.prepare('SELECT * FROM wbs_items WHERE project_id=? ORDER BY code ASC').all(projectId) as any[];
+    const workPackages = db.prepare(`
+      SELECT wp.*, c.name as company_name, s.name as site_name
+      FROM work_packages wp
+      LEFT JOIN companies c ON c.id = wp.company_id
+      LEFT JOIN sites s ON s.id = wp.site_id
+      WHERE wp.project_id=?
+      ORDER BY wp.code ASC
+    `).all(projectId) as any[];
+    const tasks = db.prepare(`
+      SELECT t.*, s.name as site_name, wp.name as work_package_name, c.name as company_name, sup.name as supervisor_name, w.name as worker_name
+      FROM tasks t
+      LEFT JOIN sites s ON s.id = t.site_id
+      LEFT JOIN work_packages wp ON wp.id = t.work_package_id
+      LEFT JOIN companies c ON c.id = t.company_id
+      LEFT JOIN users sup ON sup.id = t.supervisor_id
+      LEFT JOIN workers w ON w.id = t.assigned_worker_id
+      WHERE t.project_id=?
+      ORDER BY t.wbs_code ASC, t.start ASC
+    `).all(projectId) as any[];
+
+    const rootNodes = wbsItems.length > 0
+      ? wbsItems
+      : [{ id: 'wbs-root', code: 'WBS-01', name: 'General MEP Scope', discipline: 'Multi-Disciplinary' }];
+
+    const tree = rootNodes.map(wbs => {
+      const matchedPackages = workPackages.filter(wp => wp.wbs_item_id === wbs.id || (!wp.wbs_item_id && wp.discipline === wbs.discipline));
+      const effectivePackages = matchedPackages.length > 0
+        ? matchedPackages
+        : [{ id: 'wp-gen', code: 'WP-GEN', name: 'General Package', company_name: 'Main Contractor', site_name: 'Main Site' }];
+
+      const packagesWithTasks = effectivePackages.map(wp => {
+        const pkgTasks = tasks.filter(t => t.work_package_id === wp.id || (wp.id === 'wp-gen' && (!t.work_package_id || t.wbs_code === wbs.code || t.wbs_item_id === wbs.id)));
+        const totalTasks = pkgTasks.length;
+        const comp = pkgTasks.filter(t => ['completed', 'closed'].includes((t.status || '').toLowerCase())).length;
+        const avg = totalTasks ? Math.round(pkgTasks.reduce((s, t) => s + (t.progress || 0), 0) / totalTasks) : 0;
+        return {
+          ...wp,
+          task_count: totalTasks,
+          completed_task_count: comp,
+          progress_percent: avg,
+          tasks: pkgTasks
+        };
+      });
+
+      const allWbsTasks = packagesWithTasks.flatMap(p => p.tasks);
+      const wbsTaskCount = allWbsTasks.length;
+      const wbsCompCount = allWbsTasks.filter(t => ['completed', 'closed'].includes((t.status || '').toLowerCase())).length;
+      const wbsAvg = wbsTaskCount ? Math.round(allWbsTasks.reduce((s, t) => s + (t.progress || 0), 0) / wbsTaskCount) : 0;
+
+      return {
+        ...wbs,
+        total_tasks: wbsTaskCount,
+        completed_tasks: wbsCompCount,
+        progress_percent: wbsAvg,
+        work_packages: packagesWithTasks
+      };
+    });
+
+    res.json({
+      project_id: projectId,
+      project_name: project.name,
+      project_code: project.project_code || project.code,
+      total_wbs_nodes: wbsItems.length,
+      total_work_packages: workPackages.length,
+      total_tasks: tasks.length,
+      tree
     });
   });
 
@@ -8224,8 +8531,9 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: `No view access to ${module}` });
         return;
       }
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
       const projectId = req.query.project_id as string;
-      let { where, params } = projectScopeSql(req.user!, projectId);
+      let { where, params } = projectScopeSql(req.user!, projectId, `${actualTable}.project_id`);
       if (!where) {
         res.status(403).json({ error: "No access to this project" });
         return;
@@ -8248,15 +8556,15 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           where += ` AND (${docConds.join(" OR ")})`;
         } else if (table === "tasks" || table === "submittals" || table === "punchlist" || table === "dailylogs" || table === "daily_logs") {
           const conditions: string[] = [
-            "id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)"
+            `${actualTable}.id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)`
           ];
           params.push(module, req.user!.user_id);
           if (req.user!.work_package_id) {
-            conditions.push("work_package_id = ?");
+            conditions.push(`${actualTable}.work_package_id = ?`);
             params.push(req.user!.work_package_id);
           }
           if (req.user!.company_id) {
-            conditions.push("company_id = ?");
+            conditions.push(`${actualTable}.company_id = ?`);
             params.push(req.user!.company_id);
           }
           if (!req.user!.work_package_id && !req.user!.company_id) {
@@ -8264,7 +8572,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           }
           where += ` AND (${conditions.join(" OR ")})`;
         } else {
-          where += " AND id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)";
+          where += ` AND ${actualTable}.id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)`;
           params.push(module, req.user!.user_id);
         }
       }
@@ -8276,7 +8584,6 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         where += " AND visibility IN ('Client', 'All')";
       }
 
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
       let rows: any[];
       if (actualTable === "documents") {
         rows = db.prepare(`
@@ -8285,6 +8592,24 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           LEFT JOIN users ON users.id = documents.subcontractor_id
           WHERE ${where}
           ORDER BY documents.date_added DESC
+        `).all(...params);
+      } else if (actualTable === "tasks") {
+        rows = db.prepare(`
+          SELECT tasks.*,
+            s.name as site_name,
+            wp.name as work_package_name,
+            wp.code as work_package_code,
+            c.name as company_name,
+            sup.name as supervisor_name,
+            w.name as worker_name
+          FROM tasks
+          LEFT JOIN sites s ON s.id = tasks.site_id
+          LEFT JOIN work_packages wp ON wp.id = tasks.work_package_id
+          LEFT JOIN companies c ON c.id = tasks.company_id
+          LEFT JOIN users sup ON sup.id = tasks.supervisor_id
+          LEFT JOIN workers w ON w.id = tasks.assigned_worker_id
+          WHERE ${where}
+          ORDER BY tasks.wbs_code ASC, tasks.start ASC
         `).all(...params);
       } else {
         rows = db.prepare(`SELECT * FROM ${actualTable} WHERE ${where}`).all(...params);
@@ -8295,7 +8620,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
     // Direct GET by ID with full authorization check
     app.get(`/api/${table}/:id`, authRequired, (req, res) => {
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
       let record: any;
       if (actualTable === "documents") {
         record = db.prepare(`
@@ -8303,6 +8628,23 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           FROM documents
           LEFT JOIN users ON users.id = documents.subcontractor_id
           WHERE documents.id = ?
+        `).get(req.params.id);
+      } else if (actualTable === "tasks") {
+        record = db.prepare(`
+          SELECT tasks.*,
+            s.name as site_name,
+            wp.name as work_package_name,
+            wp.code as work_package_code,
+            c.name as company_name,
+            sup.name as supervisor_name,
+            w.name as worker_name
+          FROM tasks
+          LEFT JOIN sites s ON s.id = tasks.site_id
+          LEFT JOIN work_packages wp ON wp.id = tasks.work_package_id
+          LEFT JOIN companies c ON c.id = tasks.company_id
+          LEFT JOIN users sup ON sup.id = tasks.supervisor_id
+          LEFT JOIN workers w ON w.id = tasks.assigned_worker_id
+          WHERE tasks.id = ?
         `).get(req.params.id);
       } else {
         record = db.prepare(`SELECT * FROM ${actualTable} WHERE id = ?`).get(req.params.id);
@@ -8417,7 +8759,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           }
         }
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
       const values = cols.map(c => (c === "id" ? id : data[c] !== undefined ? data[c] : null));
       const placeholders = cols.map(() => "?").join(",");
       db.prepare(`INSERT INTO ${actualTable} (${cols.join(",")}) VALUES (${placeholders})`).run(...values);
@@ -8433,7 +8775,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: `No edit access to ${module}` });
         return;
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
       const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });
@@ -8536,7 +8878,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
     // Delete
     app.delete(`/api/${table}/:id`, authRequired, (req, res) => {
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
       const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });

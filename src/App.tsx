@@ -26,6 +26,8 @@ import {
 } from './types';
 import { WorkerMobileShell } from './components/WorkerMobileShell';
 import { ProjectControlTower } from './components/ProjectControlTower';
+import { ProjectMasterOverview } from './components/ProjectMasterOverview';
+import { TaskDetailModal } from './components/TaskDetailModal';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -2474,9 +2476,15 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
   const [formData, setFormData] = useState({
     name: '',
     code: '',
+    project_code: '',
     client: '',
     status: 'Active',
     budget: '',
+    currency: 'USD',
+    contract_type: 'Lump Sum EPC',
+    stage: 'Construction',
+    consultant: '',
+    main_contractor: '',
     location: '',
     description: '',
     start_date: '',
@@ -2504,6 +2512,7 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
     const matchesSearch =
       (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (p.code || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.project_code || '').toLowerCase().includes(search.toLowerCase()) ||
       (p.client || '').toLowerCase().includes(search.toLowerCase()) ||
       (p.location || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
@@ -2512,12 +2521,19 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
 
   const handleOpenCreate = () => {
     setEditingProject(null);
+    const rndCode = `PRJ-${Math.floor(100 + Math.random() * 900)}`;
     setFormData({
       name: '',
-      code: `PRJ-${Math.floor(100 + Math.random() * 900)}`,
+      code: rndCode,
+      project_code: rndCode,
       client: '',
       status: 'Active',
       budget: '',
+      currency: 'USD',
+      contract_type: 'Lump Sum EPC',
+      stage: 'Construction',
+      consultant: '',
+      main_contractor: '',
       location: '',
       description: '',
       start_date: new Date().toISOString().split('T')[0],
@@ -2532,10 +2548,16 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
     setEditingProject(p);
     setFormData({
       name: p.name || '',
-      code: p.code || '',
-      client: p.client || '',
+      code: p.project_code || p.code || '',
+      project_code: p.project_code || p.code || '',
+      client: p.client_name || p.client || '',
       status: p.status || 'Active',
-      budget: p.budget ? String(p.budget) : '',
+      budget: p.contract_value ?? p.budget ? String(p.contract_value ?? p.budget) : '',
+      currency: p.currency || 'USD',
+      contract_type: p.contract_type || 'Lump Sum EPC',
+      stage: p.stage || 'Construction',
+      consultant: p.consultant || '',
+      main_contractor: p.main_contractor || '',
       location: p.location || '',
       description: p.description || '',
       start_date: p.start_date || '',
@@ -2567,10 +2589,18 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
     try {
       const payload = {
         name: formData.name,
-        code: formData.code || undefined,
+        code: formData.project_code || formData.code || undefined,
+        project_code: formData.project_code || formData.code || undefined,
         client: formData.client,
+        client_name: formData.client,
         status: formData.status,
         budget: formData.budget ? Number(formData.budget) : 0,
+        contract_value: formData.budget ? Number(formData.budget) : 0,
+        currency: formData.currency,
+        contract_type: formData.contract_type,
+        stage: formData.stage,
+        consultant: formData.consultant || undefined,
+        main_contractor: formData.main_contractor || undefined,
         location: formData.location || undefined,
         description: formData.description || undefined,
         start_date: formData.start_date || undefined,
@@ -2744,8 +2774,45 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
           <FormField label="Client / Employer" required>
             <input type="text" required value={formData.client} onChange={e => setFormData(d => ({ ...d, client: e.target.value }))} placeholder="e.g. Emaar Hospitality Group" className={inputCls} />
           </FormField>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="Stage">
+              <select value={formData.stage} onChange={e => setFormData(d => ({ ...d, stage: e.target.value }))} className={selectCls}>
+                <option value="Mobilization">Mobilization</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Procurement">Procurement</option>
+                <option value="Construction">Construction</option>
+                <option value="Testing & Commissioning">Testing & Commissioning</option>
+                <option value="Handover">Handover</option>
+              </select>
+            </FormField>
+            <FormField label="Contract Type">
+              <select value={formData.contract_type} onChange={e => setFormData(d => ({ ...d, contract_type: e.target.value }))} className={selectCls}>
+                <option value="Lump Sum EPC">Lump Sum EPC</option>
+                <option value="Design & Build">Design & Build</option>
+                <option value="Cost Plus">Cost Plus</option>
+                <option value="Re-measurable Unit Rate">Re-measurable Unit Rate</option>
+              </select>
+            </FormField>
+            <FormField label="Currency">
+              <select value={formData.currency} onChange={e => setFormData(d => ({ ...d, currency: e.target.value }))} className={selectCls}>
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="AED">AED (AED)</option>
+                <option value="SAR">SAR (SAR)</option>
+                <option value="GBP">GBP (£)</option>
+              </select>
+            </FormField>
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Budget (USD)">
+            <FormField label="Main Contractor">
+              <input type="text" value={formData.main_contractor} onChange={e => setFormData(d => ({ ...d, main_contractor: e.target.value }))} placeholder="e.g. Arabtec / ASGC JV" className={inputCls} />
+            </FormField>
+            <FormField label="Lead Consultant">
+              <input type="text" value={formData.consultant} onChange={e => setFormData(d => ({ ...d, consultant: e.target.value }))} placeholder="e.g. WSP Middle East" className={inputCls} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Contract Value">
               <input type="number" value={formData.budget} onChange={e => setFormData(d => ({ ...d, budget: e.target.value }))} placeholder="e.g. 2400000" className={inputCls} />
             </FormField>
             <FormField label="Progress (%)">
@@ -2787,7 +2854,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
   const [project, setProject] = useState<any | null>(null);
   const [feed, setFeed] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'feed' | 'tasks' | 'team'>('overview');
+  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'feed' | 'tasks' | 'team'>('master');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -2967,8 +3034,9 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
       </Card>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 space-x-6">
+      <div className="flex border-b border-gray-200 space-x-6 overflow-x-auto">
         {[
+          { id: 'master', label: 'Project Master & Hierarchy', icon: Layers },
           { id: 'overview', label: 'Overview & KPIs', icon: Briefcase },
           { id: 'feed', label: `Live Feed & Updates (${feed.length})`, icon: TrendingUp },
           { id: 'tasks', label: `Tasks & Programme (${tasks.length})`, icon: CheckSquare },
@@ -2980,7 +3048,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={cn('flex items-center gap-2 py-3 border-b-2 font-semibold text-sm transition-colors',
+              className={cn('flex items-center gap-2 py-3 border-b-2 font-semibold text-sm transition-colors whitespace-nowrap',
                 active ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
               )}
             >
@@ -2989,6 +3057,17 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
           );
         })}
       </div>
+
+      {/* Tab: Project Master & Hierarchy */}
+      {activeTab === 'master' && (
+        <ProjectMasterOverview
+          projectId={activeProjectId}
+          onNavigateToTask={() => {
+            setActiveTab('tasks');
+          }}
+          onRefreshProject={loadProjectDetails}
+        />
+      )}
 
       {/* Tab: Overview */}
       {activeTab === 'overview' && (
@@ -3227,45 +3306,13 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         </form>
       </Modal>
 
-      {/* Modal: Add Task */}
-      <Modal open={showTaskModal} onClose={() => setShowTaskModal(false)} title="Add Task to Programme" size="md">
-        <form onSubmit={handleCreateTask} className="space-y-4">
-          <FormField label="Task Title" required>
-            <input type="text" required value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="e.g. Install Main AHU Ductwork Dampers" className={inputCls} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="MEP Trade">
-              <select value={taskTrade} onChange={e => setTaskTrade(e.target.value)} className={selectCls}>
-                <option value="HVAC">HVAC</option>
-                <option value="Electrical">Electrical</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="Fire Fighting">Fire Fighting</option>
-                <option value="ELV">ELV</option>
-              </select>
-            </FormField>
-            <FormField label="Priority">
-              <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)} className={selectCls}>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Start Date">
-              <input type="date" value={taskStart} onChange={e => setTaskStart(e.target.value)} className={inputCls} />
-            </FormField>
-            <FormField label="Due Date">
-              <input type="date" value={taskEnd} onChange={e => setTaskEnd(e.target.value)} className={inputCls} />
-            </FormField>
-          </div>
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
-            <button type="button" onClick={() => setShowTaskModal(false)} className={btnSecondary}>Cancel</button>
-            <button type="submit" className={btnPrimary}><Plus size={14} /> Add Task</button>
-          </div>
-        </form>
-      </Modal>
+      {/* Modal: Add Task (Enterprise) */}
+      <TaskDetailModal
+        open={showTaskModal}
+        onClose={() => setShowTaskModal(false)}
+        onSaved={loadProjectDetails}
+        projectId={activeProjectId}
+      />
 
       {/* Modal: Image Zoom */}
       <Modal open={!!selectedImage} onClose={() => setSelectedImage(null)} title="Attached Site Photo" size="lg">
@@ -3599,20 +3646,6 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<any | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    project_id: selectedProject || (projects[0]?.id ?? ''),
-    title: '',
-    description: '',
-    trade: 'HVAC',
-    priority: 'Medium',
-    status: 'Not Started',
-    start: '',
-    end: '',
-    progress: '0',
-    wbs_code: ''
-  });
-
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
@@ -3643,70 +3676,12 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
 
   const handleOpenCreate = () => {
     setEditingTask(null);
-    setFormData({
-      project_id: selectedProject || (projects[0]?.id ?? ''),
-      title: '',
-      description: '',
-      trade: 'HVAC',
-      priority: 'Medium',
-      status: 'Not Started',
-      start: new Date().toISOString().split('T')[0],
-      end: '',
-      progress: '0',
-      wbs_code: `MEP.${Math.floor(10 + Math.random() * 90)}`
-    });
     setShowModal(true);
   };
 
   const handleOpenEdit = (t: any) => {
     setEditingTask(t);
-    setFormData({
-      project_id: t.project_id || selectedProject,
-      title: t.title || '',
-      description: t.description || '',
-      trade: t.trade || 'HVAC',
-      priority: t.priority || 'Medium',
-      status: t.status || 'Not Started',
-      start: t.start || '',
-      end: t.end || '',
-      progress: t.progress != null ? String(t.progress) : '0',
-      wbs_code: t.wbs_code || ''
-    });
     setShowModal(true);
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!formData.project_id || !formData.title) {
-      addToast('error', 'Project and Task Title are required');
-      return;
-    }
-    try {
-      const payload = {
-        project_id: formData.project_id,
-        title: formData.title,
-        description: formData.description || undefined,
-        trade: formData.trade,
-        priority: formData.priority,
-        status: formData.status,
-        start: formData.start || undefined,
-        end: formData.end || undefined,
-        progress: Number(formData.progress) || 0,
-        wbs_code: formData.wbs_code || undefined
-      };
-
-      if (editingTask) {
-        await tasksApi.update(editingTask.id, payload);
-        addToast('success', 'Task updated');
-      } else {
-        await tasksApi.create(payload);
-        addToast('success', 'Task created');
-      }
-      setShowModal(false);
-      loadTasks();
-    } catch (err: any) {
-      addToast('error', err.message || 'Operation failed');
-    }
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -3833,10 +3808,40 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
                 <h3 className="font-bold text-gray-900 text-base">{t.title}</h3>
                 {t.description && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{t.description}</p>}
 
-                <div className="flex items-center gap-3 text-xs text-gray-400 mt-2 flex-wrap">
+                <div className="flex items-center gap-2 text-xs text-gray-500 mt-2 flex-wrap">
+                  {t.site_name && (
+                    <span className="text-[11px] text-gray-700 bg-gray-100 px-2 py-0.5 rounded flex items-center gap-1 font-medium">
+                      <MapPin size={11} className="text-emerald-600" /> {t.site_name}
+                    </span>
+                  )}
+                  {t.work_package_code && (
+                    <span className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded font-mono font-bold">
+                      {t.work_package_code}
+                    </span>
+                  )}
+                  {t.company_name && (
+                    <span className="text-[11px] text-gray-500">
+                      Sub: <strong className="text-gray-700">{t.company_name}</strong>
+                    </span>
+                  )}
+                  {t.supervisor_name && (
+                    <span className="text-[11px] text-gray-500">
+                      Sup: <strong className="text-gray-700">{t.supervisor_name}</strong>
+                    </span>
+                  )}
+                  {t.drawing_ref && (
+                    <span className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-mono">
+                      DWG: {t.drawing_ref}
+                    </span>
+                  )}
+                  {t.evidence_required === 1 && (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                      <Shield size={10} /> Evidence Req
+                    </span>
+                  )}
                   {t.start && <span>Start: {fmtDate(t.start)}</span>}
                   {t.end && <><span>•</span><span>Due: {fmtDate(t.end)}</span></>}
-                  {t.assignee && <><span>•</span><span className="text-gray-600 font-medium">Assigned: {t.assignee}</span></>}
+                  {t.assignee && !t.worker_name && <><span>•</span><span className="text-gray-600 font-medium">Assigned: {t.assignee}</span></>}
                 </div>
               </div>
 
@@ -3880,72 +3885,17 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
         </Card>
       )}
 
-      {/* Modal: Create / Edit Task */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingTask ? 'Edit Task' : 'Add Task to Programme'} size="md">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Project" required>
-            <select required value={formData.project_id} onChange={e => setFormData(d => ({ ...d, project_id: e.target.value }))} className={selectCls}>
-              <option value="">Select Project...</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Task Title" required>
-            <input type="text" required value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} placeholder="e.g. Pre-Commissioning Flush of Chilled Water Network" className={inputCls} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="MEP Trade">
-              <select value={formData.trade} onChange={e => setFormData(d => ({ ...d, trade: e.target.value }))} className={selectCls}>
-                <option value="HVAC">HVAC</option>
-                <option value="Electrical">Electrical</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="Fire Fighting">Fire Fighting</option>
-                <option value="ELV">ELV</option>
-              </select>
-            </FormField>
-            <FormField label="Priority">
-              <select value={formData.priority} onChange={e => setFormData(d => ({ ...d, priority: e.target.value }))} className={selectCls}>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Status">
-              <select value={formData.status} onChange={e => setFormData(d => ({ ...d, status: e.target.value }))} className={selectCls}>
-                <option value="Not Started">Not Started</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Blocked">Blocked</option>
-              </select>
-            </FormField>
-            <FormField label="Progress (%)">
-              <input type="number" min="0" max="100" value={formData.progress} onChange={e => setFormData(d => ({ ...d, progress: e.target.value }))} placeholder="0" className={inputCls} />
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Start Date">
-              <input type="date" value={formData.start} onChange={e => setFormData(d => ({ ...d, start: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="Due Date">
-              <input type="date" value={formData.end} onChange={e => setFormData(d => ({ ...d, end: e.target.value }))} className={inputCls} />
-            </FormField>
-          </div>
-          <FormField label="WBS Code / Task Identifier">
-            <input type="text" value={formData.wbs_code} onChange={e => setFormData(d => ({ ...d, wbs_code: e.target.value }))} placeholder="e.g. MEP.02.04" className={inputCls} />
-          </FormField>
-          <FormField label="Task Description / Details">
-            <textarea rows={3} value={formData.description} onChange={e => setFormData(d => ({ ...d, description: e.target.value }))} placeholder="Execution requirements, inspection checklist, or technical details..." className={inputCls} />
-          </FormField>
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
-            <button type="button" onClick={() => setShowModal(false)} className={btnSecondary}>Cancel</button>
-            <button type="submit" className={btnPrimary}><Check size={14} /> {editingTask ? 'Save Changes' : 'Add Task'}</button>
-          </div>
-        </form>
-      </Modal>
+      {/* Modal: Create / Edit Task (Enterprise TaskDetailModal) */}
+      <TaskDetailModal
+        open={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setEditingTask(null);
+        }}
+        onSaved={loadTasks}
+        task={editingTask}
+        projectId={selectedProject || (projects[0]?.id ?? '')}
+      />
     </div>
   );
 }
