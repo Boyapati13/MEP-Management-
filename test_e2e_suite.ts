@@ -525,6 +525,67 @@ async function runTests() {
     assert(tooBigUpload.status === 413 && typeof tooBigUpload.body.error === 'string' && tooBigUpload.body.error.toLowerCase().includes('too large'),
       'An attachment over the new limit gets a clean, readable JSON error (not a bare text/html "Payload Too Large")');
 
+    console.log('\nSection 16: Project document intelligence');
+    const setupText = [
+      'Project Name: Harbour MEP Upgrade',
+      'Client: Example Developments Ltd',
+      'Start Date: 01/10/2026',
+      'Completion Date: 30/06/2027',
+      'Contract Value: €4,850,000'
+    ].join('\n');
+    const setupDataUrl = 'data:text/plain;base64,' + Buffer.from(setupText).toString('base64');
+    const setupDoc = await req({
+      path: '/api/documents', method: 'POST', token: tokens['ProjectManager'],
+      body: {
+        project_id: projectId,
+        name: 'Project Setup Contract',
+        category: 'Contract',
+        revision: 'Rev 0',
+        date_added: '2026-09-20',
+        attachment_name: 'project_setup.txt',
+        attachment_data: setupDataUrl
+      }
+    });
+    assert(setupDoc.status === 201 && !!setupDoc.body.id, 'Project Manager can upload a project setup document');
+
+    const setupExtraction = await req({
+      path: `/api/projects/${projectId}/extract-setup-data`, method: 'POST', token: tokens['ProjectManager'],
+      body: { document_ids: [setupDoc.body.id] }
+    });
+    assert(setupExtraction.status === 200 && Array.isArray(setupExtraction.body.suggestions),
+      'Project setup documents can be analyzed without writing project fields automatically');
+    const extracted = Object.fromEntries((setupExtraction.body.suggestions || []).map((s: any) => [s.field, s.value]));
+    assert(extracted.name === 'Harbour MEP Upgrade' && extracted.client === 'Example Developments Ltd',
+      'Project setup extraction finds explicitly stated project name and client');
+    assert(extracted.start_date === '2026-10-01' && extracted.end_date === '2027-06-30',
+      'Project setup extraction normalizes explicitly stated project dates');
+    assert(Number(extracted.budget) === 4850000,
+      'Project setup extraction finds explicitly stated contract value');
+
+    const beforeApply = await req({ path: '/api/projects', token: tokens['ProjectManager'] });
+    const beforeProject = beforeApply.body.find((p: any) => p.id === projectId);
+    assert(beforeProject && beforeProject.name !== 'Harbour MEP Upgrade',
+      'Extraction is review-only: it does not silently overwrite the project');
+
+    const applySetup = await req({
+      path: `/api/projects/${projectId}`, method: 'PUT', token: tokens['ProjectManager'],
+      body: {
+        name: extracted.name,
+        client: extracted.client,
+        start_date: extracted.start_date,
+        end_date: extracted.end_date,
+        budget: extracted.budget
+      }
+    });
+    assert(applySetup.status === 200 && applySetup.body.name === 'Harbour MEP Upgrade' && Number(applySetup.body.budget) === 4850000,
+      'Project Manager can apply reviewed extracted project data');
+
+    const setupDenied = await req({
+      path: `/api/projects/${projectId}/extract-setup-data`, method: 'POST', token: tokens['SiteEngineer'],
+      body: { document_ids: [setupDoc.body.id] }
+    });
+    assert(setupDenied.status === 403, 'Site Engineer cannot run project setup document extraction');
+
   } finally {
     await cleanup(adminToken);
   }

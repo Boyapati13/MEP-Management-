@@ -16,6 +16,7 @@ The application was originally scaffolded in Google AI Studio (see `metadata.jso
 - [API Overview](#api-overview)
 - [AI Technical Advisor](#ai-technical-advisor)
 - [Document Intelligence & Planner](#document-intelligence--planner)
+- [Project Setup from Documents](#project-setup-from-documents)
 - [Client Portal & Publishing](#client-portal--publishing)
 - [Upload Size Limit](#upload-size-limit)
 - [Testing](#testing)
@@ -187,7 +188,7 @@ All endpoints below (except `/api/login` and `/api/health`) require `Authorizati
 `POST /api/login` · `POST /api/logout` · `GET /api/me` · `PUT /api/me/password` · `GET /api/users` · `POST /api/users` · `PUT /api/users/:id` · `DELETE /api/users/:id` · `POST /api/users/:id/reset-password` · `POST /api/users/:id/toggle-status` · `GET /api/roles`
 
 **Projects**
-`GET /api/projects` · `POST /api/projects` · `PUT /api/projects/:id` · `DELETE /api/projects/:id` · `GET/PUT /api/projects/:id/members` · `GET /api/projects/:id/subcontractors` · `GET /api/users/:id/projects` · `PUT /api/users/:id/projects`
+`GET /api/projects` · `POST /api/projects` · `PUT /api/projects/:id` · `DELETE /api/projects/:id` · `GET/PUT /api/projects/:id/members` · `GET /api/projects/:id/subcontractors` · `GET /api/users/:id/projects` · `PUT /api/users/:id/projects` · `POST /api/projects/:id/extract-setup-data`
 
 **Dashboards & Search**
 `GET /api/dashboard` · `GET /api/portfolio` · `GET /api/operations/today` · `GET /api/search` · `GET /api/export/:table`
@@ -221,6 +222,16 @@ All endpoints below (except `/api/login` and `/api/health`) require `Authorizati
    - **Fallback without AI** (no `GEMINI_API_KEY`, the call fails, or the response isn't valid JSON): one bucket ("Imported Items"), one task per CSV row or per line/paragraph of extracted text. This is deliberately simple - it does not attempt sentence-boundary detection, so a PDF whose text wraps mid-sentence can split a single requirement across two tasks. The AI path does not have this limitation.
 
 3. **`GET /api/projects/:id/planner`** — one call returns the whole board (buckets, with nested tasks, with nested checklist) in display order, for the Planner view's Kanban-style UI. Moving a task between buckets, changing its status, and toggling checklist items all go through the generic CRUD `PUT /api/plan_tasks/:id` and `PUT /api/plan_task_checklist/:id` routes rather than bespoke endpoints.
+
+## Project Setup from Documents
+
+The **Add Project / Edit Project** workflow can now accept multiple project setup documents (contract, tender, BOQ, programme, specifications, drawings and related files) at the same time the project is created or maintained. Files are stored in the normal Documents register rather than duplicated on the project record.
+
+For readable text formats (PDF, DOCX, CSV/TXT/TSV), the application can extract a small set of foundational project fields: **project name, client/employer, commencement date, completion date and contract value/budget**. If Gemini is configured it performs structured extraction with document provenance; without Gemini, deterministic label-based extraction still works for explicitly labelled values such as `Client:`, `Start Date:`, `Completion Date:` and `Contract Value:`.
+
+Extraction is deliberately **review-only**. The server never writes extracted values automatically. The UI opens a **Review Extracted Project Data** step showing the proposed value, confidence, source document and source excerpt. The Admin/Project Manager can accept, edit or ignore each field before the project is updated.
+
+`POST /api/projects/:id/extract-setup-data` is restricted to Admin/ProjectManager users with access to the project. The endpoint analyzes only documents belonging to that project and returns suggestions with source provenance.
 
 ## Client Portal & Publishing
 
@@ -272,11 +283,11 @@ npm run dev
 npx tsx test_e2e_suite.ts
 ```
 
-The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 94 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, the document-to-Planner pipeline, and notifications — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
+The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 102 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, the document-to-Planner pipeline, and notifications — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
 
 It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, so it's suitable to wire into CI against a server started in a previous step.
 
-**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 94 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
+**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 102 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
 
 ⚠️ Prior to this update, the app **crashed on every fresh-database boot** and had no way to log in without hardcoded demo credentials embedded directly in the login page. Both are now fixed — see [Known Limitations](#known-limitations--hardening-notes) for the full list of what changed.
 
@@ -290,7 +301,7 @@ It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, s
 ├── api-config.js            # Runtime API base URL override (window.MEP_API_URL)
 ├── src/                    # Unused Vite + React scaffold (App.tsx renders an empty div)
 ├── public/                 # Static assets
-├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (94 assertions)
+├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (102 assertions)
 ├── vite.config.ts
 ├── tsconfig.json
 └── .env.example
