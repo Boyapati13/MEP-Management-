@@ -314,7 +314,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "users", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "attendance_adjustments", "worker_assignments", "project_updates"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -339,7 +339,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
+      "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -350,7 +350,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
+      "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     delete: true,
   },
@@ -3138,28 +3138,48 @@ async function startServer() {
       return;
     }
     const projectId = req.query.project_id as string;
-    let { where, params } = projectScopeSql(req.user!, projectId);
-    if (!where) {
+    const scoped = projectScopeSql(req.user!, projectId, "a.project_id");
+    if (!scoped.where) {
       res.status(403).json({ error: "No access to this project" });
       return;
     }
-    if (req.user!.role !== "Admin") {
-      where += " AND user_id=?";
+    let where = scoped.where;
+    const params: any[] = [...scoped.params];
+
+    if (req.user!.role === "Worker") {
+      where += " AND a.user_id=?";
+      params.push(req.user!.user_id);
+    } else if (req.user!.role === "Subcontractor") {
+      if (!req.user!.company_id) { res.json([]); return; }
+      where += " AND w.company_id=?";
+      params.push(req.user!.company_id);
+    } else if (req.user!.role === "SiteSupervisor") {
+      where += " AND EXISTS (SELECT 1 FROM worker_assignments wa WHERE wa.worker_id=a.worker_id AND wa.project_id=a.project_id AND wa.supervisor_id=? AND wa.status='Active')";
       params.push(req.user!.user_id);
     }
-    const rows = db.prepare(`SELECT * FROM attendance WHERE ${where} ORDER BY punch_in DESC`).all(...params) as any[];
+
+    const rows = db.prepare(
+      "SELECT a.*, w.company_id as worker_company_id, w.trade as worker_trade FROM attendance a " +
+      "LEFT JOIN workers w ON w.id=a.worker_id WHERE " + where + " ORDER BY a.punch_in DESC"
+    ).all(...params) as any[];
     const now = new Date();
-    const result = rows.map(row => {
-      const record = { ...row };
-      const start = new Date(row.punch_in);
-      const end = row.punch_out ? new Date(row.punch_out) : now;
-      record.hours = Math.round((Math.max(0, end.getTime() - start.getTime()) / 3600000) * 100) / 100;
-      return record;
-    });
+    const result = rows
+      .filter(row => canAccessAttendance(req.user!, row, "view"))
+      .map(row => {
+        const record = { ...row };
+        const start = new Date(row.punch_in);
+        const end = row.punch_out ? new Date(row.punch_out) : now;
+        record.hours = Math.round((Math.max(0, end.getTime() - start.getTime()) / 3600000) * 100) / 100;
+        return record;
+      });
     res.json(result);
   });
 
   app.post("/api/attendance/punch-in", authRequired, (req, res) => {
+    if (req.user!.role === "Worker") {
+      res.status(410).json({ error: "Workers must use /api/attendance/gps-punch-in with an assigned site and GPS location" });
+      return;
+    }
     let projectId = req.body?.project_id;
     if (!projectId) {
       const defaultProj = db.prepare("SELECT project_id FROM project_memberships WHERE user_id=? AND active=1 LIMIT 1").get(req.user!.user_id) as any;
@@ -6898,14 +6918,34 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   app.get('/api/attendance/exceptions', authRequired, (req, res) => {
     if (!canView(req.user!, 'attendance')) { res.status(403).json({ error: 'No access' }); return; }
     const projectId = req.query.project_id as string;
-    if (projectId && !hasProjectAccess(req.user!, projectId)) { res.status(403).json({ error: 'No project access' }); return; }
-    const days = parseInt(req.query.days as string || '7');
+    const scoped = projectScopeSql(req.user!, projectId, 'a.project_id');
+    if (!scoped.where) { res.status(403).json({ error: 'No project access' }); return; }
+
+    const days = Math.max(1, Math.min(90, parseInt(req.query.days as string || '7', 10) || 7));
     const since = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
-    let where = 'a.work_date>=?';
-    const params: any[] = [since];
-    if (projectId) { where += ' AND a.project_id=?'; params.push(projectId); }
-    const exceptions = db.prepare(`SELECT a.*, w.name as worker_name, w.trade, s.name as site_name FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id LEFT JOIN sites s ON s.id=a.site_id WHERE ${where} AND (a.punch_out IS NULL AND a.work_date < date('now') OR a.punch_in_geofence_status IN ('Outside Geofence','GPS Accuracy Poor') OR a.punch_out_geofence_status IN ('Outside Geofence')) ORDER BY a.work_date DESC`).all(...params);
-    res.json(exceptions);
+    let where = scoped.where + ' AND a.work_date>=?';
+    const params: any[] = [...scoped.params, since];
+
+    if (req.user!.role === 'Worker') {
+      where += ' AND a.user_id=?'; params.push(req.user!.user_id);
+    } else if (req.user!.role === 'Subcontractor') {
+      if (!req.user!.company_id) { res.json([]); return; }
+      where += ' AND w.company_id=?'; params.push(req.user!.company_id);
+    } else if (req.user!.role === 'SiteSupervisor') {
+      where += " AND EXISTS (SELECT 1 FROM worker_assignments wa WHERE wa.worker_id=a.worker_id AND wa.project_id=a.project_id AND wa.supervisor_id=? AND wa.status='Active')";
+      params.push(req.user!.user_id);
+    }
+
+    const rows = db.prepare(
+      "SELECT a.*, w.name as worker_name, w.trade, w.company_id as worker_company_id, s.name as site_name " +
+      "FROM attendance a LEFT JOIN workers w ON w.id=a.worker_id LEFT JOIN sites s ON s.id=a.site_id WHERE " +
+      where + " AND ((a.punch_out IS NULL AND a.work_date < date('now')) " +
+      "OR a.punch_in_geofence_status IN ('Outside Geofence','GPS Accuracy Poor') " +
+      "OR a.punch_out_geofence_status IN ('Outside Geofence','GPS Accuracy Poor') " +
+      "OR a.attendance_status='Attendance Exception') ORDER BY a.work_date DESC"
+    ).all(...params) as any[];
+
+    res.json(rows.filter(row => canAccessAttendance(req.user!, row, 'view')));
   });
 
   // Overtime approval (blocks self-approval)
@@ -7341,39 +7381,51 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   // Leave approval (blocks self-approval)
   app.post('/api/leave_requests/:id/approve', authRequired, (req, res) => {
-    const role = req.user!.role;
-    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    if (!['Admin','ProjectManager','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No approval authority' }); return; }
     const lr = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id) as any;
     if (!lr) { res.status(404).json({ error: 'Not found' }); return; }
     if (!hasProjectAccess(req.user!, lr.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
-    // Block self-approval
     if (lr.user_id === req.user!.user_id) { res.status(403).json({ error: 'Cannot approve own leave request' }); return; }
+    if (req.user!.role === 'SiteSupervisor') {
+      const supervised = lr.worker_id && db.prepare(
+        "SELECT 1 FROM worker_assignments WHERE worker_id=? AND project_id=? AND supervisor_id=? AND status='Active' LIMIT 1"
+      ).get(lr.worker_id, lr.project_id, req.user!.user_id);
+      if (!supervised) { res.status(403).json({ error: 'Leave request is outside supervisor scope' }); return; }
+    }
     if (lr.status !== 'Pending') { res.status(400).json({ error: 'Leave request is not pending' }); return; }
     const now = new Date().toISOString();
-    db.prepare('UPDATE leave_requests SET status=?,approved_by=?,approved_at=? WHERE id=?').run('Approved', req.user!.user_id, now, req.params.id);
-    // Update balances: move pending to taken
-    const yr = new Date(lr.start_date).getFullYear();
-    db.prepare(`UPDATE leave_balances SET pending_days=MAX(0,pending_days-?), taken_days=taken_days+?, balance_days=balance_days-?, updated_at=? WHERE user_id=? AND leave_type_id=? AND year=?`)
+    db.prepare('UPDATE leave_requests SET status=?,approved_by=?,approved_at=?,reject_reason=NULL WHERE id=?')
+      .run('Approved', req.user!.user_id, now, req.params.id);
+    const yr = new Date(lr.start_date + 'T12:00:00Z').getUTCFullYear();
+    db.prepare('UPDATE leave_balances SET pending_days=MAX(0,pending_days-?),taken_days=taken_days+?,balance_days=balance_days-?,updated_at=? WHERE user_id=? AND leave_type_id=? AND year=?')
       .run(lr.days_requested, lr.days_requested, lr.days_requested, now, lr.user_id, lr.leave_type_id, yr);
     createNotification(lr.user_id, lr.project_id, 'leave_requests', req.params.id, 'Leave Approved', `Your ${lr.days_requested}-day leave request has been approved`);
     writeAudit(req.user!.user_id, 'leave_requests', req.params.id, lr.project_id, 'approve', lr, { action: 'Approved' });
     res.json(db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id));
   });
 
-  // Leave rejection (blocks self-rejection)
   app.post('/api/leave_requests/:id/reject', authRequired, (req, res) => {
-    const role = req.user!.role;
-    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    if (!['Admin','ProjectManager','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No approval authority' }); return; }
     const lr = db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id) as any;
     if (!lr) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, lr.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
     if (lr.user_id === req.user!.user_id) { res.status(403).json({ error: 'Cannot reject own leave request' }); return; }
+    if (req.user!.role === 'SiteSupervisor') {
+      const supervised = lr.worker_id && db.prepare(
+        "SELECT 1 FROM worker_assignments WHERE worker_id=? AND project_id=? AND supervisor_id=? AND status='Active' LIMIT 1"
+      ).get(lr.worker_id, lr.project_id, req.user!.user_id);
+      if (!supervised) { res.status(403).json({ error: 'Leave request is outside supervisor scope' }); return; }
+    }
     if (lr.status !== 'Pending') { res.status(400).json({ error: 'Leave request is not pending' }); return; }
     const { reject_reason } = req.body;
     const now = new Date().toISOString();
-    db.prepare('UPDATE leave_requests SET status=?,approved_by=?,approved_at=?,reject_reason=? WHERE id=?').run('Rejected', req.user!.user_id, now, reject_reason||null, req.params.id);
-    const yr = new Date(lr.start_date).getFullYear();
-    db.prepare(`UPDATE leave_balances SET pending_days=MAX(0,pending_days-?), updated_at=? WHERE user_id=? AND leave_type_id=? AND year=?`).run(lr.days_requested, now, lr.user_id, lr.leave_type_id, yr);
+    db.prepare('UPDATE leave_requests SET status=?,approved_by=?,approved_at=?,reject_reason=? WHERE id=?')
+      .run('Rejected', req.user!.user_id, now, reject_reason||null, req.params.id);
+    const yr = new Date(lr.start_date + 'T12:00:00Z').getUTCFullYear();
+    db.prepare('UPDATE leave_balances SET pending_days=MAX(0,pending_days-?),updated_at=? WHERE user_id=? AND leave_type_id=? AND year=?')
+      .run(lr.days_requested, now, lr.user_id, lr.leave_type_id, yr);
     createNotification(lr.user_id, lr.project_id, 'leave_requests', req.params.id, 'Leave Rejected', `Your leave request was rejected. Reason: ${reject_reason||'Not specified'}`);
+    writeAudit(req.user!.user_id, 'leave_requests', req.params.id, lr.project_id, 'reject', lr, { reject_reason: reject_reason||null });
     res.json(db.prepare('SELECT * FROM leave_requests WHERE id=?').get(req.params.id));
   });
 
