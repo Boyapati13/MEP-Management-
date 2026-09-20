@@ -1957,6 +1957,10 @@ function openSitePhotoModal(selectedDate){
   const html=`<div class="form-grid"><div class="full"><label>Photo title</label><input id="f_photo_name" value="Site progress - ${selectedDate}"></div><div><label>Date</label><input type="date" id="f_photo_date" value="${selectedDate}"></div><div class="full"><label>Photo file</label><input type="file" id="f_photo_file" accept="image/*" required></div></div>`;
   openModal('Upload site photo',html,async()=>{
     const file=document.getElementById('f_photo_file').files[0]; if(!file) throw new Error('Choose a photo first');
+    const MAX_FILE_MB = 100;
+    if(file.size > MAX_FILE_MB * 1024 * 1024){
+      throw new Error(`This photo is ${(file.size/1024/1024).toFixed(1)} MB, which is over the ${MAX_FILE_MB} MB limit. Try a lower-resolution photo.`);
+    }
     const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});
     await apiFetch('/api/documents',{method:'POST',body:JSON.stringify({project_id:currentProjectId,name:document.getElementById('f_photo_name').value,category:'Site Photo',revision:'',date_added:document.getElementById('f_photo_date').value,attachment_name:file.name,attachment_data:data})});
   });
@@ -4876,6 +4880,10 @@ async function openDocumentModal(record){
   </div>`;
   openModal(isEdit?'Edit Document':'Add Document', html, async ()=>{
     const file = document.getElementById('f_file').files[0];
+    const MAX_FILE_MB = 100;
+    if(file && file.size > MAX_FILE_MB * 1024 * 1024){
+      throw new Error(`This file is ${(file.size/1024/1024).toFixed(1)} MB, which is over the ${MAX_FILE_MB} MB limit for a single document. Try compressing it or splitting it into smaller files.`);
+    }
     let attachment_name = record ? record.attachment_name : null;
     let attachment_data = record ? record.attachment_data : null;
     if(file){

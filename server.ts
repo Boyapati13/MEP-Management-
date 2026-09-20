@@ -949,8 +949,32 @@ async function startServer() {
   initDb();
   const app = express();
 
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+  // 150mb accounts for base64 encoding inflating a file by ~33% - so this
+  // supports real attachments up to roughly 110MB (typical for a large,
+  // scanned multi-page tender PDF or a drawing set), not just 50MB/36MB
+  // as before. Base64-in-JSON is still not the right architecture for much
+  // larger files - see README Known Limitations - but this covers the
+  // realistic range of documents this app is meant to handle.
+  app.use(express.json({ limit: "150mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+
+  // Without this, a request that exceeds the body-size limit above (or
+  // sends malformed JSON) fails inside the body-parser itself, before any
+  // route runs, and Express's default error handler returns a bare
+  // text/html response - which the frontend's apiFetch falls back to
+  // showing as an unhelpful native alert like "Payload Too Large" with no
+  // indication of what actually happened or what to do about it.
+  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+    if (err && err.type === "entity.too.large") {
+      res.status(413).json({ error: "This file is too large to upload. The maximum attachment size is approximately 110MB - try compressing the file or splitting it into smaller documents." });
+      return;
+    }
+    if (err instanceof SyntaxError && "body" in err) {
+      res.status(400).json({ error: "Could not read the request - the data may be corrupted. Please try again." });
+      return;
+    }
+    next(err);
+  });
 
   // API Config Script
   app.get("/api-config.js", (_req, res) => {

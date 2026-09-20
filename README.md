@@ -17,6 +17,7 @@ The application was originally scaffolded in Google AI Studio (see `metadata.jso
 - [AI Technical Advisor](#ai-technical-advisor)
 - [Document Intelligence & Planner](#document-intelligence--planner)
 - [Client Portal & Publishing](#client-portal--publishing)
+- [Upload Size Limit](#upload-size-limit)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
 - [Known Limitations & Hardening Notes](#known-limitations--hardening-notes)
@@ -247,6 +248,18 @@ A `Client` role with a genuinely separate, curated workspace - built after revie
 
 **One thing outside this codebase worth doing:** the review also noted that `main` currently has no branch protection or required status checks on GitHub, so test results reported in a commit message aren't independently enforced before code lands. That's a repository setting, not something fixable via a code change - worth configuring directly in GitHub's branch protection rules.
 
+## Upload Size Limit
+
+Reported as "can't upload the project document" and reproduced directly (a real 40MB file through the actual Documents upload flow, not a guess): the JSON body limit was `50mb`, but every attachment goes through base64 first, which inflates a binary file by roughly a third - so the real usable ceiling was closer to **36MB**, not 50MB. Realistic tender/drawing PDFs and site-photo sets routinely exceed that. Worse, hitting the limit produced a bare native `alert("Payload Too Large")` with no explanation and no guidance, after however long the (doomed) upload took to fail.
+
+Fixed on both ends:
+- **Server**: the JSON/urlencoded body limit is now `150mb` (≈110MB of real file content after base64 inflation), and a dedicated error-handling middleware catches the body-parser's size/parse errors and returns a clear JSON message instead of Express's default text/html response.
+- **Client**: the Documents upload modal and the site-photo capture modal both check `file.size` against a 100MB threshold *before* attempting the slow read-and-upload, so an over-limit file fails in about a second with a specific, actionable message ("This file is 120.0 MB, which is over the 100 MB limit...") instead of after a long wait with a cryptic one.
+
+Verified end to end through the actual browser UI, not just the API: a 40MB file that previously failed now uploads and appears in the Documents list; a 120MB file now fails instantly with the new message instead of slowly with the old one. Also covered by 2 new automated assertions (a ~60MB upload succeeding, and an over-the-new-limit upload getting the clean JSON error).
+
+Base64-in-JSON is still not the right long-term architecture for very large files (that would mean streaming multipart uploads straight to disk/object storage) - this fix meaningfully raises the practical ceiling for the documents this app is meant to handle, but doesn't change the underlying architecture noted in Known Limitations.
+
 ## Testing
 
 There is no integrated test runner (`npm test` is not defined). Instead, a standalone script exercises a **running server** end-to-end over HTTP:
@@ -259,11 +272,11 @@ npm run dev
 npx tsx test_e2e_suite.ts
 ```
 
-The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 92 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, the document-to-Planner pipeline, and notifications — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
+The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 94 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, the document-to-Planner pipeline, and notifications — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
 
 It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, so it's suitable to wire into CI against a server started in a previous step.
 
-**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 92 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
+**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 94 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
 
 ⚠️ Prior to this update, the app **crashed on every fresh-database boot** and had no way to log in without hardcoded demo credentials embedded directly in the login page. Both are now fixed — see [Known Limitations](#known-limitations--hardening-notes) for the full list of what changed.
 
@@ -277,7 +290,7 @@ It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, s
 ├── api-config.js            # Runtime API base URL override (window.MEP_API_URL)
 ├── src/                    # Unused Vite + React scaffold (App.tsx renders an empty div)
 ├── public/                 # Static assets
-├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (92 assertions)
+├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (94 assertions)
 ├── vite.config.ts
 ├── tsconfig.json
 └── .env.example
@@ -296,7 +309,7 @@ These are worth addressing before any production/internet-facing deployment. Ear
   - No subcontractor progress-submission approval workflow (subcontractor proposes % complete → main contractor accepts/rejects → becomes official progress). Progress is still entered directly by whoever has edit access to `tasks`.
   - Publishing/visibility currently only covers `documents` and `change_orders` - not RFIs, submittals, or a per-record "Selected Companies" audience beyond the binary Internal/Client split.
 - **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, and now triggers an in-app notification when set - but the Planner UI still doesn't expose a way to pick an assignee from the task detail modal; it can only be set via a direct API call.
-- **File uploads** (`multer`, BOQ import, drawing attachments) should be checked for size/type limits and virus scanning if exposed beyond a trusted network.
+- **File uploads** (`multer`, BOQ import) should be checked for file-type restrictions and virus scanning if exposed beyond a trusted network - the size limit itself is now handled (see below).
 - **`alert()` is used for error handling** in a few places (e.g. the Drawing Markup Studio's PDF-load failure message) - functional, but a native blocking browser dialog is a dated pattern for a polished app; an inline error banner would look and behave better, and not incidentally block headless browser automation the way it blocked screenshot testing during this pass.
 - **The Drawing Markup Studio toolbar has three buttons styled with the same "accent" primary-action color** (Sample MEP PDF, Ask Worker AI, Create Snag from Markup) - not wrong, but three simultaneous "primary" actions dilutes which one is actually primary.
 - **Notifications are in-app only** - no email/push/SMS layer. The `createNotification()` helper is a natural place to add an email send (e.g. via `nodemailer`) behind an `SMTP_*` env var check, following the same "works without it, better with it" pattern as `GEMINI_API_KEY` - not built yet.
