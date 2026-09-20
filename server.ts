@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { DatabaseSync } from "node:sqlite";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
+import { createServer as createViteServer } from "vite";
 import { MEP_REFERENCE_KNOWLEDGE, MEP_DEFECT_PATTERNS, suggestFixFallback } from "./mep_brain";
 import { PDFParse } from "pdf-parse";
 import * as mammoth from "mammoth";
@@ -1077,6 +1078,7 @@ function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN last_login TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE sessions ADD COLUMN expires_at TEXT;"); } catch {}
 
   // Publishing/visibility: which records a Client-role user is allowed to
   // see. Defaults to "Internal" (nothing is client-visible until the
