@@ -2,7 +2,20 @@
 // MEP Management Platform — API Client Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const API_BASE = '';
+export function getApiBaseUrl(): string {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl.replace(/\/+$/, '');
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('mep_api_base_url') : null;
+  if (stored) return stored.replace(/\/+$/, '');
+  return '';
+}
+
+export function setApiBaseUrl(url: string) {
+  if (url) localStorage.setItem('mep_api_base_url', url.trim().replace(/\/+$/, ''));
+  else localStorage.removeItem('mep_api_base_url');
+}
+
+export const API_BASE = getApiBaseUrl();
 
 export function getToken(): string | null {
   return localStorage.getItem('mep_token');
@@ -18,7 +31,8 @@ export function clearToken() {
 
 async function request<T>(method: string, path: string, body?: any): Promise<T> {
   const token = getToken();
-  const res = await fetch(API_BASE + path, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(baseUrl + path, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -74,8 +88,11 @@ export const workforceApi = {
 // Attendance
 export const attendanceApi = {
   list: (project_id?: string) => api.get<any[]>(`/api/attendance${project_id ? `?project_id=${project_id}` : ''}`),
+  today: (params?: Record<string, string>) => api.get<any>(`/api/workforce/today${params ? '?' + new URLSearchParams(params).toString() : ''}`),
   punchIn: (data: any) => api.post<any>('/api/attendance/gps-punch-in', data),
+  gpsPunchIn: (data: any) => api.post<any>('/api/attendance/gps-punch-in', data),
   punchOut: (data: any) => api.post<any>('/api/attendance/gps-punch-out', data),
+  gpsPunchOut: (data: any) => api.post<any>('/api/attendance/gps-punch-out', data),
   exceptions: (params?: Record<string, string>) => api.get<any[]>(`/api/attendance/exceptions${params ? '?' + new URLSearchParams(params).toString() : ''}`),
   approveOT: (id: string, action: string) => api.post<any>(`/api/attendance/${id}/overtime-approve`, { action }),
   adjust: (id: string, data: any) => api.post<any>(`/api/attendance/${id}/adjust`, data),
@@ -93,6 +110,8 @@ export const instructionsApi = {
   acknowledge: (id: string, comment?: string) => api.post<any>(`/api/site_instructions/${id}/acknowledge`, { comment }),
   start: (id: string, comment?: string) => api.post<any>(`/api/site_instructions/${id}/start`, { comment }),
   submitEvidence: (id: string, data: any) => api.post<any>(`/api/site_instructions/${id}/evidence`, data),
+  readyForVerification: (id: string, comment?: string) =>
+    api.post<any>(`/api/site_instructions/${id}/evidence`, { comment: comment || 'Ready for verification' }),
   verify: (id: string, action: string, comment?: string) => api.post<any>(`/api/site_instructions/${id}/verify`, { action, comment }),
   close: (id: string, comment?: string) => api.post<any>(`/api/site_instructions/${id}/close`, { comment }),
   updates: (id: string) => api.get<any[]>(`/api/site_instructions/${id}/updates`),
@@ -104,8 +123,10 @@ export const instructionsApi = {
 export const leaveApi = {
   types: () => api.get<any[]>('/api/leave_types'),
   list: (params?: Record<string, string>) => api.get<any[]>(`/api/leave_requests${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  requests: (params?: Record<string, string>) => api.get<any[]>(`/api/leave_requests${params ? '?' + new URLSearchParams(params).toString() : ''}`),
   get: (id: string) => api.get<any>(`/api/leave_requests/${id}`),
   submit: (data: any) => api.post<any>('/api/leave_requests', data),
+  createRequest: (data: any) => api.post<any>('/api/leave_requests', data),
   approve: (id: string) => api.post<any>(`/api/leave_requests/${id}/approve`, {}),
   reject: (id: string, reject_reason: string) => api.post<any>(`/api/leave_requests/${id}/reject`, { reject_reason }),
   balances: (params?: Record<string, string>) => api.get<any[]>(`/api/leave_balances${params ? '?' + new URLSearchParams(params).toString() : ''}`),

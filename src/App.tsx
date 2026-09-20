@@ -13,7 +13,8 @@ import {
   BookOpen, Briefcase, MoreVertical, Check, RotateCcw, Send,
   ThumbsUp, ThumbsDown, Coffee, Plane, Stethoscope, Star,
   ChevronLeft, Upload, Map, Cpu, Package, HardHat, Grid,
-  PieChart, Sun, Moon, ChevronUp, Pin, Image as ImageIcon, CheckSquare, Folder, Trash2
+  PieChart, Sun, Moon, ChevronUp, Pin, Image as ImageIcon, CheckSquare, Folder, Trash2,
+  Smartphone
 } from 'lucide-react';
 import {
   api, authApi, sitesApi, workersApi, workforceApi, attendanceApi,
@@ -23,6 +24,7 @@ import {
 import {
   STATUS_COLORS, PRIORITY_COLORS, GEOFENCE_COLORS, INSTRUCTION_TYPES
 } from './types';
+import { WorkerMobileShell } from './components/WorkerMobileShell';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -267,6 +269,16 @@ function AppShell() {
   const isPayrollRole = ['Admin', 'CommercialManager', 'ProjectManager'].includes(role);
   const isWorkerOnly = role === 'Worker';
   const isSupervisor = role === 'SiteSupervisor';
+  const [workerMobileMode, setWorkerMobileMode] = useState(isWorkerOnly);
+
+  if (isWorkerOnly || workerMobileMode) {
+    return (
+      <WorkerMobileShell
+        onExitMobile={!isWorkerOnly ? () => setWorkerMobileMode(false) : undefined}
+        isWorkerOnly={isWorkerOnly}
+      />
+    );
+  }
 
   const selectedProj = projects.find(p => p.id === selectedProject);
 
@@ -437,6 +449,16 @@ function AppShell() {
             {selectedProj && <p className="text-xs text-gray-400">{selectedProj.name}</p>}
           </div>
           <div className="flex items-center gap-2">
+            {!isWorkerOnly && (
+              <button
+                onClick={() => setWorkerMobileMode(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm"
+                title="Preview Worker Mobile App"
+              >
+                <Smartphone size={14} />
+                <span className="hidden sm:inline">Worker App</span>
+              </button>
+            )}
             <button className="text-gray-400 hover:text-blue-600 transition-colors">
               <Bell size={20} />
             </button>

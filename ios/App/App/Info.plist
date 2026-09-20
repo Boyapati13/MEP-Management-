@@ -66,5 +66,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location is used when you punch in or punch out to confirm that you are at your assigned MEP project site.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is required to take photo evidence for site instructions, inspections, and task progress.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is required to attach site photos and documents.</string>
 </dict>
 </plist>
