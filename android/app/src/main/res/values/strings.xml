@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MEP Management</string>
+    <string name="title_activity_main">MEP Management</string>
+    <string name="package_name">com.mep.management</string>
+    <string name="custom_url_scheme">com.mep.management</string>
+</resources>

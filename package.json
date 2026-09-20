@@ -14,9 +14,17 @@
     "test:migration": "tsx test_migration_suite.ts",
     "test:workforce": "tsx test_workforce_suite.ts",
     "test:all": "tsx test_migration_suite.ts && tsx test_e2e_suite.ts && tsx test_v1_1_suite.ts && tsx test_enterprise_suite.ts && tsx test_workforce_suite.ts",
-    "test": "npm run test:all"
+    "test": "npm run test:all",
+    "mobile:sync": "cap sync",
+    "mobile:android": "cap open android",
+    "mobile:build:android": "cd android && gradlew assembleDebug",
+    "mobile:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",

@@ -355,6 +355,71 @@ These are worth addressing before any production/internet-facing deployment. Ear
 
 **How the visual audit was done:** a real headless-Chrome screenshot pipeline (`puppeteer-core` driving a pre-cached Chrome binary already present in the sandbox), rather than editing HTML/CSS and assuming the result - every fix above was confirmed with a before/after screenshot, not just a passing type-check. Screens inspected: login, dashboard, Projects, Documents, the Drawing Markup Studio, the Punch List, the Gantt chart, RFIs, NCRs, Users & Roles (both tabs), the Planner board, and the AI advisor drawer. The Gantt chart, RFIs, NCRs, and Users & Roles screens were all clean on inspection - no issues found. Not yet inspected: Submittals, Change Orders, Costs, BOQ, the remaining Site & Quality / Closeout module tables, and Attendance/camera-capture flows.
 
+## Workforce, GPS Attendance & Payroll System
+
+The platform includes a complete workforce management lifecycle:
+- **GPS-Geofenced Attendance Clock**: Workers punch in and punch out using high-accuracy device GPS coordinates, verified server-side via the Haversine formula against configured site boundaries.
+- **Site Supervision & Live Manpower**: Supervisors monitor active headcounts, trade breakdowns, and presence in real-time.
+- **Leave & Absence Management**: Multi-tier leave tracking with entitlement balances and manager approval workflows.
+- **Site Instructions & Task Assignment**: 7-stage state machine (`Draft` → `Issued` → `Acknowledged` → `In Progress` → `Pending Verification` → `Completed` → `Closed`) with priority tiers and complete audit logs.
+- **Payroll Automation**: Automated overtime calculations, hourly and salaried worker compensation structures, manager adjustments, and period locking.
+
+## Mobile Applications (Android & iOS)
+
+The application is powered by Capacitor, allowing it to run as a native mobile app on both Android and iOS devices with full access to hardware APIs (GPS, Camera, Storage, Push Notifications).
+
+### 1. Download Pre-built Android APK
+A pre-compiled debug APK is available directly in this repository:
+- **File**: [`release/mep-management.apk`](release/mep-management.apk)
+- **Installation**: Download the APK to any Android device (Android 7.0+ / API 24+) and tap to install (enable "Install unknown apps" in Settings).
+
+### 2. Android Development & Building
+To build or customize the Android application locally:
+```bash
+# Sync web assets to native container
+npm run mobile:sync
+
+# Build debug APK with Gradle (JDK 21 required)
+npm run mobile:build:android
+
+# Or open in Android Studio for emulation and signing
+npm run mobile:android
+```
+The compiled output is placed in `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### 3. iOS Application (macOS + Xcode)
+To run or archive the iOS project:
+```bash
+# Sync web assets
+npm run mobile:sync
+
+# Open Xcode workspace
+npm run mobile:ios
+```
+Inside Xcode:
+1. Select your target device or simulator.
+2. Configure your Apple Developer Team in **Signing & Capabilities**.
+3. Choose **Product > Archive** to build the `.ipa` for TestFlight or App Store distribution.
+
+---
+
+## Web Hosting & Cloud Deployment
+
+### 1. Docker Deployment (Recommended)
+A production multi-stage `Dockerfile` and `docker-compose.yml` are included in the repository.
+
+```bash
+# Build and launch with persistent SQLite volume
+docker compose up -d --build
+```
+The application runs on port `3000` by default. Data is persisted to the `mep_data` named Docker volume.
+
+### 2. Railway / Render / Cloud Deployments
+- **Railway**: The repository includes `railway.toml`. Simply link your GitHub repository to Railway; it will automatically build using the `Dockerfile` and mount a persistent volume at `/data`.
+- **Render / Fly.io**: Create a Web Service pointing to this repository with Docker environment and attach a persistent disk mounted at `/data` with `DATABASE_PATH=/data/mep_pm.db`.
+
+---
+
 ## License
 
 No license file is currently included in this repository. Add a `LICENSE` file (e.g. MIT, Apache-2.0, or a proprietary notice) to clarify usage terms for anyone outside the project.

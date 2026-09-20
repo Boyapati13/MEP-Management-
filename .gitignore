@@ -11,3 +11,14 @@ coverage/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Mobile build artifacts
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+android/captures/
+android/local.properties
+ios/DerivedData/
+ios/Pods/
+ios/.build/
