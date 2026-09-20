@@ -61,19 +61,19 @@ const tempCompanyIds: string[] = [];
 
 async function cleanup(adminToken: string) {
   for (const id of tempUserIds) {
-    await req({ path: `/api/users/${id}`, method: 'DELETE', token: adminToken });
+    try { await req({ path: `/api/users/${id}`, method: 'DELETE', token: adminToken }); } catch {}
   }
   for (const id of tempCompanyIds) {
-    await req({ path: `/api/companies/${id}`, method: 'DELETE', token: adminToken });
+    try { await req({ path: `/api/companies/${id}`, method: 'DELETE', token: adminToken }); } catch {}
   }
   for (const id of tempProjectIds) {
-    await req({ path: `/api/projects/${id}`, method: 'DELETE', token: adminToken });
+    try { await req({ path: `/api/projects/${id}`, method: 'DELETE', token: adminToken }); } catch {}
   }
 }
 
 async function runV11Tests() {
   console.log('===============================================================');
-  console.log('MEP V1.1 MULTI-COMPANY & CONSTRUCTION HIERARCHY TEST SUITE');
+  console.log('MEP V1.1 MULTI-COMPANY & HARDENED SECURITY TEST SUITE');
   console.log('===============================================================\n');
 
   const adminLogin = await req({ path: '/api/login', method: 'POST', body: { username: 'admin', password: 'ChangeMe123!' } });
@@ -95,16 +95,25 @@ async function runV11Tests() {
     const mcCompanyId = mcComp.body?.id;
     if (mcCompanyId) tempCompanyIds.push(mcCompanyId);
 
-    // 2. Create Subcontractor company
+    // 2. Create HVAC Subcontractor company
     const subComp = await req({
       path: '/api/companies', method: 'POST', token: adminToken,
-      body: { name: `ThermoVent Solutions ${RUN_ID}`, type: 'Subcontractor', contact_name: 'Tom HVAC', contact_email: 'tom@thermovent.com', phone: '+353 1 888 9999' }
+      body: { name: `ThermoVent Solutions ${RUN_ID}`, type: 'Subcontractor', trade: 'HVAC', contact_name: 'Tom HVAC', contact_email: 'tom@thermovent.com', phone: '+353 1 888 9999' }
     });
-    assert(subComp.status === 201 && !!subComp.body.id, 'Create Subcontractor company record');
+    assert(subComp.status === 201 && !!subComp.body.id, 'Create Subcontractor company record (HVAC)');
     const subCompanyId = subComp.body?.id;
     if (subCompanyId) tempCompanyIds.push(subCompanyId);
 
-    // 3. Create Client company
+    // 3. Create Electrical Subcontractor company
+    const elecComp = await req({
+      path: '/api/companies', method: 'POST', token: adminToken,
+      body: { name: `VoltTech Electrical ${RUN_ID}`, type: 'Subcontractor', trade: 'Electrical', contact_name: 'Ed Electric', contact_email: 'ed@volttech.com', phone: '+353 1 777 6666' }
+    });
+    assert(elecComp.status === 201 && !!elecComp.body.id, 'Create Subcontractor company record (Electrical)');
+    const elecCompanyId = elecComp.body?.id;
+    if (elecCompanyId) tempCompanyIds.push(elecCompanyId);
+
+    // 4. Create Client company
     const clientComp = await req({
       path: '/api/companies', method: 'POST', token: adminToken,
       body: { name: `National Bank Properties ${RUN_ID}`, type: 'Client', contact_name: 'Sarah Client', contact_email: 'sarah@natbank.com' }
@@ -113,7 +122,16 @@ async function runV11Tests() {
     const clientCompanyId = clientComp.body?.id;
     if (clientCompanyId) tempCompanyIds.push(clientCompanyId);
 
-    // 4. Create Consultant company
+    // 5. Create Second Client company (for Project B)
+    const clientBComp = await req({
+      path: '/api/companies', method: 'POST', token: adminToken,
+      body: { name: `TechCorp Commercial ${RUN_ID}`, type: 'Client', contact_name: 'Bob Client', contact_email: 'bob@techcorp.com' }
+    });
+    assert(clientBComp.status === 201 && !!clientBComp.body.id, 'Create Client B company record');
+    const clientBCompanyId = clientBComp.body?.id;
+    if (clientBCompanyId) tempCompanyIds.push(clientBCompanyId);
+
+    // 6. Create Consultant company
     const consultComp = await req({
       path: '/api/companies', method: 'POST', token: adminToken,
       body: { name: `Arup MEP Consultants ${RUN_ID}`, type: 'Consultant', contact_name: 'David Engineer', contact_email: 'david@arup.com' }
@@ -124,35 +142,60 @@ async function runV11Tests() {
 
     // List companies
     const listComp = await req({ path: '/api/companies', token: adminToken });
-    assert(listComp.status === 200 && listComp.body.length >= 4, 'List all companies');
+    assert(listComp.status === 200 && listComp.body.length >= 6, 'List all companies');
 
     console.log('\n--- Test Group 2: Projects & Participating Companies ---');
-    // Create Bank Branch Refurbishment Project
-    const proj = await req({
+    // Create Project A: Bank Branch Refurbishment
+    const projA = await req({
       path: '/api/projects', method: 'POST', token: adminToken,
       body: { name: `Bank Branch Refurbishment ${RUN_ID}`, client: 'National Bank Properties', status: 'Active', start_date: '2026-10-01', end_date: '2027-04-30', budget: 1250000 }
     });
-    assert(proj.status === 201 && !!proj.body.id, 'Create Bank Branch Refurbishment project');
-    const projectId = proj.body?.id;
+    assert(projA.status === 201 && !!projA.body.id, 'Create Project A (Bank Branch)');
+    const projectId = projA.body?.id;
     if (projectId) tempProjectIds.push(projectId);
 
-    // Add Participating Companies
-    const addMcToProj = await req({
+    // Create Project B: TechCorp Data Center (for multi-tenant isolation testing)
+    const projB = await req({
+      path: '/api/projects', method: 'POST', token: adminToken,
+      body: { name: `TechCorp Regional Data Center ${RUN_ID}`, client: 'TechCorp Commercial', status: 'Active', start_date: '2026-11-01', end_date: '2027-08-30', budget: 4500000 }
+    });
+    assert(projB.status === 201 && !!projB.body.id, 'Create Project B (Data Center)');
+    const projectBId = projB.body?.id;
+    if (projectBId) tempProjectIds.push(projectBId);
+
+    // Add Participating Companies to Project A
+    await req({
       path: `/api/projects/${projectId}/companies`, method: 'POST', token: adminToken,
       body: { company_id: mcCompanyId, role_in_project: 'Main Contractor' }
     });
-    assert(addMcToProj.status === 201, 'Associate Main Contractor company to project');
-
-    const addSubToProj = await req({
+    await req({
       path: `/api/projects/${projectId}/companies`, method: 'POST', token: adminToken,
       body: { company_id: subCompanyId, role_in_project: 'Subcontractor' }
     });
-    assert(addSubToProj.status === 201, 'Associate Subcontractor company to project');
+    await req({
+      path: `/api/projects/${projectId}/companies`, method: 'POST', token: adminToken,
+      body: { company_id: elecCompanyId, role_in_project: 'Subcontractor' }
+    });
+    await req({
+      path: `/api/projects/${projectId}/companies`, method: 'POST', token: adminToken,
+      body: { company_id: clientCompanyId, role_in_project: 'Client' }
+    });
 
-    const projCompanies = await req({ path: `/api/projects/${projectId}/companies`, token: adminToken });
-    assert(projCompanies.status === 200 && projCompanies.body.length === 2, 'Verify project participating companies list');
+    // Add Participating Companies to Project B
+    await req({
+      path: `/api/projects/${projectBId}/companies`, method: 'POST', token: adminToken,
+      body: { company_id: mcCompanyId, role_in_project: 'Main Contractor' }
+    });
+    await req({
+      path: `/api/projects/${projectBId}/companies`, method: 'POST', token: adminToken,
+      body: { company_id: clientBCompanyId, role_in_project: 'Client' }
+    });
+
+    const projACompanies = await req({ path: `/api/projects/${projectId}/companies`, token: adminToken });
+    assert(projACompanies.status === 200 && projACompanies.body.length === 4, 'Verify Project A participating companies list (4 companies)');
 
     console.log('\n--- Test Group 3: Work Packages ---');
+    // 1. HVAC Package on Project A
     const hvacPackage = await req({
       path: '/api/work_packages', method: 'POST', token: adminToken,
       body: {
@@ -168,14 +211,30 @@ async function runV11Tests() {
         status: 'Active'
       }
     });
-    assert(hvacPackage.status === 201 && !!hvacPackage.body.id, 'Create HVAC Work Package assigned to Subcontractor company');
+    assert(hvacPackage.status === 201 && !!hvacPackage.body.id, 'Create HVAC Work Package assigned to ThermoVent');
     const hvacPackageId = hvacPackage.body?.id;
 
-    const listWp = await req({ path: `/api/work_packages?project_id=${projectId}`, token: adminToken });
-    assert(listWp.status === 200 && listWp.body.length === 1 && listWp.body[0].code === 'WP-HVAC-01', 'Retrieve Work Packages for project');
+    // 2. Electrical Package on Project A
+    const elecPackage = await req({
+      path: '/api/work_packages', method: 'POST', token: adminToken,
+      body: {
+        project_id: projectId,
+        code: 'WP-ELEC-01',
+        name: 'Electrical Distribution & Containment',
+        discipline: 'Electrical',
+        scope_description: 'Cable trays, distribution boards, primary feeds, and sub-circuits.',
+        company_id: elecCompanyId,
+        planned_start: '2026-10-20',
+        planned_end: '2027-02-15',
+        contract_value: 290000,
+        status: 'Active'
+      }
+    });
+    assert(elecPackage.status === 201 && !!elecPackage.body.id, 'Create Electrical Work Package assigned to VoltTech');
+    const elecPackageId = elecPackage.body?.id;
 
     console.log('\n--- Test Group 4: Users with Company & Work Package Assignment ---');
-    // Subcontractor User
+    // 1. Subcontractor User - HVAC
     const subUsername = `hvac_lead_${RUN_ID}`;
     const subPassword = `Hvac${RUN_ID}!pw`;
     const createSubUser = await req({
@@ -187,18 +246,66 @@ async function runV11Tests() {
         role: 'Subcontractor',
         company_id: subCompanyId,
         work_package_id: hvacPackageId,
+        trade: 'HVAC',
         project_ids: [projectId]
       }
     });
-    assert(createSubUser.status === 201 && !!createSubUser.body.id, 'Create Subcontractor user linked to Company & Work Package');
+    assert(createSubUser.status === 201 && !!createSubUser.body.id, 'Create HVAC Subcontractor user');
     const subUserId = createSubUser.body?.id;
     if (subUserId) tempUserIds.push(subUserId);
 
     const subLogin = await req({ path: '/api/login', method: 'POST', body: { username: subUsername, password: subPassword } });
-    assert(subLogin.status === 200 && !!subLogin.body.token, 'Log in as Subcontractor linked user');
+    assert(subLogin.status === 200 && !!subLogin.body.token, 'Log in as HVAC Subcontractor');
     const subToken = subLogin.body?.token;
 
-    // Client User
+    // 2. Subcontractor User - Electrical
+    const elecUsername = `elec_lead_${RUN_ID}`;
+    const elecPassword = `Elec${RUN_ID}!pw`;
+    const createElecUser = await req({
+      path: '/api/users', method: 'POST', token: adminToken,
+      body: {
+        username: elecUsername,
+        name: 'Ed Electrical Specialist',
+        password: elecPassword,
+        role: 'Subcontractor',
+        company_id: elecCompanyId,
+        work_package_id: elecPackageId,
+        trade: 'Electrical',
+        project_ids: [projectId]
+      }
+    });
+    assert(createElecUser.status === 201 && !!createElecUser.body.id, 'Create Electrical Subcontractor user');
+    const elecUserId = createElecUser.body?.id;
+    if (elecUserId) tempUserIds.push(elecUserId);
+
+    const elecLogin = await req({ path: '/api/login', method: 'POST', body: { username: elecUsername, password: elecPassword } });
+    assert(elecLogin.status === 200 && !!elecLogin.body.token, 'Log in as Electrical Subcontractor');
+    const elecToken = elecLogin.body?.token;
+
+    // 3. Unassigned User - Same Electrical Company, but NO project membership on Project A
+    const unassignedUsername = `unassigned_elec_${RUN_ID}`;
+    const unassignedPassword = `Unassigned${RUN_ID}!pw`;
+    const createUnassignedUser = await req({
+      path: '/api/users', method: 'POST', token: adminToken,
+      body: {
+        username: unassignedUsername,
+        name: 'Unassigned Electrical Tech',
+        password: unassignedPassword,
+        role: 'Subcontractor',
+        company_id: elecCompanyId,
+        trade: 'Electrical',
+        project_ids: [] // Deliberately NOT assigned to Project A
+      }
+    });
+    assert(createUnassignedUser.status === 201 && !!createUnassignedUser.body.id, 'Create Unassigned user in Electrical company without project membership');
+    const unassignedUserId = createUnassignedUser.body?.id;
+    if (unassignedUserId) tempUserIds.push(unassignedUserId);
+
+    const unassignedLogin = await req({ path: '/api/login', method: 'POST', body: { username: unassignedUsername, password: unassignedPassword } });
+    assert(unassignedLogin.status === 200 && !!unassignedLogin.body.token, 'Log in as Unassigned user');
+    const unassignedToken = unassignedLogin.body?.token;
+
+    // 4. Client A User (Assigned to Project A)
     const clientUsername = `client_rep_${RUN_ID}`;
     const clientPassword = `Client${RUN_ID}!pw`;
     const createClientUser = await req({
@@ -212,15 +319,37 @@ async function runV11Tests() {
         project_ids: [projectId]
       }
     });
-    assert(createClientUser.status === 201 && !!createClientUser.body.id, 'Create Client user linked to Client Company');
+    assert(createClientUser.status === 201 && !!createClientUser.body.id, 'Create Client A user linked to Project A');
     const clientUserId = createClientUser.body?.id;
     if (clientUserId) tempUserIds.push(clientUserId);
 
     const clientLogin = await req({ path: '/api/login', method: 'POST', body: { username: clientUsername, password: clientPassword } });
-    assert(clientLogin.status === 200 && !!clientLogin.body.token, 'Log in as Client linked user');
+    assert(clientLogin.status === 200 && !!clientLogin.body.token, 'Log in as Client A');
     const clientToken = clientLogin.body?.token;
 
-    // PM User
+    // 5. Client B User (Assigned exclusively to Project B)
+    const clientBUsername = `client_b_${RUN_ID}`;
+    const clientBPassword = `ClientB${RUN_ID}!pw`;
+    const createClientBUser = await req({
+      path: '/api/users', method: 'POST', token: adminToken,
+      body: {
+        username: clientBUsername,
+        name: 'Bob TechCorp Client Rep',
+        password: clientBPassword,
+        role: 'Client',
+        company_id: clientBCompanyId,
+        project_ids: [projectBId] // Exclusively Project B
+      }
+    });
+    assert(createClientBUser.status === 201 && !!createClientBUser.body.id, 'Create Client B user assigned exclusively to Project B');
+    const clientBUserId = createClientBUser.body?.id;
+    if (clientBUserId) tempUserIds.push(clientBUserId);
+
+    const clientBLogin = await req({ path: '/api/login', method: 'POST', body: { username: clientBUsername, password: clientBPassword } });
+    assert(clientBLogin.status === 200 && !!clientBLogin.body.token, 'Log in as Client B');
+    const clientBToken = clientBLogin.body?.token;
+
+    // 6. PM User (Assigned to Project A & Project B)
     const pmUsername = `pm_user_${RUN_ID}`;
     const pmPassword = `Pm${RUN_ID}!pw`;
     const createPmUser = await req({
@@ -231,7 +360,7 @@ async function runV11Tests() {
         password: pmPassword,
         role: 'ProjectManager',
         company_id: mcCompanyId,
-        project_ids: [projectId]
+        project_ids: [projectId, projectBId]
       }
     });
     assert(createPmUser.status === 201 && !!createPmUser.body.id, 'Create Project Manager user');
@@ -359,6 +488,176 @@ async function runV11Tests() {
       }
     });
     assert(transmittalRes.status === 201 && !!transmittalRes.body.id, 'PM issues a Transmittal record');
+
+    console.log('\n--- Test Group 9: Strict Cross-Trade & Work Package Isolation (P0) ---');
+    // HVAC subcontractor creates an HVAC task
+    const hvacTaskRes = await req({
+      path: '/api/tasks', method: 'POST', token: subToken,
+      body: {
+        project_id: projectId,
+        title: `Install AHU-01 Primary Ductwork ${RUN_ID}`,
+        trade: 'HVAC',
+        start: '2026-10-15',
+        end: '2026-11-15',
+        status: 'In Progress',
+        progress: 40,
+        work_package_id: hvacPackageId,
+        company_id: subCompanyId
+      }
+    });
+    assert(hvacTaskRes.status === 201 && !!hvacTaskRes.body.id, 'HVAC subcontractor creates HVAC task under WP-HVAC-01');
+    const hvacTaskId = hvacTaskRes.body?.id;
+
+    // 1. Cross-trade read isolation: Electrical user CANNOT see the HVAC task in task list
+    const elecTasks = await req({ path: `/api/tasks?project_id=${projectId}`, token: elecToken });
+    const hasHvacTask = Array.isArray(elecTasks.body) && elecTasks.body.some((t: any) => t.id === hvacTaskId);
+    assert(!hasHvacTask, 'Electrical user CANNOT view HVAC tasks in /api/tasks query');
+
+    // 2. Cross-trade update isolation: Electrical user receives 403 on PUT
+    const putHvacTask = await req({
+      path: `/api/tasks/${hvacTaskId}`, method: 'PUT', token: elecToken,
+      body: { title: 'Tampered by Electrical Specialist' }
+    });
+    assert(putHvacTask.status === 403, 'Electrical user receives 403 Forbidden when attempting to update HVAC task');
+
+    // 3. Cross-trade creation isolation: Electrical user receives 403 when trying to create a task bound to HVAC package
+    const postForeignWpTask = await req({
+      path: '/api/tasks', method: 'POST', token: elecToken,
+      body: {
+        project_id: projectId,
+        title: 'Tampered task targeting HVAC package',
+        work_package_id: hvacPackageId,
+        trade: 'HVAC'
+      }
+    });
+    assert(postForeignWpTask.status === 403, 'Electrical user receives 403 Forbidden when attempting to POST record under HVAC work package');
+
+    // 4. Cross-trade workflow transition isolation: Electrical user receives 403 on transition
+    const transForeignTask = await req({
+      path: `/api/tasks/${hvacTaskId}/transition`, method: 'POST', token: elecToken,
+      body: { status: 'Completed' }
+    });
+    assert(transForeignTask.status === 403, 'Electrical user receives 403 Forbidden when attempting to transition HVAC task');
+
+    // Create an HVAC punchlist item with controlled workflow
+    const hvacPunchRes = await req({
+      path: '/api/punchlist', method: 'POST', token: subToken,
+      body: {
+        project_id: projectId,
+        item: `Damper actuator wiring incomplete ${RUN_ID}`,
+        work_package_id: hvacPackageId,
+        company_id: subCompanyId,
+        status: 'Open'
+      }
+    });
+    assert(hvacPunchRes.status === 201 && !!hvacPunchRes.body.id, 'HVAC subcontractor creates punchlist item');
+    const hvacPunchId = hvacPunchRes.body?.id;
+
+    const transForeignPunch = await req({
+      path: `/api/punchlist/${hvacPunchId}/transition`, method: 'POST', token: elecToken,
+      body: { status: 'In Progress' }
+    });
+    assert(transForeignPunch.status === 403, 'Electrical user receives 403 Forbidden when attempting to transition HVAC punchlist item');
+
+    // 5. Cross-trade delete isolation: Electrical user receives 403 on DELETE
+    const deleteForeignTask = await req({
+      path: `/api/tasks/${hvacTaskId}`, method: 'DELETE', token: elecToken
+    });
+    assert(deleteForeignTask.status === 403, 'Electrical user receives 403 Forbidden when attempting to delete HVAC task');
+
+    console.log('\n--- Test Group 10: Subcontractor Progress Submission Isolation (P0) ---');
+    // 1. Electrical user cannot see HVAC progress submissions
+    const elecSubmissions = await req({ path: `/api/progress_submissions?project_id=${projectId}`, token: elecToken });
+    const hasHvacClaim = Array.isArray(elecSubmissions.body) && elecSubmissions.body.some((ps: any) => ps.id === claimId);
+    assert(!hasHvacClaim, 'Electrical user CANNOT view HVAC progress submissions in /api/progress_submissions');
+
+    // 2. Electrical user receives 403 when submitting progress against HVAC work package
+    const postForeignClaim = await req({
+      path: '/api/progress_submissions', method: 'POST', token: elecToken,
+      body: {
+        project_id: projectId,
+        work_package_id: hvacPackageId,
+        period_date: '2026-11-30',
+        claimed_percentage: 50
+      }
+    });
+    assert(postForeignClaim.status === 403, 'Electrical user receives 403 Forbidden when submitting progress against HVAC work package');
+
+    console.log('\n--- Test Group 11: Multi-Project & Client Isolation (P0/P1) ---');
+    // Client A attempting to access Project B
+    const clientAOnProjB = await req({ path: `/api/projects/${projectBId}/client-summary`, token: clientToken });
+    assert(clientAOnProjB.status === 403, 'Client A receives 403 Forbidden when accessing Project B client summary');
+
+    const clientADocsOnProjB = await req({ path: `/api/documents?project_id=${projectBId}`, token: clientToken });
+    assert(clientADocsOnProjB.status === 403, 'Client A receives 403 Forbidden when accessing documents from Project B');
+
+    console.log('\n--- Test Group 12: Explicit Individual Membership Enforcement (P0) ---');
+    // Unassigned user in VoltTech (participating company in Project A) has NO individual project membership
+    const unassignedTasks = await req({ path: `/api/tasks?project_id=${projectId}`, token: unassignedToken });
+    assert(unassignedTasks.status === 403, 'Unassigned same-company user receives 403 without explicit individual membership');
+
+    console.log('\n--- Test Group 13: Work Packages & Company Directory Boundaries (P1) ---');
+    // 1. Client cannot query work packages
+    const clientWp = await req({ path: `/api/work_packages?project_id=${projectId}`, token: clientToken });
+    assert(clientWp.status === 403, 'Client receives 403 Forbidden when accessing internal work packages endpoint');
+
+    // 2. Client cannot query project companies directory
+    const clientCompanies = await req({ path: `/api/projects/${projectId}/companies`, token: clientToken });
+    assert(clientCompanies.status === 403, 'Client receives 403 Forbidden when accessing project companies directory');
+
+    // 3. Subcontractor cannot query project companies directory
+    const subCompanies = await req({ path: `/api/projects/${projectId}/companies`, token: subToken });
+    assert(subCompanies.status === 403, 'Subcontractor receives 403 Forbidden when accessing project companies directory');
+
+    console.log('\n--- Test Group 14: Client Progress Leakage Prevention (P1) ---');
+    // Create an internal task on Project B (85% progress)
+    await req({
+      path: '/api/tasks', method: 'POST', token: adminToken,
+      body: {
+        project_id: projectBId,
+        title: 'Project B Internal Commissioning Task',
+        progress: 85,
+        status: 'In Progress',
+        start: '2026-11-01',
+        end: '2026-12-01'
+      }
+    });
+
+    // Client B requests client summary on Project B where NO progress report has been published
+    const clientBSummary = await req({ path: `/api/projects/${projectBId}/client-summary`, token: clientBToken });
+    assert(
+      clientBSummary.status === 200 &&
+      clientBSummary.body?.overall_progress === null &&
+      clientBSummary.body?.progress_status === 'Progress not yet published',
+      'Client summary reports null progress ("Progress not yet published") without falling back to internal tasks'
+    );
+
+    console.log('\n--- Test Group 15: Firebase Auth Hardening (P0) ---');
+    // 1. Plain unauthenticated firebase_uid payload is rejected with 401
+    const fakeFirebaseReq = await req({
+      path: '/api/firebase-auth-login', method: 'POST',
+      body: { firebase_uid: 'attacker_fake_uid_999' }
+    });
+    assert(fakeFirebaseReq.status === 401, 'POST /api/firebase-auth-login strictly rejects raw unauthenticated firebase_uid with 401');
+
+    // 2. Forged/invalid JWT token is rejected with 401
+    const invalidTokenReq = await req({
+      path: '/api/firebase-auth-login', method: 'POST',
+      body: { id_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwicm9sZSI6IkFkbWluIn0.signature' }
+    });
+    assert(invalidTokenReq.status === 401, 'POST /api/firebase-auth-login rejects unregistered/invalid token identity with 401');
+
+    console.log('\n--- Test Group 16: Instant Session Revocation on User Deactivation (P1) ---');
+    // Deactivate electrical user
+    const deactivateRes = await req({
+      path: `/api/users/${elecUserId}`, method: 'PUT', token: adminToken,
+      body: { status: 'Inactive' }
+    });
+    assert(deactivateRes.status === 200 && deactivateRes.body?.status === 'Inactive', 'Admin deactivates electrical user');
+
+    // Electrical user's next request with existing session token MUST immediately be rejected with 401!
+    const revokedReq = await req({ path: `/api/tasks?project_id=${projectId}`, token: elecToken });
+    assert(revokedReq.status === 401, 'Deactivated user session token is immediately revoked with 401 on subsequent request');
 
   } finally {
     await cleanup(adminToken);

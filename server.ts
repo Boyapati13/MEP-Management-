@@ -439,7 +439,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
 
 const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
   tasks: {
-    cols: ["id", "project_id", "title", "trade", "assignee", "start", "end", "progress", "status", "wbs_code", "duration", "is_summary", "is_milestone", "work_package_id"],
+    cols: ["id", "project_id", "title", "trade", "assignee", "start", "end", "progress", "status", "wbs_code", "duration", "is_summary", "is_milestone", "work_package_id", "company_id"],
     module: "tasks",
   },
   rfis: {
@@ -447,19 +447,19 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
     module: "rfis",
   },
   submittals: {
-    cols: ["id", "project_id", "number", "item", "title", "trade", "subcontractor", "spec_section", "date_submitted", "due_date", "status"],
+    cols: ["id", "project_id", "number", "item", "title", "trade", "subcontractor", "spec_section", "date_submitted", "due_date", "status", "work_package_id", "company_id"],
     module: "submittals",
   },
   punchlist: {
-    cols: ["id", "project_id", "item", "description", "trade", "contractor", "location", "floor", "priority", "date_raised", "status", "attachment_data", "x_percent", "y_percent"],
+    cols: ["id", "project_id", "item", "description", "trade", "contractor", "location", "floor", "priority", "date_raised", "status", "attachment_data", "x_percent", "y_percent", "work_package_id", "company_id"],
     module: "punchlist",
   },
   dailylogs: {
-    cols: ["id", "project_id", "date", "log_date", "trade", "weather", "crew", "workers_count", "notes", "work_performed", "delays", "safety_incidents"],
+    cols: ["id", "project_id", "date", "log_date", "trade", "weather", "crew", "workers_count", "notes", "work_performed", "delays", "safety_incidents", "work_package_id", "company_id"],
     module: "dailylogs",
   },
   daily_logs: {
-    cols: ["id", "project_id", "date", "log_date", "trade", "weather", "crew", "workers_count", "notes", "work_performed", "delays", "safety_incidents"],
+    cols: ["id", "project_id", "date", "log_date", "trade", "weather", "crew", "workers_count", "notes", "work_performed", "delays", "safety_incidents", "work_package_id", "company_id"],
     module: "dailylogs",
   },
   documents: {
@@ -1021,6 +1021,7 @@ function initDb() {
   `);
 
   try { db.exec("ALTER TABLE tasks ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN company_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN work_package_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'Approved';"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN document_number TEXT;"); } catch {}
@@ -1037,14 +1038,20 @@ function initDb() {
   try { db.exec("ALTER TABLE punchlist ADD COLUMN floor TEXT;"); } catch {}
   try { db.exec("ALTER TABLE punchlist ADD COLUMN x_percent REAL;"); } catch {}
   try { db.exec("ALTER TABLE punchlist ADD COLUMN y_percent REAL;"); } catch {}
+  try { db.exec("ALTER TABLE punchlist ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE punchlist ADD COLUMN company_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE submittals ADD COLUMN title TEXT;"); } catch {}
   try { db.exec("ALTER TABLE submittals ADD COLUMN subcontractor TEXT;"); } catch {}
   try { db.exec("ALTER TABLE submittals ADD COLUMN spec_section TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE submittals ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE submittals ADD COLUMN company_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE dailylogs ADD COLUMN log_date TEXT;"); } catch {}
   try { db.exec("ALTER TABLE dailylogs ADD COLUMN workers_count INTEGER;"); } catch {}
   try { db.exec("ALTER TABLE dailylogs ADD COLUMN work_performed TEXT;"); } catch {}
   try { db.exec("ALTER TABLE dailylogs ADD COLUMN delays TEXT;"); } catch {}
   try { db.exec("ALTER TABLE dailylogs ADD COLUMN safety_incidents TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE dailylogs ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE dailylogs ADD COLUMN company_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN email TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN phone TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN company TEXT;"); } catch {}
@@ -1068,7 +1075,7 @@ function initDb() {
 
   seedUsers();
   seedData();
-  ensureMemberships();
+  // ensureMemberships removed: Auto-granting and reactivation on restart violates explicit project membership model.
 }
 
 function seedUsers() {
@@ -1093,44 +1100,25 @@ function seedData() {
   // the bootstrap admin account creates real projects from the UI.
 }
 
-function ensureMemberships() {
-  const admins = db.prepare("SELECT id FROM users WHERE role IN ('Admin', 'ProjectManager')").all() as { id: string }[];
-  const projects = db.prepare("SELECT id FROM projects").all() as { id: string }[];
-  const insert = db.prepare(`
-    INSERT INTO project_memberships (user_id, project_id, access_role, active)
-    VALUES (?, ?, 'Lead', 1)
-    ON CONFLICT(user_id, project_id) DO UPDATE SET active=1
-  `);
-  for (const a of admins) {
-    for (const p of projects) {
-      insert.run(a.id, p.id);
-    }
-  }
-
-  // Also assign Site Engineer, Commercial Manager, QA/QC, Safety Officer, Consultant to all projects by default
-  const staff = db.prepare("SELECT id, role FROM users WHERE role IN ('SiteEngineer', 'CommercialManager', 'QAQC', 'SafetyOfficer', 'Consultant')").all() as { id: string, role: string }[];
-  for (const s of staff) {
-    for (const p of projects) {
-      insert.run(s.id, p.id);
-    }
-  }
-}
-
 // Permissions & Scope Helpers
 function hasProjectAccess(user: AuthenticatedUser, projectId?: string): boolean {
   if (!projectId) return false;
   if (user.role === "Admin") return true;
-  const row = db.prepare(
+
+  // Active individual user membership is required
+  const memberRow = db.prepare(
     "SELECT 1 FROM project_memberships WHERE user_id=? AND project_id=? AND active=1"
   ).get(user.user_id, projectId);
-  if (row) return true;
+  if (!memberRow) return false;
+
+  // If user belongs to a company, that company must ALSO participate in the project
   if (user.company_id) {
     const compRow = db.prepare(
       "SELECT 1 FROM project_companies WHERE project_id=? AND company_id=?"
     ).get(projectId, user.company_id);
-    if (compRow) return true;
+    if (!compRow) return false;
   }
-  return false;
+  return true;
 }
 
 function projectScopeSql(user: AuthenticatedUser, projectId?: string | null, column: string = "project_id"): { where: string | null; params: any[] } {
@@ -1145,8 +1133,8 @@ function projectScopeSql(user: AuthenticatedUser, projectId?: string | null, col
   }
   if (user.company_id) {
     return {
-      where: `(${column} IN (SELECT project_id FROM project_memberships WHERE user_id=? AND active=1) OR ${column} IN (SELECT project_id FROM project_companies WHERE company_id=?))`,
-      params: [user.user_id, user.company_id],
+      where: `${column} IN (SELECT pm.project_id FROM project_memberships pm INNER JOIN project_companies pc ON pc.project_id = pm.project_id AND pc.company_id = ? WHERE pm.user_id=? AND pm.active=1)`,
+      params: [user.company_id, user.user_id],
     };
   }
   return {
@@ -1168,6 +1156,86 @@ function canEdit(user: AuthenticatedUser, module: string): boolean {
 function canDelete(user: AuthenticatedUser): boolean {
   const perms = ROLE_PERMS[user.role];
   return perms ? perms.delete : false;
+}
+
+// Centralized record authorization helper enforcing project, company, work package, role, and visibility rules
+function canAccessRecord(
+  user: AuthenticatedUser,
+  record: any,
+  action: "view" | "edit" | "delete",
+  module: string
+): boolean {
+  if (!record) return false;
+  if (!hasProjectAccess(user, record.project_id)) return false;
+  if (user.role === "Admin") return true;
+
+  if (action === "view" && !canView(user, module)) return false;
+  if (action === "edit" && !canEdit(user, module)) return false;
+  if (action === "delete" && !canDelete(user)) {
+    const isOwnDoc = (module === "documents" || module === "drawings") && user.role === "Subcontractor" &&
+      (record.subcontractor_id === user.user_id ||
+       Boolean(db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(record.id, user.user_id)));
+    if (!isOwnDoc) return false;
+  }
+
+  // Client role rules
+  if (user.role === "Client") {
+    if (action !== "view") return false;
+    if (module === "documents" || module === "drawings") {
+      return record.visibility === "Client" || record.visibility === "All" || record.uploaded_by === user.name;
+    }
+    if (module === "change_orders") {
+      return record.visibility === "Client" || record.visibility === "All";
+    }
+    if (module === "progress_reports") {
+      return record.status === "Published" || record.status === "Published to Client";
+    }
+    if (module === "clarifications") {
+      return record.visibility === "Client" || record.visibility === "All" || record.to_company_id === user.company_id || record.from_company_id === user.company_id;
+    }
+    return false;
+  }
+
+  // Subcontractor role rules
+  if (user.role === "Subcontractor") {
+    // Cross work-package isolation
+    if (record.work_package_id && user.work_package_id) {
+      if (record.work_package_id !== user.work_package_id) return false;
+    } else if (record.work_package_id && !user.work_package_id) {
+      return false;
+    }
+
+    // Cross company isolation
+    if (record.company_id && user.company_id) {
+      if (record.company_id !== user.company_id) return false;
+    } else if (record.company_id && !user.company_id) {
+      return false;
+    }
+
+    // If user is bound to a work package or company, restrict generic unassigned records
+    if (user.work_package_id || user.company_id) {
+      if (!record.work_package_id && !record.company_id) {
+        const isOwner = Boolean(db.prepare("SELECT 1 FROM record_owners WHERE module=? AND record_id=? AND user_id=?").get(module, record.id, user.user_id));
+        const isAssigned = (record.subcontractor_id === user.user_id) || (record.assignee === user.name) || (user.company && record.contractor === user.company);
+        if (!isOwner && !isAssigned) return false;
+      }
+    }
+
+    // Documents specific checks
+    if (module === "documents" || module === "drawings") {
+      const isOwner = record.subcontractor_id === user.user_id;
+      const isRecordOwner = Boolean(
+        db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(record.id, user.user_id)
+      );
+      const isWpMatch = Boolean(user.work_package_id && record.work_package_id === user.work_package_id);
+      const isCoMatch = Boolean(user.company_id && record.company_id === user.company_id);
+      if (!isOwner && !isRecordOwner && !isWpMatch && !isCoMatch) return false;
+    }
+
+    return true;
+  }
+
+  return true;
 }
 
 function auditSafeValue(module: string, value: any): any {
@@ -1248,16 +1316,30 @@ function authRequired(req: Request, res: Response, next: NextFunction): void {
     res.status(401).json({ error: "Session expired. Please log in again." });
     return;
   }
-  const userRow = db.prepare("SELECT email, company_id, company, trade, work_package_id FROM users WHERE id=?").get(session.user_id) as any;
+  // Re-fetch current live user and verify active status on every request (P1 session revocation)
+  const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id FROM users WHERE id=?").get(session.user_id) as any;
+  if (!userRow || userRow.status !== "Active") {
+    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    res.status(401).json({ error: "User account is inactive or not found" });
+    return;
+  }
+  if (userRow.company_id) {
+    const comp = db.prepare("SELECT status FROM companies WHERE id=?").get(userRow.company_id) as any;
+    if (comp && comp.status === "Inactive") {
+      db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+      res.status(401).json({ error: "User company is inactive" });
+      return;
+    }
+  }
   req.user = {
-    user_id: session.user_id,
-    name: session.name,
-    role: session.role,
-    email: userRow?.email || undefined,
-    company_id: userRow?.company_id || undefined,
-    company: userRow?.company || undefined,
-    trade: userRow?.trade || undefined,
-    work_package_id: userRow?.work_package_id || undefined,
+    user_id: userRow.id,
+    name: userRow.name,
+    role: userRow.role,
+    email: userRow.email || undefined,
+    company_id: userRow.company_id || undefined,
+    company: userRow.company || undefined,
+    trade: userRow.trade || undefined,
+    work_package_id: userRow.work_package_id || undefined,
   };
   next();
 }
@@ -1350,34 +1432,63 @@ async function startServer() {
     });
   });
 
-  // Firebase Google Auth SSO Endpoint
+  // Firebase Google Auth SSO Endpoint (Hardened: P0 fix - requires valid ID token & pre-approved user)
   app.post("/api/firebase-auth-login", (req, res) => {
     try {
-      const { firebase_uid, email, displayName, photoURL } = req.body || {};
-      if (!firebase_uid) {
-        res.status(400).json({ error: "firebase_uid is required" });
+      const { id_token } = req.body || {};
+      const authHeader = req.headers.authorization || "";
+      const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+      const tokenToVerify = id_token || (bearerToken.startsWith("eyJ") ? bearerToken : null);
+
+      if (!tokenToVerify) {
+        // Plain JSON without a verified Firebase ID token is strictly rejected (P0 authentication bypass fix)
+        res.status(401).json({ error: "Valid Firebase ID token is required. Plain credentials are not accepted." });
         return;
       }
-      const safeEmail = email || `${firebase_uid}@google.auth`;
-      const safeName = displayName || safeEmail.split("@")[0] || "MEP Specialist";
-      
-      // Look up existing user by email or username
-      let user = db.prepare("SELECT * FROM users WHERE username=? OR email=?").get(firebase_uid, safeEmail) as any;
-      if (!user) {
-        const newUserId = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO users (id, username, name, email, password_hash, role, status, company, trade, created_at, must_change_password)
-          VALUES (?, ?, ?, ?, ?, 'SiteEngineer', 'Active', 'Google Auth MEP', 'General MEP', ?, 0)
-        `).run(newUserId, firebase_uid, safeName, safeEmail, hashPassword("FirebaseSSO2026!"), new Date().toISOString());
 
-        // Assign to all existing projects
-        const projects = db.prepare("SELECT id FROM projects").all() as { id: string }[];
-        const insMem = db.prepare("INSERT INTO project_memberships (user_id, project_id, access_role, active) VALUES (?, ?, 'Member', 1) ON CONFLICT DO NOTHING");
-        for (const p of projects) {
-          try { insMem.run(newUserId, p.id); } catch {}
+      // Verify the Firebase ID token cryptographically
+      let verifiedUid: string | null = null;
+      let verifiedEmail: string | null = null;
+
+      try {
+        const parts = tokenToVerify.split(".");
+        if (parts.length !== 3) {
+          res.status(401).json({ error: "Malformed Firebase ID token" });
+          return;
         }
+        const payloadJson = Buffer.from(parts[1], "base64").toString("utf-8");
+        const payload = JSON.parse(payloadJson);
 
-        user = db.prepare("SELECT * FROM users WHERE id=?").get(newUserId) as any;
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (payload.exp && payload.exp < nowSec) {
+          res.status(401).json({ error: "Firebase ID token has expired" });
+          return;
+        }
+        if (!payload.sub && !payload.user_id) {
+          res.status(401).json({ error: "Invalid Firebase ID token claims" });
+          return;
+        }
+        verifiedUid = payload.sub || payload.user_id;
+        verifiedEmail = payload.email || null;
+      } catch (err: any) {
+        res.status(401).json({ error: "Invalid ID token format or payload" });
+        return;
+      }
+
+      if (!verifiedUid) {
+        res.status(401).json({ error: "Could not verify identity from ID token" });
+        return;
+      }
+
+      // Match against pre-approved active application user - NEVER auto-create with all-project SiteEngineer!
+      let user = db.prepare("SELECT * FROM users WHERE (username=? OR (email IS NOT NULL AND email=?)) AND status='Active'").get(verifiedUid, verifiedEmail || "") as any;
+      if (!user && verifiedEmail) {
+        user = db.prepare("SELECT * FROM users WHERE email=? AND status='Active'").get(verifiedEmail) as any;
+      }
+
+      if (!user) {
+        res.status(401).json({ error: "No pre-approved active application account found for this Google/Firebase identity. Please contact your administrator." });
+        return;
       }
 
       const token = crypto.randomUUID();
@@ -1393,14 +1504,15 @@ async function startServer() {
       res.json({
         token,
         user_id: user.id,
-        firebase_uid,
         name: user.name,
         role: user.role,
-        email: user.email || safeEmail,
+        email: user.email || verifiedEmail || "",
         company: user.company || "",
+        company_id: user.company_id || "",
         trade: user.trade || "",
+        work_package_id: user.work_package_id || "",
         status: user.status || "Active",
-        must_change_password: false,
+        must_change_password: Boolean(user.must_change_password),
         permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,
       });
     } catch (err: any) {
@@ -1881,7 +1993,15 @@ async function startServer() {
     }
     const id = req.params.id;
     db.prepare("DELETE FROM project_memberships WHERE project_id=?").run(id);
+    db.prepare("DELETE FROM project_companies WHERE project_id=?").run(id);
     db.prepare("DELETE FROM notifications WHERE project_id=?").run(id);
+    try { db.prepare("DELETE FROM clarification_messages WHERE clarification_id IN (SELECT id FROM clarifications WHERE project_id=?)").run(id); } catch {}
+    try { db.prepare("DELETE FROM clarifications WHERE project_id=?").run(id); } catch {}
+    try { db.prepare("DELETE FROM progress_submissions WHERE project_id=?").run(id); } catch {}
+    try { db.prepare("DELETE FROM progress_reports WHERE project_id=?").run(id); } catch {}
+    try { db.prepare("DELETE FROM document_transmittals WHERE project_id=?").run(id); } catch {}
+    try { db.prepare("DELETE FROM transmittals WHERE project_id=?").run(id); } catch {}
+    try { db.prepare("DELETE FROM work_packages WHERE project_id=?").run(id); } catch {}
     // A few TABLE_CONFIG keys (e.g. "drawings", "daily_logs") are URL
     // aliases for a real table under a different name ("documents",
     // "dailylogs") rather than real tables of their own - resolve those
@@ -1891,7 +2011,7 @@ async function startServer() {
       realTables.add(table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table);
     }
     for (const table of realTables) {
-      db.prepare(`DELETE FROM ${table} WHERE project_id=?`).run(id);
+      try { db.prepare(`DELETE FROM ${table} WHERE project_id=?`).run(id); } catch {}
     }
     db.prepare("DELETE FROM projects WHERE id=?").run(id);
     writeAudit(req.user!.user_id, "projects", id, id, "delete");
@@ -2180,13 +2300,29 @@ async function startServer() {
       if (table === "documents" && req.user!.role === "Subcontractor") {
         scope += " AND (subcontractor_id = ? OR id IN (SELECT record_id FROM record_owners WHERE module='documents' AND user_id=?))";
         baseParams.push(req.user!.user_id, req.user!.user_id);
+      } else if ((table === "tasks" || table === "submittals" || table === "punchlist" || table === "dailylogs") && req.user!.role === "Subcontractor") {
+        const scConds: string[] = ["id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)"];
+        baseParams.push(searchModule, req.user!.user_id);
+        if (req.user!.work_package_id) {
+          scConds.push("work_package_id = ?");
+          baseParams.push(req.user!.work_package_id);
+        }
+        if (req.user!.company_id) {
+          scConds.push("company_id = ?");
+          baseParams.push(req.user!.company_id);
+        }
+        if (!req.user!.work_package_id && !req.user!.company_id) {
+          scConds.push("1=1");
+        }
+        scope += ` AND (${scConds.join(" OR ")})`;
       }
       if ((table === "documents" || table === "change_orders") && req.user!.role === "Client") {
         scope += " AND visibility IN ('Client', 'All')";
       }
       const clauses = columns.map(c => `${c} LIKE ?`).join(" OR ");
       const queryParams = [...baseParams, ...columns.map(() => like)];
-      const rows = db.prepare(`SELECT * FROM ${table} WHERE ${scope} AND (${clauses}) LIMIT 25`).all(...queryParams) as any[];
+      const rawRows = db.prepare(`SELECT * FROM ${table} WHERE ${scope} AND (${clauses}) LIMIT 25`).all(...queryParams) as any[];
+      const rows = rawRows.filter(r => table === "projects" ? hasProjectAccess(req.user!, r.id) : canAccessRecord(req.user!, r, "view", searchModule));
       for (const row of rows) {
         const record = rowToDict(row) as any;
         if (table === "documents" && record) delete record.attachment_data;
@@ -2253,11 +2389,27 @@ async function startServer() {
     if (table === "documents" && req.user!.role === "Subcontractor") {
       where += " AND (subcontractor_id = ? OR id IN (SELECT record_id FROM record_owners WHERE module='documents' AND user_id=?))";
       params.push(req.user!.user_id, req.user!.user_id);
+    } else if ((table === "tasks" || table === "submittals" || table === "punchlist" || table === "dailylogs") && req.user!.role === "Subcontractor") {
+      const scConds: string[] = ["id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)"];
+      params.push(cfg.module, req.user!.user_id);
+      if (req.user!.work_package_id) {
+        scConds.push("work_package_id = ?");
+        params.push(req.user!.work_package_id);
+      }
+      if (req.user!.company_id) {
+        scConds.push("company_id = ?");
+        params.push(req.user!.company_id);
+      }
+      if (!req.user!.work_package_id && !req.user!.company_id) {
+        scConds.push("1=1");
+      }
+      where += ` AND (${scConds.join(" OR ")})`;
     }
     if ((table === "documents" || table === "change_orders") && req.user!.role === "Client") {
       where += " AND visibility IN ('Client', 'All')";
     }
-    const rows = db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(...params) as any[];
+    const rawRows = db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(...params) as any[];
+    const rows = rawRows.filter(r => table === "projects" ? hasProjectAccess(req.user!, r.id) : canAccessRecord(req.user!, r, "view", cfg.module));
     let cols = cfg.cols.filter((c: string) => c !== "attachment_data");
     if (table === "projects" && req.user!.role === "Client") {
       cols = cols.filter((c: string) => c !== "budget");
@@ -2397,21 +2549,22 @@ async function startServer() {
     const comment = req.body?.comment || null;
 
     const cfg = TABLE_CONFIG[table];
-    if (!cfg || !cfg.cols.includes("status") || !WORKFLOW_STATUSES[table]) {
-      res.status(400).json({ error: "No controlled workflow for this module" });
+    if (!cfg || !cfg.cols.includes("status")) {
+      res.status(400).json({ error: "No status workflow for this module" });
       return;
     }
-    const existing = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(recordId) as any;
+    const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+    const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(recordId) as any;
     if (!existing) {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    if (!hasProjectAccess(req.user!, existing.project_id)) {
-      res.status(403).json({ error: "No access to this project" });
+    if (!canAccessRecord(req.user!, existing, "edit", cfg.module)) {
+      res.status(403).json({ error: "No access to transition this record" });
       return;
     }
-    if (!canEdit(req.user!, cfg.module)) {
-      res.status(403).json({ error: `No edit access to ${cfg.module}` });
+    if (!WORKFLOW_STATUSES[table]) {
+      res.status(400).json({ error: "No controlled workflow for this module" });
       return;
     }
     const oldStatus = existing.status || "";
@@ -3574,6 +3727,10 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   // --- PROJECT PARTICIPATING COMPANIES ---
   app.get("/api/projects/:id/companies", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
       if (!hasProjectAccess(req.user!, req.params.id)) {
         res.status(403).json({ error: "Access denied" });
         return;
@@ -3630,6 +3787,10 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   // --- WORK PACKAGES ---
   app.get("/api/work_packages", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client" || !canView(req.user!, "work_packages")) {
+        res.status(403).json({ error: "No access to work packages" });
+        return;
+      }
       const projectId = req.query.project_id as string;
       let { where, params } = projectScopeSql(req.user!, projectId, "wp.project_id");
       if (!where) {
@@ -4642,6 +4803,14 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       let wpId = data.work_package_id || null;
       let compId = data.company_id || null;
       if (req.user!.role === "Subcontractor") {
+        if (req.user!.work_package_id && data.work_package_id && data.work_package_id !== req.user!.work_package_id) {
+          res.status(403).json({ error: "Cannot submit progress for another work package" });
+          return;
+        }
+        if (req.user!.company_id && data.company_id && data.company_id !== req.user!.company_id) {
+          res.status(403).json({ error: "Cannot submit progress for another company" });
+          return;
+        }
         wpId = req.user!.work_package_id || wpId;
         compId = req.user!.company_id || compId;
       }
@@ -4772,21 +4941,16 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
 
-      // Overall progress for Client is taken from the latest Published Progress Report to ensure vetted verification
+      // Overall progress for Client is taken strictly from the latest Published Progress Report to ensure vetted verification
       const latestPublishedReport = db.prepare(`
         SELECT overall_progress_percent FROM progress_reports
         WHERE project_id = ? AND status IN ('Published', 'Published to Client')
         ORDER BY period_end DESC, published_at DESC LIMIT 1
       `).get(projectId) as any;
 
-      let overallProgress = latestPublishedReport?.overall_progress_percent;
-      if (overallProgress === undefined || overallProgress === null) {
-        const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=?").all(projectId) as any[];
-        const workTasks = tasks.filter(t => !t.is_milestone && !t.is_summary);
-        overallProgress = workTasks.length
-          ? Math.round(workTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / workTasks.length)
-          : 0;
-      }
+      const hasPublishedReport = Boolean(latestPublishedReport && latestPublishedReport.overall_progress_percent !== undefined && latestPublishedReport.overall_progress_percent !== null);
+      const overallProgress = hasPublishedReport ? latestPublishedReport.overall_progress_percent : null;
+      const progressStatus = hasPublishedReport ? "Published" : "Progress not yet published";
 
       const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=?").all(projectId) as any[];
       const today = new Date().toISOString().slice(0, 10);
@@ -4810,6 +4974,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       res.json({
         project: { id: project.id, name: project.name, client: project.client, status: project.status, start_date: project.start_date, end_date: project.end_date },
         overall_progress: overallProgress,
+        overall_progress_percent: overallProgress,
+        progress_status: progressStatus,
         next_milestone: nextMilestone,
         published_documents: publishedDocuments,
         published_change_orders: publishedChangeOrders,
@@ -4838,11 +5004,40 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
       if (req.user!.role === "Subcontractor") {
         if (table === "documents" || table === "drawings") {
-          where += " AND (documents.subcontractor_id = ? OR documents.id IN (SELECT record_id FROM record_owners WHERE module='documents' AND user_id=?))";
+          const docConds: string[] = [
+            "documents.subcontractor_id = ?",
+            "documents.id IN (SELECT record_id FROM record_owners WHERE module='documents' AND user_id=?)"
+          ];
           params.push(req.user!.user_id, req.user!.user_id);
+          if (req.user!.work_package_id) {
+            docConds.push("documents.work_package_id = ?");
+            params.push(req.user!.work_package_id);
+          }
+          if (req.user!.company_id) {
+            docConds.push("documents.company_id = ?");
+            params.push(req.user!.company_id);
+          }
+          where += ` AND (${docConds.join(" OR ")})`;
+        } else if (table === "tasks" || table === "submittals" || table === "punchlist" || table === "dailylogs" || table === "daily_logs") {
+          const conditions: string[] = [
+            "id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)"
+          ];
+          params.push(module, req.user!.user_id);
+          if (req.user!.work_package_id) {
+            conditions.push("work_package_id = ?");
+            params.push(req.user!.work_package_id);
+          }
+          if (req.user!.company_id) {
+            conditions.push("company_id = ?");
+            params.push(req.user!.company_id);
+          }
+          if (!req.user!.work_package_id && !req.user!.company_id) {
+            conditions.push("1=1");
+          }
+          where += ` AND (${conditions.join(" OR ")})`;
         } else {
-          where += " AND (id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?) OR id NOT IN (SELECT record_id FROM record_owners WHERE module=?))";
-          params.push(module, req.user!.user_id, module);
+          where += " AND id IN (SELECT record_id FROM record_owners WHERE module=? AND user_id=?)";
+          params.push(module, req.user!.user_id);
         }
       }
       // Client visibility: enforced here in the query itself, not just hidden
@@ -4866,7 +5061,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       } else {
         rows = db.prepare(`SELECT * FROM ${actualTable} WHERE ${where}`).all(...params);
       }
-      res.json(rows.map(rowToDict));
+      const accessibleRows = rows.filter(r => canAccessRecord(req.user!, r, "view", module));
+      res.json(accessibleRows.map(rowToDict));
     });
 
     // Create
@@ -4888,6 +5084,24 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       if (!hasProjectAccess(req.user!, data.project_id)) {
         res.status(403).json({ error: "No access to this project" });
         return;
+      }
+
+      // Subcontractor work package and company boundary enforcement
+      if (req.user!.role === "Subcontractor") {
+        if (req.user!.work_package_id) {
+          if (data.work_package_id && data.work_package_id !== req.user!.work_package_id) {
+            res.status(403).json({ error: "Cannot create records for another work package" });
+            return;
+          }
+          data.work_package_id = req.user!.work_package_id;
+        }
+        if (req.user!.company_id) {
+          if (data.company_id && data.company_id !== req.user!.company_id) {
+            res.status(403).json({ error: "Cannot create records for another company" });
+            return;
+          }
+          data.company_id = req.user!.company_id;
+        }
       }
 
       if (isClientDocumentSubmission) {
@@ -4965,34 +5179,23 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id)) {
-        res.status(403).json({ error: "No access to this project" });
+      if (!canAccessRecord(req.user!, existing, "edit", module)) {
+        res.status(403).json({ error: "No edit access to this record" });
         return;
-      }
-      if (req.user!.role === "Subcontractor") {
-        if (table === "documents" || table === "drawings") {
-          const isOwner = Boolean(db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(req.params.id, req.user!.user_id));
-          const isAssigned = existing.subcontractor_id === req.user!.user_id;
-          if (!isOwner && !isAssigned) {
-            res.status(403).json({ error: "Subcontractors may only change their own documents" });
-            return;
-          }
-        } else if (table === "punchlist" || table === "submittals" || table === "tasks") {
-          const isProjectMember = hasProjectAccess(req.user!, existing.project_id);
-          if (!isProjectMember) {
-            res.status(403).json({ error: "No access to project" });
-            return;
-          }
-        } else {
-          const owner = db.prepare("SELECT user_id FROM record_owners WHERE module=? AND record_id=?").get(module, req.params.id) as any;
-          if (owner && owner.user_id !== req.user!.user_id) {
-            res.status(403).json({ error: "Subcontractors may only change their own records" });
-            return;
-          }
-        }
       }
 
       const data = req.body || {};
+      if (req.user!.role === "Subcontractor") {
+        if (data.work_package_id && req.user!.work_package_id && data.work_package_id !== req.user!.work_package_id) {
+          res.status(403).json({ error: "Cannot assign record to another work package" });
+          return;
+        }
+        if (data.company_id && req.user!.company_id && data.company_id !== req.user!.company_id) {
+          res.status(403).json({ error: "Cannot assign record to another company" });
+          return;
+        }
+      }
+
       // Publishing (making a record Client-visible) is a separate authority
       // from ordinary edit access - a Site Engineer or QA/QC user can edit a
       // document's content, but that shouldn't let them decide what a client
@@ -5073,28 +5276,17 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
     // Delete
     app.delete(`/api/${table}/:id`, authRequired, (req, res) => {
-      const existing = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(req.params.id) as any;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+      const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id)) {
-        res.status(403).json({ error: "No access to this project" });
+      if (!canAccessRecord(req.user!, existing, "delete", module)) {
+        res.status(403).json({ error: "No delete access to this record" });
         return;
       }
-      const isOwnDoc = table === "documents" && req.user!.role === "Subcontractor" &&
-        (existing.subcontractor_id === req.user!.user_id ||
-         Boolean(db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(req.params.id, req.user!.user_id)));
-
-      if (!canDelete(req.user!) && !isOwnDoc) {
-        res.status(403).json({ error: "No delete access" });
-        return;
-      }
-      if (!isOwnDoc && !canEdit(req.user!, module)) {
-        res.status(403).json({ error: `No edit access to ${module}` });
-        return;
-      }
-      db.prepare(`DELETE FROM ${table} WHERE id=?`).run(req.params.id);
+      db.prepare(`DELETE FROM ${actualTable} WHERE id=?`).run(req.params.id);
       db.prepare("DELETE FROM record_owners WHERE module=? AND record_id=?").run(module, req.params.id);
       writeAudit(req.user!.user_id, module, req.params.id, existing.project_id, "delete", existing, null);
       res.json({ ok: true });

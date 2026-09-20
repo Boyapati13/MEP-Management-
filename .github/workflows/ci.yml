@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, feature/** ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (Lint)
+        run: npm run lint
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start server in background
+        run: |
+          NODE_ENV=production node dist/server.cjs &
+          echo "Waiting for server to start on port 3000..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:3000/api/health > /dev/null 2>&1 || curl -s http://127.0.0.1:3000/ > /dev/null 2>&1; then
+              echo "Server is live!"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run E2E Test Suite
+        run: npm run test:e2e
+
+      - name: Run V1.1 Multi-Company & Isolation Test Suite
+        run: npm run test:v1.1
