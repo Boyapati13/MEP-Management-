@@ -325,7 +325,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "attendance_adjustments", "worker_assignments", "project_updates"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     delete: true,
   },
@@ -7444,29 +7444,66 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   app.get('/api/payroll_profiles', authRequired, (req, res) => {
     if (!canAccessPayroll(req.user!)) { res.status(403).json({ error: 'No access to payroll financial data' }); return; }
     const workerId = req.query.worker_id as string;
-    if (workerId) { res.json([db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(workerId)]); return; }
-    res.json(db.prepare('SELECT pp.*, w.name as worker_name FROM payroll_profiles pp JOIN workers w ON w.id=pp.worker_id ORDER BY w.name').all());
+    if (workerId) {
+      const worker = db.prepare('SELECT * FROM workers WHERE id=?').get(workerId) as any;
+      if (!worker) { res.status(404).json({ error: 'Worker not found' }); return; }
+      if (req.user!.role !== 'Admin' && !hasProjectAccess(req.user!, worker.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+      const profile = db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(workerId);
+      res.json(profile ? [profile] : []);
+      return;
+    }
+    if (req.user!.role === 'Admin') {
+      res.json(db.prepare('SELECT pp.*, w.name as worker_name, w.project_id FROM payroll_profiles pp JOIN workers w ON w.id=pp.worker_id ORDER BY w.name').all());
+      return;
+    }
+    const scoped = projectScopeSql(req.user!, 'ALL', 'w.project_id');
+    if (!scoped.where) { res.status(403).json({ error: 'No project access' }); return; }
+    res.json(db.prepare(
+      'SELECT pp.*, w.name as worker_name, w.project_id FROM payroll_profiles pp JOIN workers w ON w.id=pp.worker_id WHERE ' +
+      scoped.where + ' ORDER BY w.name'
+    ).all(...scoped.params));
   });
 
   app.post('/api/payroll_profiles', authRequired, (req, res) => {
-    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    if (!canAccessPayroll(req.user!)) { res.status(403).json({ error: 'No access' }); return; }
     const { worker_id, basic_daily_rate, basic_monthly_rate, rate_type, currency, ot_multiplier, housing_allowance, transport_allowance, food_allowance, bank_account, bank_name, effective_from } = req.body;
     if (!worker_id) { res.status(400).json({ error: 'worker_id required' }); return; }
-    const id = crypto.randomUUID();
+    const worker = db.prepare('SELECT * FROM workers WHERE id=?').get(worker_id) as any;
+    if (!worker) { res.status(404).json({ error: 'Worker not found' }); return; }
+    if (req.user!.role !== 'Admin' && !hasProjectAccess(req.user!, worker.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const numeric = [basic_daily_rate, basic_monthly_rate, ot_multiplier, housing_allowance, transport_allowance, food_allowance]
+      .filter(v => v !== undefined && v !== null)
+      .map(Number);
+    if (numeric.some(v => !Number.isFinite(v) || v < 0)) { res.status(422).json({ error: 'Payroll rates and allowances must be non-negative numbers' }); return; }
+
+    const existing = db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(worker_id) as any;
+    const id = existing?.id || crypto.randomUUID();
     const now = new Date().toISOString();
-    db.prepare(`INSERT OR REPLACE INTO payroll_profiles (id,worker_id,basic_daily_rate,basic_monthly_rate,rate_type,currency,ot_multiplier,housing_allowance,transport_allowance,food_allowance,bank_account,bank_name,effective_from,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(id, worker_id, basic_daily_rate||0, basic_monthly_rate||0, rate_type||'Daily', currency||'USD', ot_multiplier||1.5, housing_allowance||0, transport_allowance||0, food_allowance||0, bank_account||null, bank_name||null, effective_from||null, now, now);
-    res.status(201).json(db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(worker_id));
+    if (existing) {
+      db.prepare('UPDATE payroll_profiles SET basic_daily_rate=?,basic_monthly_rate=?,rate_type=?,currency=?,ot_multiplier=?,housing_allowance=?,transport_allowance=?,food_allowance=?,bank_account=?,bank_name=?,effective_from=?,updated_at=? WHERE worker_id=?')
+        .run(Number(basic_daily_rate||0), Number(basic_monthly_rate||0), rate_type||'Daily', currency||'USD', Number(ot_multiplier??1.5), Number(housing_allowance||0), Number(transport_allowance||0), Number(food_allowance||0), bank_account||null, bank_name||null, effective_from||null, now, worker_id);
+    } else {
+      db.prepare('INSERT INTO payroll_profiles (id,worker_id,basic_daily_rate,basic_monthly_rate,rate_type,currency,ot_multiplier,housing_allowance,transport_allowance,food_allowance,bank_account,bank_name,effective_from,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(id, worker_id, Number(basic_daily_rate||0), Number(basic_monthly_rate||0), rate_type||'Daily', currency||'USD', Number(ot_multiplier??1.5), Number(housing_allowance||0), Number(transport_allowance||0), Number(food_allowance||0), bank_account||null, bank_name||null, effective_from||null, now, now);
+    }
+    writeAudit(req.user!.user_id, 'payroll_profiles', id, worker.project_id, existing ? 'update' : 'create', existing, { worker_id, rate_type, currency });
+    res.status(existing ? 200 : 201).json(db.prepare('SELECT * FROM payroll_profiles WHERE worker_id=?').get(worker_id));
   });
 
   app.put('/api/payroll_profiles/:id', authRequired, (req, res) => {
-    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
-    const profile = db.prepare('SELECT * FROM payroll_profiles WHERE id=?').get(req.params.id) as any;
+    if (!canAccessPayroll(req.user!)) { res.status(403).json({ error: 'No access' }); return; }
+    const profile = db.prepare('SELECT pp.*, w.project_id FROM payroll_profiles pp JOIN workers w ON w.id=pp.worker_id WHERE pp.id=?').get(req.params.id) as any;
     if (!profile) { res.status(404).json({ error: 'Not found' }); return; }
+    if (req.user!.role !== 'Admin' && !hasProjectAccess(req.user!, profile.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
     const now = new Date().toISOString();
     const { basic_daily_rate, basic_monthly_rate, rate_type, currency, ot_multiplier, housing_allowance, transport_allowance, food_allowance, bank_account, bank_name } = req.body;
-    db.prepare(`UPDATE payroll_profiles SET basic_daily_rate=COALESCE(?,basic_daily_rate),basic_monthly_rate=COALESCE(?,basic_monthly_rate),rate_type=COALESCE(?,rate_type),currency=COALESCE(?,currency),ot_multiplier=COALESCE(?,ot_multiplier),housing_allowance=COALESCE(?,housing_allowance),transport_allowance=COALESCE(?,transport_allowance),food_allowance=COALESCE(?,food_allowance),bank_account=COALESCE(?,bank_account),bank_name=COALESCE(?,bank_name),updated_at=? WHERE id=?`)
+    const numeric = [basic_daily_rate, basic_monthly_rate, ot_multiplier, housing_allowance, transport_allowance, food_allowance]
+      .filter(v => v !== undefined && v !== null)
+      .map(Number);
+    if (numeric.some(v => !Number.isFinite(v) || v < 0)) { res.status(422).json({ error: 'Payroll rates and allowances must be non-negative numbers' }); return; }
+    db.prepare('UPDATE payroll_profiles SET basic_daily_rate=COALESCE(?,basic_daily_rate),basic_monthly_rate=COALESCE(?,basic_monthly_rate),rate_type=COALESCE(?,rate_type),currency=COALESCE(?,currency),ot_multiplier=COALESCE(?,ot_multiplier),housing_allowance=COALESCE(?,housing_allowance),transport_allowance=COALESCE(?,transport_allowance),food_allowance=COALESCE(?,food_allowance),bank_account=COALESCE(?,bank_account),bank_name=COALESCE(?,bank_name),updated_at=? WHERE id=?')
       .run(basic_daily_rate??null, basic_monthly_rate??null, rate_type||null, currency||null, ot_multiplier??null, housing_allowance??null, transport_allowance??null, food_allowance??null, bank_account||null, bank_name||null, now, req.params.id);
+    writeAudit(req.user!.user_id, 'payroll_profiles', req.params.id, profile.project_id, 'update', profile, { rate_type, currency });
     res.json(db.prepare('SELECT * FROM payroll_profiles WHERE id=?').get(req.params.id));
   });
 
@@ -7615,18 +7652,28 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   // Payroll adjustments (bonuses, deductions)
   app.post('/api/payroll_adjustments', authRequired, (req, res) => {
-    if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
+    if (!canAccessPayroll(req.user!)) { res.status(403).json({ error: 'No access' }); return; }
     const { payroll_entry_id, payroll_period_id, worker_id, type, description, amount, is_deduction } = req.body;
-    if (!payroll_entry_id || !worker_id || !type || !description || amount == null) { res.status(400).json({ error: 'Missing required fields' }); return; }
+    if (!payroll_entry_id || !payroll_period_id || !worker_id || !type || !description || amount == null) {
+      res.status(400).json({ error: 'Missing required fields' }); return;
+    }
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount < 0) { res.status(422).json({ error: 'amount must be a non-negative number' }); return; }
     const period = db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(payroll_period_id) as any;
-    if (period?.status === 'Locked') { res.status(400).json({ error: 'Period is locked' }); return; }
+    if (!period) { res.status(404).json({ error: 'Payroll period not found' }); return; }
+    if (period.status === 'Locked') { res.status(400).json({ error: 'Period is locked' }); return; }
+    if (req.user!.role !== 'Admin' && !hasProjectAccess(req.user!, period.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const entry = db.prepare('SELECT * FROM payroll_entries WHERE id=? AND payroll_period_id=? AND worker_id=?').get(payroll_entry_id, payroll_period_id, worker_id) as any;
+    if (!entry) { res.status(422).json({ error: 'Payroll entry does not match period and worker' }); return; }
+
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    db.prepare(`INSERT INTO payroll_adjustments (id,payroll_entry_id,payroll_period_id,worker_id,type,description,amount,is_deduction,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-      .run(id, payroll_entry_id, payroll_period_id, worker_id, type, description, amount, is_deduction?1:0, req.user!.user_id, now);
-    // Apply to entry
-    const delta = is_deduction ? -Math.abs(amount) : Math.abs(amount);
-    db.prepare('UPDATE payroll_entries SET deductions=deductions+?,net_pay=net_pay+?,gross_pay=gross_pay+? WHERE id=?').run(is_deduction?Math.abs(amount):0, delta, is_deduction?0:delta, payroll_entry_id);
+    db.prepare('INSERT INTO payroll_adjustments (id,payroll_entry_id,payroll_period_id,worker_id,type,description,amount,is_deduction,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      .run(id, payroll_entry_id, payroll_period_id, worker_id, type, description, numericAmount, is_deduction?1:0, req.user!.user_id, now);
+    const delta = is_deduction ? -numericAmount : numericAmount;
+    db.prepare('UPDATE payroll_entries SET deductions=deductions+?,net_pay=net_pay+?,gross_pay=gross_pay+? WHERE id=?')
+      .run(is_deduction?numericAmount:0, delta, is_deduction?0:delta, payroll_entry_id);
+    writeAudit(req.user!.user_id, 'payroll_adjustments', id, period.project_id, 'create', null, { payroll_entry_id, worker_id, type, amount: numericAmount, is_deduction: Boolean(is_deduction) });
     res.status(201).json(db.prepare('SELECT * FROM payroll_adjustments WHERE id=?').get(id));
   });
 
