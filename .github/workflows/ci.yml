@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MEP_DB_PATH: /tmp/mep-ci.db
-      NODE_ENV: production
 
     steps:
       - name: Checkout repository
@@ -37,6 +36,8 @@ jobs:
         run: npm run test:migration
 
       - name: Start isolated production server
+        env:
+          NODE_ENV: production
         run: |
           rm -f "$MEP_DB_PATH" "$MEP_DB_PATH-wal" "$MEP_DB_PATH-shm"
           node dist/server.cjs > /tmp/mep-ci-server.log 2>&1 &
