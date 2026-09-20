@@ -4724,18 +4724,21 @@ async function renderDocuments(){
   const canEdit = ME.permissions.edit.includes('documents');
   const canDel = ME.permissions.delete && canEdit;
   const isSub = ME.role === 'Subcontractor';
+  const isClient = ME.role === 'Client';
+  const canUpload = canEdit || isClient;
 
   document.getElementById('viewContent').innerHTML = `
   <div class="panel">
     <h3>
       <span>Documents</span>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn ghost small" id="openDocStudioBtn" title="Open Drawing & PDF Markup Studio">Drawing & PDF Studio</button>
-        ${canEdit?`<button class="btn accent small" id="addBtn">+ Add Document</button>`:'<span style="font-size:11px;color:var(--muted);margin-right:10px;">Read-only</span>'}
+        ${!isClient?'<button class="btn ghost small" id="openDocStudioBtn" title="Open Drawing & PDF Markup Studio">Drawing & PDF Studio</button>':''}
+        ${canUpload?`<button class="btn accent small" id="addBtn">${isClient?'+ Submit Document':'+ Add Document'}</button>`:'<span style="font-size:11px;color:var(--muted);margin-right:10px;">Read-only</span>'}
         <button class="btn ghost small" id="exportBtn">Export CSV</button>
       </span>
     </h3>
-    ${isSub ? `<div class="api-banner show" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534;margin-bottom:12px;">Document Isolation Active: You only have access to documents assigned to your subcontracting company for this project.</div>` : ''}
+    ${isSub ? `<div class="api-banner show" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534;margin-bottom:12px;">Document Isolation Active: You only have access to documents assigned to your subcontracting company for this project. Files you upload remain tied to your subcontractor account.</div>` : ''}
+    ${isClient ? `<div class="api-banner show" style="margin-bottom:12px;">Client Portal Documents: you can download documents published to you and submit files back to the main contractor. Your submissions cannot change project data or publish contractor records.</div>` : ''}
     ${rows.length ? `<table><thead><tr><th>Name</th><th>Category</th><th>Rev.</th><th>Date Added</th>${!isSub?'<th>Assigned Subcontractor / Uploader</th>':''}<th>File & Tools</th>${canEdit?'<th></th>':''}</tr></thead><tbody>
       ${rows.map(r=>{
         const isDrawingOrVisual = (r.category === 'Drawing') || (r.attachment_name && (r.attachment_name.endsWith('.pdf') || r.attachment_name.match(/\.(png|jpg|jpeg|svg)$/i)));
@@ -4748,7 +4751,7 @@ async function renderDocuments(){
           <td>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               ${r.attachment_data?`<span class="doc-link" data-dl="${r.id}">${escHtml(r.attachment_name||'download')}</span>`:'<span style="color:var(--muted);">—</span>'}
-              ${isDrawingOrVisual && r.attachment_data ? `
+              ${isDrawingOrVisual && r.attachment_data && !isClient ? `
                 <button class="btn ghost small" data-doc-markup="${r.id}" style="padding:2px 6px;font-size:10px;" title="Open in Drawing & PDF Markup Studio">✏️ Draw</button>
                 <button class="btn ghost small" data-doc-ai="${r.id}" style="padding:2px 6px;font-size:10px;border-color:#0284c7;color:#38bdf8;" title="Ask AI about this drawing">AI</button>
               ` : ''}
@@ -4762,7 +4765,7 @@ async function renderDocuments(){
       }).join('')}
     </tbody></table>` : '<div class="empty">No documents found for this project.</div>'}
   </div>`;
-  if(canEdit) document.getElementById('addBtn').onclick = ()=> openDocumentModal(null);
+  if(canUpload && document.getElementById('addBtn')) document.getElementById('addBtn').onclick = ()=> openDocumentModal(null);
   document.getElementById('exportBtn').onclick = ()=> exportCsv('documents');
   if(document.getElementById('openDocStudioBtn')){
     document.getElementById('openDocStudioBtn').onclick = () => {
@@ -4853,10 +4856,12 @@ async function renderDocuments(){
 async function openDocumentModal(record){
   const isEdit = !!record;
   const isSub = ME.role === 'Subcontractor';
+  const isClient = ME.role === 'Client';
+  if (isClient && isEdit) throw new Error('Client submissions are immutable after upload; submit a new revision instead.');
   const targetProjId = record ? record.project_id : (currentProjectId === 'ALL' ? (PROJECTS[0]?.id || '') : currentProjectId);
 
   let subOptions = '';
-  if (!isSub && targetProjId) {
+  if (!isSub && !isClient && targetProjId) {
     try {
       const subs = await apiFetch(`/api/projects/${targetProjId}/subcontractors`);
       subOptions = `<div class="full"><label>Subcontractor Access (Restricts visibility to this subcontractor only)</label>
@@ -4869,17 +4874,21 @@ async function openDocumentModal(record){
   }
 
   const projectPicker = !isEdit && currentProjectId==='ALL' ? `<div class="full"><label>Project</label><select id="f_project_id">${PROJECTS.map(p=>`<option value="${p.id}">${escHtml(p.name)}</option>`).join('')}</select></div>` : '';
+  const documentCategories = isClient
+    ? ['Client Submission','Clarification Attachment','Client Drawing','Other']
+    : ['Drawing','Specification','Contract','Tender','BOQ','Programme','Report','Submittal','Safety','Site Photo','Other'];
   const html = `<div class="form-grid">
     ${projectPicker}
-    <div class="full"><label>Document Name</label><input id="f_name" value="${record?escHtml(record.name):''}" placeholder="e.g. Electrical Submittal, Safety Plan, Shop Drawing"></div>
-    <div><label>Category</label><select id="f_category">${['Drawing','Specification','Contract','Tender','BOQ','Programme','Report','Submittal','Safety','Site Photo','Other'].map(c=>`<option ${record&&record.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="full"><label>Document Name</label><input id="f_name" value="${record?escHtml(record.name):''}" placeholder="${isClient?'e.g. Client response, marked-up drawing, clarification attachment':'e.g. Electrical Submittal, Safety Plan, Shop Drawing'}"></div>
+    <div><label>Category</label><select id="f_category">${documentCategories.map(c=>`<option ${record&&record.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
     <div><label>Revision</label><input id="f_revision" value="${record?escHtml(record.revision):'Rev 0'}"></div>
     <div><label>Date Added</label><input type="date" id="f_date_added" value="${record?escHtml(record.date_added):new Date().toISOString().slice(0,10)}"></div>
     ${subOptions}
     <div class="full"><label>Attach File ${isEdit&&record.attachment_name?'(current: '+escHtml(record.attachment_name)+' — choose a new file to replace)':''}</label><input type="file" id="f_file"></div>
   </div>`;
-  openModal(isEdit?'Edit Document':'Add Document', html, async ()=>{
+  openModal(isEdit?'Edit Document':(isClient?'Submit Document to Project':'Add Document'), html, async ()=>{
     const file = document.getElementById('f_file').files[0];
+    if(isClient && !file) throw new Error('Choose a file to submit to the project.');
     const MAX_FILE_MB = 100;
     if(file && file.size > MAX_FILE_MB * 1024 * 1024){
       throw new Error(`This file is ${(file.size/1024/1024).toFixed(1)} MB, which is over the ${MAX_FILE_MB} MB limit for a single document. Try compressing it or splitting it into smaller files.`);
