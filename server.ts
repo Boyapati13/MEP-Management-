@@ -1448,6 +1448,13 @@ async function startServer() {
       res.status(403).json({ error: "No access to this project" });
       return;
     }
+    // This endpoint includes login usernames because internal document owners
+    // use it to assign a document to a subcontractor. External portal users
+    // do not need that directory information.
+    if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+      res.status(403).json({ error: "Internal project team access required" });
+      return;
+    }
     const rows = db.prepare(`
       SELECT u.id, u.name, u.username, pm.access_role
       FROM users u
@@ -3016,21 +3023,36 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     // Create
     app.post(`/api/${table}`, authRequired, (req, res) => {
       const data = req.body || {};
-      // Every record starts Internal regardless of what's in the creation
-      // payload - publishing to a Client is a deliberate, separate action
-      // (via PUT, which stamps published_by/published_at itself) not
-      // something that happens implicitly at creation time.
+      // Internal records start unpublished regardless of request payload.
+      // Client-originated document submissions are the one explicit
+      // exception: they are visible back to that Client portal by definition,
+      // but this does NOT grant the Client contractor-side publish authority.
       delete data.visibility;
       delete data.published_by;
       delete data.published_at;
-      const isDoc = (table === "documents" || table === "drawings") && req.user!.role === "Subcontractor";
-      if (!isDoc && !canEdit(req.user!, module)) {
+      const isSubcontractorDocument = (table === "documents" || table === "drawings") && req.user!.role === "Subcontractor";
+      const isClientDocumentSubmission = table === "documents" && req.user!.role === "Client";
+      if (!isSubcontractorDocument && !isClientDocumentSubmission && !canEdit(req.user!, module)) {
         res.status(403).json({ error: `No edit access to ${module}` });
         return;
       }
       if (!hasProjectAccess(req.user!, data.project_id)) {
         res.status(403).json({ error: "No access to this project" });
         return;
+      }
+
+      if (isClientDocumentSubmission) {
+        const allowedClientCategories = new Set(["Client Submission", "Clarification Attachment", "Client Drawing", "Other"]);
+        data.category = allowedClientCategories.has(String(data.category || "")) ? data.category : "Client Submission";
+        data.name = String(data.name || data.attachment_name || "Client Submission").slice(0, 300);
+        data.revision = String(data.revision || "Rev 0").slice(0, 80);
+        data.date_added = data.date_added || new Date().toISOString().slice(0, 10);
+        data.visibility = "Client";
+        data.published_by = null;
+        data.published_at = null;
+        data.subcontractor_id = null;
+        data.uploaded_by = req.user!.name;
+        delete data.markup_data;
       }
 
       // Normalization helpers for rich MEP fields
@@ -3058,6 +3080,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         if (req.user!.role === "Subcontractor") {
           data.subcontractor_id = req.user!.user_id;
           data.uploaded_by = req.user!.name;
+        } else if (req.user!.role === "Client") {
+          // Values were normalized above for the dedicated Client submission path.
+          data.subcontractor_id = null;
+          data.uploaded_by = req.user!.name;
+          data.visibility = "Client";
+          data.published_by = null;
+          data.published_at = null;
         } else {
           data.uploaded_by = data.uploaded_by || req.user!.name;
           if (!data.subcontractor_id) {
