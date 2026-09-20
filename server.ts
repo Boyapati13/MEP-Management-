@@ -3258,6 +3258,62 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
+  // --- PROJECT PARTICIPATING COMPANIES ---
+  app.get("/api/projects/:id/companies", authRequired, (req, res) => {
+    try {
+      if (!hasProjectAccess(req.user!, req.params.id)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const rows = db.prepare(`
+        SELECT pc.*, c.name as company_name, c.type as company_type, c.trade as company_trade, c.contact_person, c.email, c.phone
+        FROM project_companies pc
+        JOIN companies c ON c.id = pc.company_id
+        WHERE pc.project_id = ?
+        ORDER BY pc.created_at ASC
+      `).all(req.params.id);
+      res.json(rows.map(rowToDict));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/projects/:id/companies", authRequired, (req, res) => {
+    try {
+      if (!hasProjectAccess(req.user!, req.params.id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
+      const { company_id, role_in_project } = req.body || {};
+      if (!company_id) {
+        res.status(400).json({ error: "company_id is required" });
+        return;
+      }
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO project_companies (id, project_id, company_id, role_in_project, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, req.params.id, company_id, role_in_project || "Subcontractor", now);
+      res.status(201).json({ id, project_id: req.params.id, company_id, role_in_project, created_at: now });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/projects/:id/companies/:companyId", authRequired, (req, res) => {
+    try {
+      if (!hasProjectAccess(req.user!, req.params.id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
+      db.prepare("DELETE FROM project_companies WHERE project_id=? AND company_id=?").run(req.params.id, req.params.companyId);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // --- WORK PACKAGES ---
   app.get("/api/work_packages", authRequired, (req, res) => {
     try {
@@ -3461,6 +3517,79 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
+  app.get("/api/clarifications/:id", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Clarification not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      if (req.user!.role === "Client" && !["Client", "All"].includes(existing.visibility || "Internal")) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const comments = db.prepare("SELECT * FROM clarification_comments WHERE clarification_id=? ORDER BY created_at ASC").all(req.params.id).map(rowToDict);
+      res.json({
+        ...rowToDict(existing),
+        comments,
+        messages: comments
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/clarifications/:id", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Clarification not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const data = req.body || {};
+      const now = new Date().toISOString();
+      const updatedStatus = data.status || existing.status;
+      const officialResponse = data.official_response !== undefined ? data.official_response : existing.official_response;
+      const respondedBy = officialResponse ? (existing.responded_by || req.user!.name) : existing.responded_by;
+      const respondedAt = officialResponse ? (existing.responded_at || now) : existing.responded_at;
+
+      db.prepare(`
+        UPDATE clarifications
+        SET title=?, type=?, discipline=?, priority=?, status=?, official_response=?,
+            responded_by=?, responded_at=?, due_date=?, visibility=?, question_text=?, proposed_solution=?
+        WHERE id=?
+      `).run(
+        data.title ?? existing.title,
+        data.type ?? existing.type,
+        data.discipline ?? existing.discipline,
+        data.priority ?? existing.priority,
+        updatedStatus,
+        officialResponse,
+        respondedBy,
+        respondedAt,
+        data.due_date ?? existing.due_date,
+        data.visibility ?? existing.visibility,
+        data.question_text ?? (data.question ?? existing.question_text),
+        data.proposed_solution ?? existing.proposed_solution,
+        req.params.id
+      );
+
+      writeAudit(req.user!.user_id, "clarifications", req.params.id, existing.project_id, "update", existing, data);
+      const updated = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
+      res.json(rowToDict(updated));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/clarifications/:id/answer", authRequired, (req, res) => {
     try {
       const existing = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
@@ -3488,7 +3617,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
-  app.post("/api/clarifications/:id/comment", authRequired, (req, res) => {
+  const postClarificationCommentHandler = (req: any, res: any) => {
     try {
       const existing = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
       if (!existing) {
@@ -3499,8 +3628,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: "Permission denied" });
         return;
       }
-      const { comment_text } = req.body || {};
-      if (!comment_text || !String(comment_text).trim()) {
+      const text = req.body?.comment_text || req.body?.message || "";
+      if (!text || !String(text).trim()) {
         res.status(400).json({ error: "Comment text is required" });
         return;
       }
@@ -3509,13 +3638,15 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       db.prepare(`
         INSERT INTO clarification_comments (id, clarification_id, user_id, user_name, company_name, comment_text, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, req.params.id, req.user!.user_id, req.user!.name, req.user!.role, comment_text, now);
+      `).run(id, req.params.id, req.user!.user_id, req.user!.name, req.user!.role, text, now);
 
-      res.status(201).json({ id, clarification_id: req.params.id, user_name: req.user!.name, comment_text, created_at: now });
+      res.status(201).json({ id, clarification_id: req.params.id, user_name: req.user!.name, comment_text: text, message: text, created_at: now });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
-  });
+  };
+  app.post("/api/clarifications/:id/comment", authRequired, postClarificationCommentHandler);
+  app.post("/api/clarifications/:id/messages", authRequired, postClarificationCommentHandler);
 
   app.get("/api/clarifications/:id/comments", authRequired, (req, res) => {
     try {
@@ -3541,7 +3672,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
       if (req.user!.role === "Client") {
-        where += " AND pr.status = 'Published to Client'";
+        where += " AND pr.status IN ('Published', 'Published to Client')";
       }
       const rows = db.prepare(`
         SELECT pr.*,
@@ -3567,12 +3698,68 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: "Access denied" });
         return;
       }
-      if (req.user!.role === "Client" && report.status !== "Published to Client") {
+      if (req.user!.role === "Client" && !["Published", "Published to Client"].includes(report.status)) {
         res.status(403).json({ error: "This report has not been published to the client" });
         return;
       }
       const photos = db.prepare("SELECT * FROM progress_report_photos WHERE report_id=? ORDER BY created_at ASC").all(req.params.id);
       res.json({ ...rowToDict(report), photos: photos.map(rowToDict) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/progress_reports/:id", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Report not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role === "Client" || req.user!.role === "Subcontractor")) {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
+      const data = req.body || {};
+      const now = new Date().toISOString();
+      const updatedStatus = data.status || existing.status;
+      const publishedAt = (updatedStatus === "Published" || updatedStatus === "Published to Client") ? (existing.published_at || now) : existing.published_at;
+      const publishedBy = (updatedStatus === "Published" || updatedStatus === "Published to Client") ? (existing.published_by || req.user!.name) : existing.published_by;
+
+      db.prepare(`
+        UPDATE progress_reports
+        SET title=?, period_start=?, period_end=?, status=?, executive_summary=?,
+            overall_progress_percent=?, planned_progress_percent=?, milestone_summary=?,
+            hvac_progress=?, electrical_progress=?, plumbing_progress=?, fire_progress=?, bms_progress=?,
+            safety_summary=?, manpower_peak=?, lookahead_narrative=?, key_risks_issues=?,
+            published_at=?, published_by=?
+        WHERE id=?
+      `).run(
+        data.title ?? existing.title,
+        data.period_start ?? existing.period_start,
+        data.period_end ?? existing.period_end,
+        updatedStatus,
+        data.executive_summary ?? existing.executive_summary,
+        data.overall_progress_percent !== undefined ? parseImportNumber(data.overall_progress_percent) : (data.overall_progress_actual !== undefined ? parseImportNumber(data.overall_progress_actual) : existing.overall_progress_percent),
+        data.planned_progress_percent !== undefined ? parseImportNumber(data.planned_progress_percent) : (data.overall_progress_planned !== undefined ? parseImportNumber(data.overall_progress_planned) : existing.planned_progress_percent),
+        data.milestone_summary ?? existing.milestone_summary,
+        data.hvac_progress !== undefined ? parseImportNumber(data.hvac_progress) : existing.hvac_progress,
+        data.electrical_progress !== undefined ? parseImportNumber(data.electrical_progress) : existing.electrical_progress,
+        data.plumbing_progress !== undefined ? parseImportNumber(data.plumbing_progress) : existing.plumbing_progress,
+        data.fire_progress !== undefined ? parseImportNumber(data.fire_progress) : existing.fire_progress,
+        data.bms_progress !== undefined ? parseImportNumber(data.bms_progress) : existing.bms_progress,
+        data.safety_summary ?? existing.safety_summary,
+        data.manpower_peak !== undefined ? parseInt(data.manpower_peak) : existing.manpower_peak,
+        data.lookahead_narrative ?? existing.lookahead_narrative,
+        data.key_risks_issues ?? existing.key_risks_issues,
+        publishedAt,
+        publishedBy,
+        req.params.id
+      );
+
+      writeAudit(req.user!.user_id, "progress_reports", req.params.id, existing.project_id, "update", existing, data);
+      const updated = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
+      res.json(rowToDict(updated));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -3966,6 +4153,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
+      const claimedVal = data.claimed_percent !== undefined ? data.claimed_percent : data.claimed_percentage;
       db.prepare(`
         INSERT INTO progress_submissions (
           id, project_id, work_package_id, company_id, submitted_by, period_date,
@@ -3979,16 +4167,60 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         req.user!.name,
         data.period_date || now.slice(0, 10),
         data.discipline || "MEP",
-        parseImportNumber(data.claimed_percent),
+        parseImportNumber(claimedVal),
         parseImportNumber(data.quantity_installed),
         data.unit || "%",
         data.notes || "",
         now
       );
       writeAudit(req.user!.user_id, "progress_submissions", id, data.project_id, "submit", null, data);
-      res.status(201).json({ id, ...data, status: "Submitted", created_at: now });
+      res.status(201).json({ id, ...data, claimed_percent: parseImportNumber(claimedVal), status: "Submitted", created_at: now });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/progress_submissions/:id", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM progress_submissions WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Submission not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager" && req.user!.role !== "SiteEngineer")) {
+        res.status(403).json({ error: "Only Project Managers or Site Engineers can review progress submissions" });
+        return;
+      }
+      const data = req.body || {};
+      const now = new Date().toISOString();
+      const finalStatus = data.status || existing.status;
+      const rawAdj = data.verified_percentage !== undefined ? data.verified_percentage : (data.verified_percent !== undefined ? data.verified_percent : data.adjusted_percent);
+      const finalPercent = rawAdj !== undefined ? parseImportNumber(rawAdj) : (existing.adjusted_percent || existing.claimed_percent);
+      const reviewComments = data.review_comments !== undefined ? data.review_comments : existing.review_comments;
+
+      db.prepare(`
+        UPDATE progress_submissions
+        SET status=?, adjusted_percent=?, reviewed_by=?, review_comments=?, approved_at=?
+        WHERE id=?
+      `).run(finalStatus, finalPercent, req.user!.name, reviewComments || "", now, req.params.id);
+
+      if ((finalStatus === "Approved" || finalStatus === "Approved with Adjustments") && existing.work_package_id) {
+        db.prepare(`
+          UPDATE tasks
+          SET progress = MAX(progress, ?)
+          WHERE work_package_id = ? AND status != 'Completed'
+        `).run(finalPercent, existing.work_package_id);
+      }
+
+      writeAudit(req.user!.user_id, "progress_submissions", req.params.id, existing.project_id, "update", existing, data);
+      const updated = db.prepare("SELECT * FROM progress_submissions WHERE id=?").get(req.params.id) as any;
+      res.json({
+        ...rowToDict(updated),
+        verified_percentage: updated.adjusted_percent,
+        verified_percent: updated.adjusted_percent
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 

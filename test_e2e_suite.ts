@@ -517,10 +517,10 @@ async function runTests() {
     });
     assert(bigUpload.status === 201, 'A ~60MB attachment (over the old 50mb JSON limit, under the new 150mb one) uploads successfully');
 
-    const twoHundredMbBase64 = Buffer.alloc(200 * 1024 * 1024, 'a').toString('base64');
+    const tooBigBase64 = Buffer.alloc(115 * 1024 * 1024, 'a').toString('base64');
     const tooBigUpload = await req({
       path: '/api/documents', method: 'POST', token: tokens['SiteEngineer'],
-      body: { project_id: projectId, name: `too_big_${RUN_ID}.pdf`, attachment_name: `toobig_${RUN_ID}.pdf`, attachment_data: `data:application/pdf;base64,${twoHundredMbBase64}` }
+      body: { project_id: projectId, name: `too_big_${RUN_ID}.pdf`, attachment_name: `toobig_${RUN_ID}.pdf`, attachment_data: `data:application/pdf;base64,${tooBigBase64}` }
     });
     assert(tooBigUpload.status === 413 && typeof tooBigUpload.body.error === 'string' && tooBigUpload.body.error.toLowerCase().includes('too large'),
       'An attachment over the new limit gets a clean, readable JSON error (not a bare text/html "Payload Too Large")');
