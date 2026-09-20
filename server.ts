@@ -1931,7 +1931,10 @@ function canAccessSiteInstruction(user: AuthenticatedUser, instruction: any, act
     const supervisesWorker = Boolean(instruction.assigned_worker_id && db.prepare(
       "SELECT 1 FROM worker_assignments WHERE worker_id=? AND project_id=? AND supervisor_id=? AND status='Active' LIMIT 1"
     ).get(instruction.assigned_worker_id, instruction.project_id, user.user_id));
-    if (!directlyAssigned && !supervisesWorker) return false;
+    const supervisesSite = Boolean(instruction.site_id && db.prepare(
+      "SELECT 1 FROM worker_assignments WHERE project_id=? AND site_id=? AND supervisor_id=? AND status='Active' LIMIT 1"
+    ).get(instruction.project_id, instruction.site_id, user.user_id));
+    if (!directlyAssigned && !supervisesWorker && !supervisesSite) return false;
     return ["view", "update", "assign", "verify"].includes(action);
   }
 
@@ -2036,7 +2039,11 @@ function attendanceStatusForRecord(record: any): string {
   const geofenceException = ["Outside Geofence", "GPS Accuracy Poor"].includes(record.punch_in_geofence_status)
     || ["Outside Geofence", "GPS Accuracy Poor"].includes(record.punch_out_geofence_status);
   if (geofenceException) return "Attendance Exception";
-  if (!record.punch_out) return "Missing Punch";
+  if (!record.punch_out) {
+    const site = record.site_id ? db.prepare("SELECT timezone FROM sites WHERE id=?").get(record.site_id) as any : null;
+    const today = zonedParts(new Date(), site?.timezone || "UTC").date;
+    return record.work_date < today ? "Missing Punch" : "Present";
+  }
   if ((record.late_minutes || 0) > 0) return "Late";
   return "Present";
 }
@@ -7364,7 +7371,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   });
 
   app.get('/api/payroll_periods', authRequired, (req, res) => {
-    if (!['Admin','CommercialManager','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access to payroll' }); return; }
+    if (!canAccessPayroll(req.user!)) { res.status(403).json({ error: 'No access to payroll financial data' }); return; }
     const projectId = req.query.project_id as string;
     const { where, params } = projectScopeSql(req.user!, projectId);
     if (!where) { res.status(403).json({ error: 'No project access' }); return; }
