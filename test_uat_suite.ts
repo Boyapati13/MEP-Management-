@@ -75,9 +75,13 @@ async function runUatSuite() {
 
   try {
     let serverLogs = '';
+    const serverScript = fs.existsSync(path.join(process.cwd(), 'dist', 'server.cjs'))
+      ? [path.join(process.cwd(), 'dist', 'server.cjs')]
+      : [path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server.ts'];
+
     serverProcess = spawn(
       process.execPath,
-      [path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server.ts'],
+      serverScript,
       {
         cwd: process.cwd(),
         env: {
