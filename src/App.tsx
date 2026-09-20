@@ -25,6 +25,7 @@ import {
   STATUS_COLORS, PRIORITY_COLORS, GEOFENCE_COLORS, INSTRUCTION_TYPES
 } from './types';
 import { WorkerMobileShell } from './components/WorkerMobileShell';
+import { ProjectControlTower } from './components/ProjectControlTower';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -2142,6 +2143,7 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
   const [recentUpdates, setRecentUpdates] = useState<any[]>([]);
   const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [dashboardView, setDashboardView] = useState<'control_tower' | 'portfolio'>('control_tower');
   const [newProjectData, setNewProjectData] = useState({ name: '', code: '', client: '', status: 'Active', budget: '', location: '', description: '' });
 
   const loadData = useCallback(async () => {
@@ -2215,8 +2217,36 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* View Switcher: Control Tower vs Portfolio */}
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+        <button
+          onClick={() => setDashboardView('control_tower')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
+            dashboardView === 'control_tower'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <Zap size={14} /> Control Tower & Lookahead
+        </button>
+        <button
+          onClick={() => setDashboardView('portfolio')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
+            dashboardView === 'portfolio'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <Briefcase size={14} /> Portfolio Overview ({portfolio.length})
+        </button>
+      </div>
+
+      {dashboardView === 'control_tower' ? (
+        <ProjectControlTower projectId={selectedProject || undefined} navigate={navigate} />
+      ) : (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Portfolio" value={portfolio.length} icon={Briefcase} color="bg-blue-600" sub={`${activeProjects.length} Active • ${delayedProjects.length} Delayed`} />
         <StatCard label="Avg Portfolio Progress" value={`${avgProgress}%`} icon={TrendingUp} color="bg-emerald-600" sub="across all active jobs" />
         <StatCard label="Total Contract Value" value={`${(totalBudget / 1000000).toFixed(2)}M`} icon={DollarSign} color="bg-indigo-600" sub="approved budget" />
@@ -2383,6 +2413,8 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
           </Card>
         </div>
       </div>
+      </>
+      )}
 
       {/* Modal: New Project */}
       <Modal open={showNewProjectModal} onClose={() => setShowNewProjectModal(false)} title="Create New Project" size="md">

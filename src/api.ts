@@ -206,3 +206,34 @@ export const updatesApi = {
   dailyLogs: (projectId?: string) => api.get<any[]>(`/api/dailylogs${projectId ? `?project_id=${projectId}` : ''}`),
   createDailyLog: (data: any) => api.post<any>('/api/dailylogs', data),
 };
+
+// Control Tower & Attention Engine (V1.3)
+export const controlTowerApi = {
+  get: (projectId?: string) => api.get<any>(`/api/control-tower${projectId ? `?project_id=${projectId}` : ''}`),
+};
+
+// 2-Week Lookahead Schedule (V1.3)
+export const lookaheadApi = {
+  get: (projectId?: string, days: number = 14, startDate?: string) => {
+    const p = new URLSearchParams();
+    if (projectId) p.set('project_id', projectId);
+    if (days) p.set('days', String(days));
+    if (startDate) p.set('start_date', startDate);
+    return api.get<any>(`/api/tasks/lookahead?${p.toString()}`);
+  },
+};
+
+// Task Blockers Engine (V1.3)
+export const blockersApi = {
+  list: (params?: { project_id?: string; task_id?: string }) => {
+    const p = new URLSearchParams();
+    if (params?.project_id) p.set('project_id', params.project_id);
+    if (params?.task_id) p.set('task_id', params.task_id);
+    return api.get<any[]>(`/api/blockers?${p.toString()}`);
+  },
+  forTask: (taskId: string) => api.get<any[]>(`/api/tasks/${taskId}/blockers`),
+  create: (taskId: string, data: { blocker_type?: string; description: string; blocking_trade?: string; impact_days?: number }) =>
+    api.post<any>(`/api/tasks/${taskId}/blockers`, data),
+  resolve: (taskId: string, blockerId: string, resolution_notes?: string) =>
+    api.post<any>(`/api/tasks/${taskId}/blockers/${blockerId}/resolve`, { resolution_notes }),
+};
