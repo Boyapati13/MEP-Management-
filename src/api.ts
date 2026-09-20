@@ -180,6 +180,7 @@ export const projectsApi = {
 export const workPackagesApi = {
   list: (params?: Record<string, string>) => api.get<any[]>(`/api/work_packages${params ? '?' + new URLSearchParams(params).toString() : ''}`),
   get: (id: string) => api.get<any>(`/api/work_packages/${id}`),
+  commandCenter: (id: string) => api.get<any>(`/api/work_packages/${id}/command-center`),
   create: (data: any) => api.post<any>('/api/work_packages', data),
   update: (id: string, data: any) => api.put<any>(`/api/work_packages/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/work_packages/${id}`),
@@ -256,4 +257,42 @@ export const blockersApi = {
     api.post<any>(`/api/tasks/${taskId}/blockers`, data),
   resolve: (taskId: string, blockerId: string, resolution_notes?: string) =>
     api.post<any>(`/api/tasks/${taskId}/blockers/${blockerId}/resolve`, { resolution_notes }),
+};
+
+// Procurement & Programme Impact (V1.4)
+export const procurementApi = {
+  programmeImpact: (projectId: string) => api.get<any>(`/api/procurement/programme-impact?project_id=${projectId}`),
+  listOrders: (params?: Record<string, string>) => api.get<any[]>(`/api/purchase_orders${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  createOrder: (data: any) => api.post<any>('/api/purchase_orders', data),
+  updateOrder: (id: string, data: any) => api.put<any>(`/api/purchase_orders/${id}`, data),
+  materialRequests: (params?: Record<string, string>) => api.get<any[]>(`/api/material_requests${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  createMaterialRequest: (data: any) => api.post<any>('/api/material_requests', data),
+};
+
+// Project Actions Register (V1.4)
+export const projectActionsApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/project_actions${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/project_actions/${id}`),
+  create: (data: any) => api.post<any>('/api/project_actions', data),
+  update: (id: string, data: any) => api.put<any>(`/api/project_actions/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/project_actions/${id}`),
+};
+
+// Project Decisions Register (V1.4)
+export const projectDecisionsApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/project_decisions${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/project_decisions/${id}`),
+  create: (data: any) => api.post<any>('/api/project_decisions', data),
+  update: (id: string, data: any) => api.put<any>(`/api/project_decisions/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/project_decisions/${id}`),
+};
+
+// Advanced Risk Management & 5x5 Matrix (V1.4)
+export const risksApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/risks${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/risks/${id}`),
+  matrix: (projectId: string) => api.get<any>(`/api/project_risks/matrix?project_id=${projectId}`),
+  create: (data: any) => api.post<any>('/api/risks', data),
+  update: (id: string, data: any) => api.put<any>(`/api/risks/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/risks/${id}`),
 };

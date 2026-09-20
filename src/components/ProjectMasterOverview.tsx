@@ -5,6 +5,7 @@ import {
   ExternalLink, ArrowUpRight, Shield, Activity, RefreshCw, Briefcase
 } from 'lucide-react';
 import { projectsApi, sitesApi, workPackagesApi, tasksApi } from '../api';
+import { WorkPackageCommandCenterModal } from './WorkPackageCommandCenterModal';
 
 interface ProjectMasterOverviewProps {
   projectId: string;
@@ -19,6 +20,7 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
   const [activeTab, setActiveTab] = useState<'hierarchy' | 'trades' | 'sites_packages'>('hierarchy');
   const [expandedWbs, setExpandedWbs] = useState<Record<string, boolean>>({});
   const [expandedPackages, setExpandedPackages] = useState<Record<string, boolean>>({});
+  const [selectedWpForCommandCenter, setSelectedWpForCommandCenter] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!projectId) return;
@@ -334,7 +336,18 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedWpForCommandCenter(wp.id);
+                                  }}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-sm transition-all"
+                                  title="Open Work Package Command Center"
+                                >
+                                  <Activity size={12} /> Command Center
+                                </button>
                                 <span className="text-gray-500">{wp.tasks?.length || 0} Tasks</span>
                                 <span className="font-bold text-indigo-600">{wp.progress_percent || 0}%</span>
                               </div>
@@ -485,6 +498,15 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
             </div>
           </div>
         </div>
+      )}
+      {/* Work Package Full Command Center Modal */}
+      {selectedWpForCommandCenter && (
+        <WorkPackageCommandCenterModal
+          open={!!selectedWpForCommandCenter}
+          workPackageId={selectedWpForCommandCenter}
+          onClose={() => setSelectedWpForCommandCenter(null)}
+          onNavigateToTask={onNavigateToTask}
+        />
       )}
     </div>
   );

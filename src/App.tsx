@@ -28,6 +28,9 @@ import { WorkerMobileShell } from './components/WorkerMobileShell';
 import { ProjectControlTower } from './components/ProjectControlTower';
 import { ProjectMasterOverview } from './components/ProjectMasterOverview';
 import { TaskDetailModal } from './components/TaskDetailModal';
+import { ProjectActionsRegister } from './components/ProjectActionsRegister';
+import { ProjectDecisionsRegister } from './components/ProjectDecisionsRegister';
+import { RiskMatrixHeatMapModal } from './components/RiskMatrixHeatMapModal';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -238,6 +241,7 @@ function NavGroup({ icon: Icon, label, children, defaultOpen }: { icon: any; lab
 // ─── Main App Shell ───────────────────────────────────────────────────────────
 type Page =
   | 'dashboard' | 'projects' | 'project-detail' | 'tasks' | 'updates'
+  | 'actions' | 'decisions'
   | 'rfis' | 'submittals' | 'documents'
   | 'ncrs' | 'inspections' | 'commissioning' | 'handover' | 'progress'
   | 'clarifications' | 'change_orders' | 'boq' | 'procurement' | 'risks'
@@ -291,6 +295,8 @@ function AppShell() {
       case 'projects': return <ProjectsPage navigate={navigate} />;
       case 'project-detail': return <ProjectDetailPage projectId={pageParam} navigate={navigate} />;
       case 'tasks': return <TasksPage navigate={navigate} />;
+      case 'actions': return <div className="space-y-6"><ProjectActionsRegister projectId={selectedProject} /></div>;
+      case 'decisions': return <div className="space-y-6"><ProjectDecisionsRegister projectId={selectedProject} /></div>;
       case 'updates': return <ProjectUpdatesPage navigate={navigate} />;
       case 'progress': return <ProjectUpdatesPage navigate={navigate} />;
       case 'workforce': return <WorkforceDashboardPage />;
@@ -344,6 +350,8 @@ function AppShell() {
           <NavItem icon={Briefcase} label="Projects" active={page === 'projects' || page === 'project-detail'} onClick={() => navigate('projects')} />
           <NavItem icon={TrendingUp} label="Project Updates" active={page === 'updates'} onClick={() => navigate('updates')} />
           <NavItem icon={Grid} label="Tasks & Schedule" active={page === 'tasks'} onClick={() => navigate('tasks')} />
+          <NavItem icon={AlertCircle} label="Actions Register" active={page === 'actions'} onClick={() => navigate('actions')} />
+          <NavItem icon={Shield} label="Decisions Register" active={page === 'decisions'} onClick={() => navigate('decisions')} />
         </>}
 
         {isWorkerOnly && (
@@ -2854,7 +2862,8 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
   const [project, setProject] = useState<any | null>(null);
   const [feed, setFeed] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'feed' | 'tasks' | 'team'>('master');
+  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'feed' | 'tasks' | 'actions' | 'decisions' | 'team'>('master');
+  const [showRiskMatrix, setShowRiskMatrix] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -2986,8 +2995,9 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         <button onClick={() => navigate('projects')} className={btnSecondary}>
           <ArrowLeft size={14} /> Back to Projects
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={loadProjectDetails} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          <button onClick={() => setShowRiskMatrix(true)} className={btnSecondary}><AlertTriangle size={14} className="text-amber-600" /> 5x5 Risk Heat Map</button>
           <button onClick={() => setShowUpdateModal(true)} className={btnPrimary}><Plus size={14} />Post Site Update</button>
           <button onClick={() => setShowTaskModal(true)} className={btnSecondary}><CheckSquare size={14} />Add Task</button>
         </div>
@@ -3040,6 +3050,8 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
           { id: 'overview', label: 'Overview & KPIs', icon: Briefcase },
           { id: 'feed', label: `Live Feed & Updates (${feed.length})`, icon: TrendingUp },
           { id: 'tasks', label: `Tasks & Programme (${tasks.length})`, icon: CheckSquare },
+          { id: 'actions', label: 'Project Actions', icon: AlertCircle },
+          { id: 'decisions', label: 'Project Decisions', icon: Shield },
           { id: 'team', label: 'Team & Directory', icon: Users },
         ].map(tab => {
           const Icon = tab.icon;
@@ -3214,6 +3226,16 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         </div>
       )}
 
+      {/* Tab: Project Actions */}
+      {activeTab === 'actions' && (
+        <ProjectActionsRegister projectId={activeProjectId} />
+      )}
+
+      {/* Tab: Project Decisions */}
+      {activeTab === 'decisions' && (
+        <ProjectDecisionsRegister projectId={activeProjectId} />
+      )}
+
       {/* Tab: Team */}
       {activeTab === 'team' && (
         <Card className="p-6 border border-gray-100">
@@ -3322,6 +3344,13 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
           </div>
         )}
       </Modal>
+
+      {/* Modal: 5x5 Risk Heat Map */}
+      <RiskMatrixHeatMapModal
+        open={showRiskMatrix}
+        onClose={() => setShowRiskMatrix(false)}
+        projectId={activeProjectId}
+      />
     </div>
   );
 }

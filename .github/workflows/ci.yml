@@ -75,6 +75,12 @@ jobs:
       - name: Run Project Master & Task Engine Suite
         run: npm run test:project-master
 
+      - name: Run Release V1.4.0 Enterprise UAT Suite
+        run: npm run test:uat
+
+      - name: Run Release V1.4.0 High-Concurrency Load Benchmark
+        run: npm run test:load
+
       - name: Stop isolated server
         if: always()
         run: |

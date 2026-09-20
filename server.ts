@@ -314,7 +314,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "users", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "payroll_profiles", "attendance_adjustments", "worker_assignments", "project_updates"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "attendance_adjustments", "worker_assignments", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -325,7 +326,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "payroll_profiles", "attendance_adjustments", "worker_assignments", "project_updates"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "attendance_adjustments", "worker_assignments", "project_updates",
+      "project_actions", "project_decisions"
     ],
     delete: true,
   },
@@ -339,7 +341,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "attendance_adjustments", "worker_assignments", "project_updates"
+      "attendance_adjustments", "worker_assignments", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -350,7 +353,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "attendance_adjustments", "worker_assignments", "project_updates"
+      "attendance_adjustments", "worker_assignments", "project_updates",
+      "project_actions", "project_decisions"
     ],
     delete: true,
   },
@@ -363,7 +367,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dependencies", "material_requests", "ncrs", "commissioning",
       "wbs", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "workforce", "sites", "workers", "site_instructions", "leave_requests", "attendance_adjustments", "worker_assignments", "project_updates"
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "attendance_adjustments", "worker_assignments", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "dailylogs", "documents",
@@ -371,7 +376,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "meeting_minutes", "timesheets", "equipment", "material_requests",
       "commissioning", "attendance",
       "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "site_instructions", "leave_requests", "attendance_adjustments", "project_updates"
+      "site_instructions", "leave_requests", "attendance_adjustments", "project_updates",
+      "project_actions", "project_decisions"
     ],
     delete: false,
   },
@@ -381,13 +387,15 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "procurement", "material_requests", "dependencies", "risks",
       "handover", "documents", "projects", "gantt", "wbs", "tasks", "planner", "submittals",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "costs", "budget", "change_orders", "purchase_orders",
       "procurement", "material_requests", "risks", "handover", "documents",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates",
+      "project_actions", "project_decisions"
     ],
     delete: false,
   },
@@ -396,12 +404,14 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "punchlist", "inspections", "ncrs", "commissioning",
       "handover", "submittals", "rfis", "dailylogs", "documents",
       "site_today", "equipment", "tasks", "planner",
-      "companies", "work_packages", "clarifications", "transmittals", "progress_submissions", "project_updates"
+      "companies", "work_packages", "clarifications", "transmittals", "progress_submissions", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "punchlist", "inspections", "ncrs", "commissioning",
       "handover", "documents",
-      "clarifications", "transmittals", "project_updates"
+      "clarifications", "transmittals", "project_updates",
+      "project_actions", "project_decisions"
     ],
     delete: false,
   },
@@ -411,11 +421,13 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dailylogs", "timesheets", "attendance", "site_today",
       "documents", "equipment", "tasks", "planner",
       "companies", "work_packages", "clarifications", "progress_reports",
-      "workforce", "sites", "workers", "project_updates"
+      "workforce", "sites", "workers", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "safety_incidents", "risks", "inspections", "dailylogs",
-      "attendance", "documents", "clarifications", "project_updates"
+      "attendance", "documents", "clarifications", "project_updates",
+      "project_actions", "project_decisions"
     ],
     delete: false,
   },
@@ -425,7 +437,8 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "safety_incidents", "timesheets", "equipment", "dependencies",
       "material_requests", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "transmittals", "progress_submissions",
-      "site_instructions", "leave_requests", "workers", "project_updates"
+      "site_instructions", "leave_requests", "workers", "project_updates",
+      "project_actions"
     ],
     edit: [
       "tasks", "planner", "submittals", "punchlist", "dailylogs", "documents", "safety_incidents",
@@ -439,16 +452,18 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "tasks", "planner", "gantt", "rfis", "submittals", "punchlist",
       "costs", "change_orders", "inspections", "meeting_minutes", "ncrs",
       "commissioning", "handover", "documents", "site_today", "calendar",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "project_updates"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "project_updates",
+      "project_actions", "project_decisions"
     ],
     edit: [
       "rfis", "submittals", "inspections", "commissioning", "handover",
-      "clarifications", "transmittals"
+      "clarifications", "transmittals",
+      "project_actions", "project_decisions"
     ],
     delete: false,
   },
   Client: {
-    view: ["client_dashboard", "projects", "documents", "change_orders", "progress_reports", "clarifications", "project_updates"],
+    view: ["client_dashboard", "projects", "documents", "change_orders", "progress_reports", "clarifications", "project_updates", "project_actions", "project_decisions"],
     edit: [],
     delete: false,
   },
@@ -542,7 +557,7 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
     module: "change_orders",
   },
   purchase_orders: {
-    cols: ["id", "project_id", "po_number", "vendor", "trade", "description", "amount", "order_date", "expected_delivery", "status"],
+    cols: ["id", "project_id", "po_number", "vendor", "trade", "description", "amount", "order_date", "expected_delivery", "expected_delivery_date", "actual_delivery_date", "lead_time_days", "task_id", "status"],
     module: "purchase_orders",
   },
   safety_incidents: {
@@ -593,13 +608,33 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
   material_requests: {
     cols: [
       "id", "project_id", "location", "discipline", "system", "material", "description",
-      "quantity", "unit", "required_date", "reason", "drawing", "boq_reference", "requested_by", "status"
+      "quantity", "unit", "required_date", "reason", "drawing", "boq_reference", "requested_by", "task_id", "status"
     ],
     module: "material_requests",
   },
   risks: {
-    cols: ["id", "project_id", "title", "category", "probability", "impact", "risk_score", "owner", "mitigation", "target_date", "status"],
+    cols: ["id", "project_id", "risk_no", "title", "category", "probability", "impact", "risk_score", "risk_level", "owner", "mitigation", "target_date", "contingency_cost", "linked_task_id", "status", "created_by", "created_at"],
     module: "risks",
+  },
+  project_risks: {
+    cols: ["id", "project_id", "risk_no", "title", "category", "probability", "impact", "risk_score", "risk_level", "owner", "mitigation", "target_date", "contingency_cost", "linked_task_id", "status", "created_by", "created_at"],
+    module: "risks",
+  },
+  project_actions: {
+    cols: ["id", "project_id", "action_no", "title", "description", "assigned_to_user_id", "assigned_to_name", "priority", "status", "due_date", "source_type", "source_id", "created_by", "created_at", "completed_at"],
+    module: "project_actions",
+  },
+  actions: {
+    cols: ["id", "project_id", "action_no", "title", "description", "assigned_to_user_id", "assigned_to_name", "priority", "status", "due_date", "source_type", "source_id", "created_by", "created_at", "completed_at"],
+    module: "project_actions",
+  },
+  project_decisions: {
+    cols: ["id", "project_id", "decision_no", "title", "context", "options_considered", "decision_taken", "decided_by", "decision_date", "cost_impact", "schedule_impact_days", "status", "created_by", "created_at"],
+    module: "project_decisions",
+  },
+  decisions: {
+    cols: ["id", "project_id", "decision_no", "title", "context", "options_considered", "decision_taken", "decided_by", "decision_date", "cost_impact", "schedule_impact_days", "status", "created_by", "created_at"],
+    module: "project_decisions",
   },
   ncrs: {
     cols: [
@@ -892,9 +927,21 @@ function initDb() {
       requested_by TEXT, status TEXT
     );
     CREATE TABLE IF NOT EXISTS risks (
-      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, title TEXT, category TEXT,
-      probability TEXT, impact TEXT, risk_score REAL, owner TEXT, mitigation TEXT,
-      target_date TEXT, status TEXT
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, risk_no TEXT, title TEXT, category TEXT,
+      probability TEXT, impact TEXT, risk_score REAL, risk_level TEXT DEFAULT 'Medium', owner TEXT, mitigation TEXT,
+      target_date TEXT, contingency_cost REAL DEFAULT 0, linked_task_id TEXT, status TEXT, created_by TEXT, created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS project_actions (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, action_no TEXT, title TEXT NOT NULL,
+      description TEXT, assigned_to_user_id TEXT, assigned_to_name TEXT, priority TEXT DEFAULT 'Medium',
+      status TEXT DEFAULT 'Open', due_date TEXT, source_type TEXT DEFAULT 'General', source_id TEXT,
+      created_by TEXT, created_at TEXT, completed_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS project_decisions (
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL, decision_no TEXT, title TEXT NOT NULL,
+      context TEXT, options_considered TEXT, decision_taken TEXT, decided_by TEXT, decision_date TEXT,
+      cost_impact REAL DEFAULT 0, schedule_impact_days INTEGER DEFAULT 0, status TEXT DEFAULT 'Approved',
+      created_by TEXT, created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS ncrs (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL, number TEXT, location TEXT,
@@ -1569,6 +1616,29 @@ function initDb() {
 
   // V1.2 Workforce: worker_id linkage on users
   try { db.exec("ALTER TABLE users ADD COLUMN worker_id TEXT;"); } catch {}
+
+  // V1.4 Enterprise: Procurement -> Programme integration
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN expected_delivery_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN actual_delivery_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN lead_time_days INTEGER DEFAULT 0;"); } catch {}
+
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN task_id TEXT;"); } catch {}
+
+  // V1.4 Enterprise: Risk management enhancements
+  try { db.exec("ALTER TABLE risks ADD COLUMN risk_no TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE risks ADD COLUMN risk_level TEXT DEFAULT 'Medium';"); } catch {}
+  try { db.exec("ALTER TABLE risks ADD COLUMN contingency_cost REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE risks ADD COLUMN linked_task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE risks ADD COLUMN created_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE risks ADD COLUMN created_at TEXT;"); } catch {}
+
+  // V1.4 Enterprise: Project actions & decisions indices
+  db.exec("CREATE INDEX IF NOT EXISTS idx_project_actions_proj ON project_actions(project_id, status, due_date);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_project_decisions_proj ON project_decisions(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_risks_proj ON risks(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_po_task ON purchase_orders(task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_mr_task ON material_requests(task_id);");
 
   seedUsers();
   seedLeaveTypes();
@@ -3628,7 +3698,10 @@ async function startServer() {
     }
     const poNumber = req.body?.po_number || `PO-${Date.now()}`;
     const today = new Date().toISOString().split("T")[0];
-    db.prepare("INSERT INTO purchase_orders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare(`
+      INSERT INTO purchase_orders (id, project_id, po_number, vendor, trade, description, amount, order_date, expected_delivery, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
       crypto.randomUUID(), item.project_id, poNumber, item.selected_supplier || "", "",
       item.material || "", 0, item.po_date || today, item.expected_delivery, "Ordered"
     );
@@ -5118,6 +5191,285 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
+  // --- WORK PACKAGE COMMAND CENTER ---
+  app.get("/api/work_packages/:id/command-center", authRequired, (req, res) => {
+    try {
+      if (req.user!.role === "Client" || !canView(req.user!, "work_packages")) {
+        res.status(403).json({ error: "No access to work packages" });
+        return;
+      }
+      const wp = db.prepare(`
+        SELECT wp.*,
+          c.name as company_name, c.trade as company_trade,
+          s.name as site_name,
+          wbs.name as wbs_name, wbs.code as wbs_code
+        FROM work_packages wp
+        LEFT JOIN companies c ON c.id = wp.company_id
+        LEFT JOIN sites s ON s.id = wp.site_id
+        LEFT JOIN wbs_items wbs ON wbs.id = wp.wbs_item_id
+        WHERE wp.id=?
+      `).get(req.params.id) as any;
+      if (!wp) {
+        res.status(404).json({ error: "Work package not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, wp.project_id)) {
+        res.status(403).json({ error: "No access to project" });
+        return;
+      }
+      if (req.user!.role === "Subcontractor" && req.user!.work_package_id && req.user!.work_package_id !== wp.id) {
+        res.status(403).json({ error: "Forbidden: cross-package access blocked" });
+        return;
+      }
+
+      // Tasks aggregation
+      const tasks = db.prepare(`
+        SELECT t.*,
+          sup.name as supervisor_name,
+          w.name as worker_name
+        FROM tasks t
+        LEFT JOIN users sup ON sup.id = t.supervisor_id
+        LEFT JOIN workers w ON w.id = t.assigned_worker_id
+        WHERE t.work_package_id=?
+        ORDER BY t.start ASC
+      `).all(req.params.id) as any[];
+
+      const totalTasks = tasks.length;
+      const completedTasks = tasks.filter(t => t.status === "Completed" || t.progress === 100).length;
+      const inProgressTasks = tasks.filter(t => t.status === "In Progress").length;
+      const blockedTasks = tasks.filter(t => t.status === "Blocked").length;
+      const notStartedTasks = tasks.filter(t => t.status === "Not Started" || (!t.status && t.progress === 0)).length;
+      const avgProgress = totalTasks > 0
+        ? Math.round(tasks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0) / totalTasks)
+        : 0;
+
+      // Progress submissions / claims
+      const claims = db.prepare(`
+        SELECT * FROM progress_submissions WHERE work_package_id=? ORDER BY period_date DESC, created_at DESC LIMIT 10
+      `).all(req.params.id) as any[];
+      const totalClaimedAmount = claims.reduce((acc, c) => acc + (Number(c.claimed_amount) || 0), 0);
+      const totalCertifiedAmount = claims.filter(c => c.status === "Approved" || c.status === "Approved with Adjustments")
+        .reduce((acc, c) => acc + (Number(c.adjusted_amount || c.claimed_amount) || 0), 0);
+
+      // Blockers
+      const blockers = db.prepare(`
+        SELECT b.*, t.title as task_title
+        FROM task_blockers b
+        JOIN tasks t ON t.id = b.task_id
+        WHERE t.work_package_id=? AND b.status = 'Active'
+        ORDER BY b.created_at DESC
+      `).all(req.params.id) as any[];
+
+      // Assigned manpower
+      const workers = db.prepare(`
+        SELECT DISTINCT w.*, c.name as company_name
+        FROM workers w
+        LEFT JOIN companies c ON c.id = w.company_id
+        WHERE w.work_package_id=? OR w.id IN (SELECT assigned_worker_id FROM tasks WHERE work_package_id=? AND assigned_worker_id IS NOT NULL)
+      `).all(req.params.id, req.params.id) as any[];
+
+      // Open clarifications
+      const clarifications = db.prepare(`
+        SELECT * FROM clarifications WHERE work_package_id=? AND status != 'Closed' ORDER BY created_at DESC
+      `).all(req.params.id) as any[];
+
+      // Linked Purchase orders
+      const wpDiscipline = wp.discipline || wp.trade || null;
+      const pos = db.prepare(`
+        SELECT po.* FROM purchase_orders po
+        WHERE (po.trade = ? AND ? IS NOT NULL) OR po.task_id IN (SELECT id FROM tasks WHERE work_package_id=?)
+      `).all(wpDiscipline, wpDiscipline, req.params.id) as any[];
+
+      res.json({
+        work_package: rowToDict(wp),
+        metrics: {
+          total_tasks: totalTasks,
+          completed_tasks: completedTasks,
+          in_progress_tasks: inProgressTasks,
+          blocked_tasks: blockedTasks,
+          not_started_tasks: notStartedTasks,
+          avg_progress: avgProgress,
+          total_claimed_amount: totalClaimedAmount,
+          total_certified_amount: totalCertifiedAmount,
+          active_blockers_count: blockers.length,
+          manpower_count: workers.length,
+          open_clarifications_count: clarifications.length
+        },
+        tasks: tasks.map(rowToDict),
+        claims: claims.map(rowToDict),
+        blockers: blockers.map(rowToDict),
+        workers: workers.map(rowToDict),
+        clarifications: clarifications.map(rowToDict),
+        purchase_orders: pos.map(rowToDict)
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- PROCUREMENT -> PROGRAMME INTEGRATION ---
+  app.get("/api/procurement/programme-impact", authRequired, (req, res) => {
+    try {
+      const projectId = req.query.project_id as string;
+      if (!projectId || !hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "No access to project" });
+        return;
+      }
+      const pos = db.prepare(`
+        SELECT po.*,
+          t.title as task_title, t.start as task_start, t.end as task_end, t.status as task_status,
+          t.trade as task_trade, wp.code as work_package_code, wp.name as work_package_name
+        FROM purchase_orders po
+        LEFT JOIN tasks t ON t.id = po.task_id
+        LEFT JOIN work_packages wp ON wp.id = t.work_package_id
+        WHERE po.project_id=? AND po.task_id IS NOT NULL
+      `).all(projectId) as any[];
+
+      const impactItems = pos.map(po => {
+        const deliveryDate = po.expected_delivery_date || po.expected_delivery;
+        const taskStart = po.task_start;
+        let bufferDays: number | null = null;
+        let riskLevel: "Critical" | "Warning" | "On Track" | "Delivered" = "On Track";
+        let message = "Material scheduled on time";
+
+        if (po.status === "Delivered" || po.actual_delivery_date) {
+          riskLevel = "Delivered";
+          message = "Material arrived on site";
+        } else if (deliveryDate && taskStart) {
+          const dDel = new Date(deliveryDate).getTime();
+          const dTask = new Date(taskStart).getTime();
+          bufferDays = Math.round((dTask - dDel) / (1000 * 60 * 60 * 24));
+          if (bufferDays < 0) {
+            riskLevel = "Critical";
+            message = `Material delivery is delayed by ${Math.abs(bufferDays)} days past scheduled task start!`;
+          } else if (bufferDays <= 3) {
+            riskLevel = "Warning";
+            message = `Tight buffer: only ${bufferDays} days between delivery and task start`;
+          } else {
+            riskLevel = "On Track";
+            message = `Healthy buffer: ${bufferDays} days lead time`;
+          }
+        }
+
+        return {
+          po_id: po.id,
+          po_number: po.po_number,
+          vendor: po.vendor,
+          description: po.description,
+          amount: po.amount,
+          status: po.status,
+          expected_delivery: deliveryDate,
+          task_id: po.task_id,
+          task_title: po.task_title,
+          task_start: po.task_start,
+          task_trade: po.task_trade,
+          work_package_code: po.work_package_code,
+          buffer_days: bufferDays,
+          risk_level: riskLevel,
+          message
+        };
+      });
+
+      const criticalCount = impactItems.filter(i => i.risk_level === "Critical").length;
+      const warningCount = impactItems.filter(i => i.risk_level === "Warning").length;
+      const onTrackCount = impactItems.filter(i => i.risk_level === "On Track" || i.risk_level === "Delivered").length;
+
+      res.json({
+        project_id: projectId,
+        summary: {
+          total_linked: impactItems.length,
+          critical_lead_time_risks: criticalCount,
+          tight_lead_time_warnings: warningCount,
+          on_track_count: onTrackCount
+        },
+        items: impactItems
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- ADVANCED RISK MANAGEMENT: 5x5 HEAT MAP MATRIX ---
+  app.get(["/api/project_risks/matrix", "/api/risks/matrix"], authRequired, (req, res) => {
+    try {
+      const projectId = req.query.project_id as string;
+      if (!projectId || !hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "No access to project" });
+        return;
+      }
+      const risks = db.prepare(`
+        SELECT r.*, t.title as linked_task_title
+        FROM risks r
+        LEFT JOIN tasks t ON t.id = r.linked_task_id
+        WHERE r.project_id=?
+        ORDER BY r.risk_score DESC, r.target_date ASC
+      `).all(projectId) as any[];
+
+      const mapLevel = (val: any): number => {
+        if (typeof val === 'number') return Math.max(1, Math.min(5, Math.round(val)));
+        const s = String(val || '').toLowerCase();
+        if (s.includes('very high') || s.includes('critical') || s === '5') return 5;
+        if (s.includes('high') || s === '4') return 4;
+        if (s.includes('medium') || s.includes('moderate') || s === '3') return 3;
+        if (s.includes('low') || s === '2') return 2;
+        if (s.includes('very low') || s === '1') return 1;
+        const n = parseInt(s, 10);
+        return isNaN(n) ? 3 : Math.max(1, Math.min(5, n));
+      };
+
+      const grid: Record<string, any[]> = {};
+      for (let p = 1; p <= 5; p++) {
+        for (let i = 1; i <= 5; i++) {
+          grid[`${p}_${i}`] = [];
+        }
+      }
+
+      let criticalCount = 0;
+      let highCount = 0;
+      let mediumCount = 0;
+      let lowCount = 0;
+
+      const scoredRisks = risks.map(r => {
+        const prob = mapLevel(r.probability);
+        const imp = mapLevel(r.impact);
+        const score = prob * imp;
+        let level: 'Critical' | 'High' | 'Medium' | 'Low' = 'Low';
+        if (score >= 15) {
+          level = 'Critical';
+          criticalCount++;
+        } else if (score >= 10) {
+          level = 'High';
+          highCount++;
+        } else if (score >= 5) {
+          level = 'Medium';
+          mediumCount++;
+        } else {
+          level = 'Low';
+          lowCount++;
+        }
+        const item = { ...rowToDict(r), calculated_probability: prob, calculated_impact: imp, calculated_score: score, calculated_level: level };
+        grid[`${prob}_${imp}`].push(item);
+        return item;
+      });
+
+      res.json({
+        project_id: projectId,
+        total_risks: risks.length,
+        summary: {
+          critical: criticalCount,
+          high: highCount,
+          medium: mediumCount,
+          low: lowCount
+        },
+        matrix_grid: grid,
+        risks: scoredRisks,
+        top_risks: scoredRisks.slice(0, 5)
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // --- CLARIFICATIONS HUB (CLIENT <-> MAIN CONTRACTOR <-> SUBCONTRACTOR) ---
   app.get("/api/clarifications", authRequired, (req, res) => {
     try {
@@ -5629,6 +5981,31 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       );
 
       writeAudit(req.user!.user_id, "progress_reports", req.params.id, existing.project_id, "update", existing, data);
+      const updated = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
+      res.json(rowToDict(updated));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/progress_reports/:id/publish", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Report not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
+        res.status(403).json({ error: "Only Admin or Project Manager can publish progress reports" });
+        return;
+      }
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE progress_reports
+        SET status='Published to Client', published_at=?, published_by=?
+        WHERE id=?
+      `).run(now, req.user!.name, req.params.id);
+      writeAudit(req.user!.user_id, "progress_reports", req.params.id, existing.project_id, "publish", existing, { status: "Published to Client" });
       const updated = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
       res.json(rowToDict(updated));
     } catch (err: any) {
@@ -8531,7 +8908,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: `No view access to ${module}` });
         return;
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+      if (actualTable === "project_actions") {
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+          db.prepare("UPDATE project_actions SET status='Overdue' WHERE status NOT IN ('Completed', 'Closed') AND due_date IS NOT NULL AND due_date != '' AND due_date < ?").run(today);
+        } catch {}
+      }
       const projectId = req.query.project_id as string;
       let { where, params } = projectScopeSql(req.user!, projectId, `${actualTable}.project_id`);
       if (!where) {
@@ -8620,7 +9003,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
     // Direct GET by ID with full authorization check
     app.get(`/api/${table}/:id`, authRequired, (req, res) => {
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
       let record: any;
       if (actualTable === "documents") {
         record = db.prepare(`
@@ -8759,7 +9142,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           }
         }
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
       const values = cols.map(c => (c === "id" ? id : data[c] !== undefined ? data[c] : null));
       const placeholders = cols.map(() => "?").join(",");
       db.prepare(`INSERT INTO ${actualTable} (${cols.join(",")}) VALUES (${placeholders})`).run(...values);
@@ -8775,7 +9158,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: `No edit access to ${module}` });
         return;
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
       const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });
@@ -8878,7 +9261,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
     // Delete
     app.delete(`/api/${table}/:id`, authRequired, (req, res) => {
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table;
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
       const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });
@@ -8896,7 +9279,9 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   }
 
   // Vite development middleware or static file serving
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV === "test") {
+    // In test mode, omit Vite dev server to allow instantaneous startup
+  } else if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
