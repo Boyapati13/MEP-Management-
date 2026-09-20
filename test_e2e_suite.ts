@@ -586,6 +586,71 @@ async function runTests() {
     });
     assert(setupDenied.status === 403, 'Site Engineer cannot run project setup document extraction');
 
+    console.log('\nSection 17: External document submissions - Client and Subcontractor');
+    const clientSubmissionData = 'data:text/plain;base64,' + Buffer.from('Client response / clarification attachment').toString('base64');
+    const clientSubmission = await req({
+      path: '/api/documents', method: 'POST', token: clientToken,
+      body: {
+        project_id: projectId,
+        name: 'Client Response',
+        category: 'Contract',
+        visibility: 'All',
+        published_by: 'spoofed',
+        attachment_name: 'client_response.txt',
+        attachment_data: clientSubmissionData
+      }
+    });
+    assert(clientSubmission.status === 201 && clientSubmission.body.category === 'Client Submission' && clientSubmission.body.visibility === 'Client' && !clientSubmission.body.published_by,
+      'Client can submit a document to an assigned project, but the server forces safe Client-submission metadata');
+
+    const clientDocsAfterSubmission = await req({ path: `/api/documents?project_id=${projectId}`, token: clientToken });
+    assert(clientDocsAfterSubmission.status === 200 && clientDocsAfterSubmission.body.some((d: any) => d.id === clientSubmission.body.id),
+      'Client can see their own submitted document alongside contractor-published documents');
+
+    const clientCannotEditSubmission = await req({
+      path: `/api/documents/${clientSubmission.body.id}`, method: 'PUT', token: clientToken,
+      body: { name: 'Changed by client', visibility: 'All' }
+    });
+    assert(clientCannotEditSubmission.status === 403,
+      'Client submissions are immutable through the generic edit route; a new revision must be submitted instead');
+
+    const clientCrossProjectUpload = await req({
+      path: '/api/documents', method: 'POST', token: clientToken,
+      body: { project_id: otherProjectId, name: 'Should fail', attachment_name: 'fail.txt', attachment_data: clientSubmissionData }
+    });
+    assert(clientCrossProjectUpload.status === 403,
+      'Client cannot upload documents to a project they are not assigned to');
+
+    const clientSubcontractorDirectory = await req({ path: `/api/projects/${projectId}/subcontractors`, token: clientToken });
+    assert(clientSubcontractorDirectory.status === 403,
+      'Client cannot enumerate subcontractor login identities through the internal assignment endpoint');
+
+    const subcontractorSubmissionData = 'data:text/plain;base64,' + Buffer.from('Subcontractor method statement / project evidence').toString('base64');
+    const subcontractorSubmission = await req({
+      path: '/api/documents', method: 'POST', token: tokens['Subcontractor'],
+      body: {
+        project_id: otherProjectId,
+        name: 'Subcontractor Method Statement',
+        category: 'Submittal',
+        attachment_name: 'method_statement.txt',
+        attachment_data: subcontractorSubmissionData
+      }
+    });
+    assert(subcontractorSubmission.status === 201 && subcontractorSubmission.body.subcontractor_id === subUser.id,
+      'Subcontractor can upload a document only within their assigned project and it is tied to their own account');
+
+    const subcontractorDocs = await req({ path: `/api/documents?project_id=${otherProjectId}`, token: tokens['Subcontractor'] });
+    assert(subcontractorDocs.status === 200 && subcontractorDocs.body.some((d: any) => d.id === subcontractorSubmission.body.id),
+      'Subcontractor can see their own uploaded project document');
+
+    const subcontractorDirectoryDenied = await req({ path: `/api/projects/${otherProjectId}/subcontractors`, token: tokens['Subcontractor'] });
+    assert(subcontractorDirectoryDenied.status === 403,
+      'Subcontractor cannot enumerate other subcontractor login identities');
+
+    const internalDirectoryAllowed = await req({ path: `/api/projects/${otherProjectId}/subcontractors`, token: tokens['SiteEngineer'] });
+    assert(internalDirectoryAllowed.status === 200 && Array.isArray(internalDirectoryAllowed.body) && internalDirectoryAllowed.body.some((u: any) => u.id === subUser.id),
+      'Internal project team can still use the subcontractor assignment directory');
+
   } finally {
     await cleanup(adminToken);
   }
