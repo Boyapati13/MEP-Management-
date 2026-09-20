@@ -315,12 +315,13 @@ These are worth addressing before any production/internet-facing deployment. Ear
 
 **Still open:**
 - **No MFA/SSO.** Authentication is username + password only.
-- **Deferred from the full multi-workspace architecture** (the Client Portal above is a deliberately scoped Phase 1 of this, not the whole proposal):
-  - No `tenants`/`companies` data model - a company (main contractor, subcontractor firm, client organization) isn't a first-class entity yet; project membership is still user-to-project directly, matching every other role.
-  - No work-package/trade-scoped subcontractor visibility - a Subcontractor's access is still "their assigned project" rather than "their assigned package within a project" (`XYZ Electrical → Hotel Alpha → Electrical LV package` from the proposal).
-  - No Clarifications Hub (`clarifications`/`clarification_messages` with SC↔MC↔Client threads, escalation to RFI/Change Order).
-  - No subcontractor progress-submission approval workflow (subcontractor proposes % complete → main contractor accepts/rejects → becomes official progress). Progress is still entered directly by whoever has edit access to `tasks`.
-  - Publishing/visibility currently only covers `documents` and `change_orders` - not RFIs, submittals, or a per-record "Selected Companies" audience beyond the binary Internal/Client split.
+- **Multi-Company & Work-Package Architecture**:
+  - `companies` & `project_companies` data model: First-class organizational hierarchy mapping Main Contractor, Subcontractors, and Client entities with strict query-level isolation.
+  - Work-Package Scoping: Subcontractor access is tightly constrained to assigned work packages (`work_packages`) and assigned trades within their project scope.
+  - Clarifications Hub (`clarifications` & `clarification_messages`): Multi-tier messaging with thread-level Client/Internal visibility rules, owner checks, and seamless escalation to RFIs or Change Orders.
+  - Subcontractor Progress-Submission Workflow (`progress_submissions`): Subcontractors propose progress milestones and completion percentages with review and approval workflows before becoming official progress metrics.
+  - Progress Reports Publishing (`progress_reports`): Formal report lifecycle with revision tracking, safe photo attachment management, and explicit publishing workflows.
+  - Transmittals & Revision Control: Strict authorization and client visibility filtering across document revisions, drawing packages, and transmittals.
 - **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, and now triggers an in-app notification when set - but the Planner UI still doesn't expose a way to pick an assignee from the task detail modal; it can only be set via a direct API call.
 - **File uploads** (`multer`, BOQ import) should be checked for file-type restrictions and virus scanning if exposed beyond a trusted network - the size limit itself is now handled (see below).
 - **`alert()` is used for error handling** in a few places (e.g. the Drawing Markup Studio's PDF-load failure message) - functional, but a native blocking browser dialog is a dated pattern for a polished app; an inline error banner would look and behave better, and not incidentally block headless browser automation the way it blocked screenshot testing during this pass.

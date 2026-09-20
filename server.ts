@@ -13,10 +13,12 @@ import * as mammoth from "mammoth";
 interface AuthenticatedUser {
   user_id: string;
   name: string;
-  role: "Admin" | "ProjectManager" | "SiteEngineer" | "CommercialManager" | "SafetyOfficer" | "QAQC" | "Subcontractor" | "Consultant" | string;
+  role: "Admin" | "ProjectManager" | "SiteEngineer" | "CommercialManager" | "SafetyOfficer" | "QAQC" | "Subcontractor" | "Consultant" | "Client" | string;
   email?: string;
+  company_id?: string;
   company?: string;
   trade?: string;
+  work_package_id?: string;
   specialization?: string;
 }
 
@@ -579,34 +581,6 @@ const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
     cols: ["id", "project_id", "task_id", "label", "is_checked", "order_index"],
     module: "planner",
   },
-  companies: {
-    cols: ["id", "name", "type", "trade", "contact_person", "email", "phone", "vat_number", "status", "notes", "created_at"],
-    module: "companies",
-  },
-  work_packages: {
-    cols: ["id", "project_id", "name", "code", "discipline", "description", "company_id", "lead_contact", "budget_allocated", "status", "start_date", "target_date", "created_at"],
-    module: "work_packages",
-  },
-  clarifications: {
-    cols: ["id", "project_id", "number", "title", "type", "from_company_id", "to_company_id", "work_package_id", "raised_by", "discipline", "priority", "status", "question_text", "proposed_solution", "cost_impact_flag", "schedule_impact_flag", "official_response", "responded_by", "responded_at", "due_date", "attachment_name", "attachment_data", "visibility", "created_at"],
-    module: "clarifications",
-  },
-  progress_reports: {
-    cols: ["id", "project_id", "report_number", "title", "period_start", "period_end", "prepared_by", "status", "executive_summary", "overall_progress_percent", "planned_progress_percent", "milestone_summary", "hvac_progress", "electrical_progress", "plumbing_progress", "fire_progress", "bms_progress", "safety_summary", "manpower_peak", "lookahead_narrative", "key_risks_issues", "published_at", "published_by", "created_at"],
-    module: "progress_reports",
-  },
-  document_transmittals: {
-    cols: ["id", "project_id", "transmittal_number", "sender_company_id", "recipient_company_id", "subject", "purpose", "date_sent", "due_date", "status", "notes", "created_at"],
-    module: "transmittals",
-  },
-  transmittals: {
-    cols: ["id", "project_id", "transmittal_number", "sender_company_id", "recipient_company_id", "subject", "purpose", "date_sent", "due_date", "status", "notes", "created_at"],
-    module: "transmittals",
-  },
-  progress_submissions: {
-    cols: ["id", "project_id", "work_package_id", "company_id", "submitted_by", "period_date", "discipline", "claimed_percent", "quantity_installed", "unit", "notes", "status", "adjusted_percent", "reviewed_by", "review_comments", "approved_at", "created_at"],
-    module: "progress_submissions",
-  },
 };
 
 const WORKFLOW_STATUSES: Record<string, Record<string, string[]>> = {
@@ -1052,6 +1026,7 @@ function initDb() {
   try { db.exec("ALTER TABLE documents ADD COLUMN document_number TEXT;"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN discipline TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN company_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN work_package_id TEXT;"); } catch {}
 
   try { db.exec("ALTER TABLE documents ADD COLUMN subcontractor_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN uploaded_by TEXT;"); } catch {}
@@ -1148,7 +1123,14 @@ function hasProjectAccess(user: AuthenticatedUser, projectId?: string): boolean 
   const row = db.prepare(
     "SELECT 1 FROM project_memberships WHERE user_id=? AND project_id=? AND active=1"
   ).get(user.user_id, projectId);
-  return Boolean(row);
+  if (row) return true;
+  if (user.company_id) {
+    const compRow = db.prepare(
+      "SELECT 1 FROM project_companies WHERE project_id=? AND company_id=?"
+    ).get(projectId, user.company_id);
+    if (compRow) return true;
+  }
+  return false;
 }
 
 function projectScopeSql(user: AuthenticatedUser, projectId?: string | null, column: string = "project_id"): { where: string | null; params: any[] } {
@@ -1160,6 +1142,12 @@ function projectScopeSql(user: AuthenticatedUser, projectId?: string | null, col
   }
   if (user.role === "Admin") {
     return { where: "1=1", params: [] };
+  }
+  if (user.company_id) {
+    return {
+      where: `(${column} IN (SELECT project_id FROM project_memberships WHERE user_id=? AND active=1) OR ${column} IN (SELECT project_id FROM project_companies WHERE company_id=?))`,
+      params: [user.user_id, user.company_id],
+    };
   }
   return {
     where: `${column} IN (SELECT project_id FROM project_memberships WHERE user_id=? AND active=1)`,
@@ -1260,10 +1248,16 @@ function authRequired(req: Request, res: Response, next: NextFunction): void {
     res.status(401).json({ error: "Session expired. Please log in again." });
     return;
   }
+  const userRow = db.prepare("SELECT email, company_id, company, trade, work_package_id FROM users WHERE id=?").get(session.user_id) as any;
   req.user = {
     user_id: session.user_id,
     name: session.name,
     role: session.role,
+    email: userRow?.email || undefined,
+    company_id: userRow?.company_id || undefined,
+    company: userRow?.company || undefined,
+    trade: userRow?.trade || undefined,
+    work_package_id: userRow?.work_package_id || undefined,
   };
   next();
 }
@@ -1426,14 +1420,16 @@ async function startServer() {
 
   app.get("/api/me", authRequired, (req, res) => {
     const user = req.user!;
-    const uRow = db.prepare("SELECT email, company, trade, status, must_change_password FROM users WHERE id=?").get(user.user_id) as any;
+    const uRow = db.prepare("SELECT email, company_id, company, trade, work_package_id, status, must_change_password FROM users WHERE id=?").get(user.user_id) as any;
     res.json({
       user_id: user.user_id,
       name: user.name,
       role: user.role,
       email: uRow?.email || "",
+      company_id: uRow?.company_id || "",
       company: uRow?.company || "",
       trade: uRow?.trade || "",
+      work_package_id: uRow?.work_package_id || "",
       status: uRow?.status || "Active",
       must_change_password: !!uRow?.must_change_password,
       permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,
@@ -1499,7 +1495,7 @@ async function startServer() {
       return;
     }
     const rows = db.prepare(`
-      SELECT u.id, u.username, u.name, u.role, u.email, u.phone, u.company, u.trade,
+      SELECT u.id, u.username, u.name, u.role, u.email, u.phone, u.company_id, u.company, u.trade, u.work_package_id,
         COALESCE(u.status, 'Active') as status, u.created_at, u.last_login,
         (SELECT COUNT(*) FROM project_memberships pm WHERE pm.user_id = u.id AND pm.active = 1) as project_count,
         (SELECT GROUP_CONCAT(p.name, ', ') FROM project_memberships pm JOIN projects p ON p.id = pm.project_id WHERE pm.user_id = u.id AND pm.active = 1) as project_names
@@ -1514,7 +1510,7 @@ async function startServer() {
       res.status(403).json({ error: "Admin access required" });
       return;
     }
-    const { username, name, password, role, email, phone, company, trade, status, project_ids } = req.body || {};
+    const { username, name, password, role, email, phone, company_id, company, trade, work_package_id, status, project_ids } = req.body || {};
     if (!username || !password) {
       res.status(400).json({ error: "Username and password required" });
       return;
@@ -1531,14 +1527,16 @@ async function startServer() {
 
     try {
       db.prepare(`
-        INSERT INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, username, name, password_hash, role, email, phone, company_id, company, trade, work_package_id, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, username.trim(), (name || username).trim(), hashPassword(password), assignedRole,
         email ? String(email).trim() : null,
         phone ? String(phone).trim() : null,
+        company_id ? String(company_id).trim() : null,
         company ? String(company).trim() : null,
         trade ? String(trade).trim() : "General MEP",
+        work_package_id ? String(work_package_id).trim() : null,
         userStatus,
         now
       );
@@ -1560,7 +1558,7 @@ async function startServer() {
       }
 
       writeAudit(req.user!.user_id, "users", id, "SYSTEM", "CREATE_USER", null, {
-        username, name, role: assignedRole, email, company, trade, status: userStatus, project_ids
+        username, name, role: assignedRole, email, company_id, company, trade, work_package_id, status: userStatus, project_ids
       });
 
       res.status(201).json({ id, username, name, role: assignedRole, status: userStatus });
@@ -1584,8 +1582,10 @@ async function startServer() {
     const role = data.role !== undefined ? String(data.role).trim() : user.role;
     const email = data.email !== undefined ? String(data.email).trim() : user.email;
     const phone = data.phone !== undefined ? String(data.phone).trim() : user.phone;
+    const company_id = data.company_id !== undefined ? String(data.company_id).trim() : user.company_id;
     const company = data.company !== undefined ? String(data.company).trim() : user.company;
     const trade = data.trade !== undefined ? String(data.trade).trim() : user.trade;
+    const work_package_id = data.work_package_id !== undefined ? String(data.work_package_id).trim() : user.work_package_id;
     const status = data.status !== undefined ? String(data.status).trim() : (user.status || "Active");
 
     let pwHash = user.password_hash;
@@ -1594,9 +1594,9 @@ async function startServer() {
     }
 
     db.prepare(`
-      UPDATE users SET name=?, role=?, email=?, phone=?, company=?, trade=?, status=?, password_hash=?
+      UPDATE users SET name=?, role=?, email=?, phone=?, company_id=?, company=?, trade=?, work_package_id=?, status=?, password_hash=?
       WHERE id=?
-    `).run(name, role, email, phone, company, trade, status, pwHash, req.params.id);
+    `).run(name, role, email, phone, company_id, company, trade, work_package_id, status, pwHash, req.params.id);
 
     // Update project memberships if provided
     if (Array.isArray(data.project_ids)) {
@@ -1625,9 +1625,9 @@ async function startServer() {
 
     writeAudit(req.user!.user_id, "users", req.params.id, "SYSTEM", "UPDATE_USER", {
       name: user.name, role: user.role, status: user.status
-    }, { name, role, email, phone, company, trade, status });
+    }, { name, role, email, phone, company_id, company, trade, work_package_id, status });
 
-    res.json({ id: req.params.id, username: user.username, name, role, email, phone, company, trade, status });
+    res.json({ id: req.params.id, username: user.username, name, role, email, phone, company_id, company, trade, work_package_id, status });
   });
 
   app.post("/api/users/:id/toggle-status", authRequired, (req, res) => {
@@ -3449,6 +3449,29 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   // --- COMPANIES & DIRECTORY ---
   app.get("/api/companies", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client") {
+        res.status(403).json({ error: "Access denied: company directory is confidential" });
+        return;
+      }
+      if (req.user!.role === "Subcontractor") {
+        const rows = db.prepare(`
+          SELECT c.*,
+            (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id OR u.company = c.name) as user_count,
+            (SELECT COUNT(*) FROM work_packages wp WHERE wp.company_id = c.id) as package_count
+          FROM companies c
+          WHERE c.id = ? OR c.id IN (
+            SELECT pc.company_id FROM project_companies pc
+            WHERE pc.project_id IN (
+              SELECT project_id FROM project_memberships WHERE user_id = ? AND active = 1
+              UNION
+              SELECT project_id FROM project_companies WHERE company_id = ?
+            )
+          )
+          ORDER BY c.name ASC
+        `).all(req.user!.company_id || "", req.user!.user_id, req.user!.company_id || "");
+        res.json(rows.map(rowToDict));
+        return;
+      }
       const rows = db.prepare(`
         SELECT c.*,
           (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id OR u.company = c.name) as user_count,
@@ -3608,10 +3631,19 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   app.get("/api/work_packages", authRequired, (req, res) => {
     try {
       const projectId = req.query.project_id as string;
-      const { where, params } = projectScopeSql(req.user!, projectId, "wp.project_id");
+      let { where, params } = projectScopeSql(req.user!, projectId, "wp.project_id");
       if (!where) {
         res.status(403).json({ error: "No access to project" });
         return;
+      }
+      if (req.user!.role === "Subcontractor") {
+        if (req.user!.work_package_id || req.user!.company_id) {
+          where += " AND (wp.id = ? OR wp.company_id = ?)";
+          params.push(req.user!.work_package_id || "", req.user!.company_id || "");
+        } else {
+          res.json([]);
+          return;
+        }
       }
       const rows = db.prepare(`
         SELECT wp.*,
@@ -3626,7 +3658,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         WHERE ${where}
         ORDER BY wp.code ASC, wp.name ASC
       `).all(...params);
-      res.json(rows.map(rowToDict));
+      const mapped = rows.map(rowToDict);
+      if (req.user!.role === "Client") {
+        for (const r of mapped as any[]) {
+          r.budget_allocated = 0;
+        }
+      }
+      res.json(mapped);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -3634,7 +3672,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.post("/api/work_packages", authRequired, (req, res) => {
     try {
-      if (!canEdit(req.user!, "work_packages")) {
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor" || !canEdit(req.user!, "work_packages")) {
         res.status(403).json({ error: "Permission denied" });
         return;
       }
@@ -3672,12 +3710,16 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.put("/api/work_packages/:id", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor" || !canEdit(req.user!, "work_packages")) {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
       const existing = db.prepare("SELECT * FROM work_packages WHERE id=?").get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Work package not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id) || !canEdit(req.user!, "work_packages")) {
+      if (!hasProjectAccess(req.user!, existing.project_id)) {
         res.status(403).json({ error: "Permission denied" });
         return;
       }
@@ -3708,12 +3750,16 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.delete("/api/work_packages/:id", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor" || !canDelete(req.user!)) {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
       const existing = db.prepare("SELECT * FROM work_packages WHERE id=?").get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Work package not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id) || !canDelete(req.user!)) {
+      if (!hasProjectAccess(req.user!, existing.project_id)) {
         res.status(403).json({ error: "Permission denied" });
         return;
       }
@@ -3735,7 +3781,31 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
       if (req.user!.role === "Client") {
-        where += " AND cl.visibility IN ('Client', 'All')";
+        if (req.user!.company_id) {
+          where += " AND (cl.visibility IN ('Client', 'All') OR cl.from_company_id = ? OR cl.to_company_id = ?)";
+          params.push(req.user!.company_id, req.user!.company_id);
+        } else {
+          where += " AND cl.visibility IN ('Client', 'All')";
+        }
+      } else if (req.user!.role === "Subcontractor") {
+        const subClauses: string[] = [];
+        const subParams: any[] = [];
+        if (req.user!.work_package_id) {
+          subClauses.push("cl.work_package_id = ?");
+          subParams.push(req.user!.work_package_id);
+        }
+        if (req.user!.company_id) {
+          subClauses.push("cl.from_company_id = ?");
+          subParams.push(req.user!.company_id);
+          subClauses.push("cl.to_company_id = ?");
+          subParams.push(req.user!.company_id);
+        }
+        subClauses.push("cl.raised_by = ?");
+        subParams.push(req.user!.name);
+        subClauses.push("cl.id IN (SELECT record_id FROM record_owners WHERE module='clarifications' AND user_id=?)");
+        subParams.push(req.user!.user_id);
+        where += ` AND (${subClauses.join(" OR ")})`;
+        params.push(...subParams);
       }
       const rows = db.prepare(`
         SELECT cl.*,
@@ -3766,7 +3836,22 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
-      const number = data.number || `CLR-${Date.now().toString().slice(-4)}`;
+      const count = (db.prepare("SELECT COUNT(*) as c FROM clarifications WHERE project_id=?").get(data.project_id) as any)?.c || 0;
+      const number = data.number || `CLR-${String(count + 1).padStart(3, "0")}`;
+      
+      let fromComp = data.from_company_id || null;
+      let workPkg = data.work_package_id || null;
+      let vis = data.visibility || "Internal";
+
+      if (req.user!.role === "Client") {
+        fromComp = req.user!.company_id || fromComp;
+        vis = "Client";
+      } else if (req.user!.role === "Subcontractor") {
+        fromComp = req.user!.company_id || fromComp;
+        workPkg = req.user!.work_package_id || workPkg;
+        vis = "Internal";
+      }
+
       db.prepare(`
         INSERT INTO clarifications (
           id, project_id, number, title, type, from_company_id, to_company_id,
@@ -3780,14 +3865,14 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         number,
         data.title || "Clarification Request",
         data.type || "Technical",
-        data.from_company_id || null,
+        fromComp,
         data.to_company_id || null,
-        data.work_package_id || null,
+        workPkg,
         req.user!.name || "User",
         data.discipline || "General",
         data.priority || "Medium",
         data.status || "Submitted",
-        data.question_text || "",
+        data.question_text || data.question || "",
         data.proposed_solution || "",
         data.cost_impact_flag ? 1 : 0,
         data.schedule_impact_flag ? 1 : 0,
@@ -3797,15 +3882,36 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         data.due_date || "",
         data.attachment_name || "",
         data.attachment_data || "",
-        data.visibility || "Internal",
+        vis,
         now
       );
+      db.prepare("INSERT OR IGNORE INTO record_owners VALUES (?, ?, ?)").run("clarifications", id, req.user!.user_id);
       writeAudit(req.user!.user_id, "clarifications", id, data.project_id, "create", null, data);
-      res.status(201).json({ id, ...data, number, created_at: now });
+      res.status(201).json({ id, ...data, from_company_id: fromComp, work_package_id: workPkg, visibility: vis, number, created_at: now });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
   });
+
+  const checkClarificationAccess = (user: AuthenticatedUser, cl: any): boolean => {
+    if (!hasProjectAccess(user, cl.project_id)) return false;
+    if (user.role === "Admin" || user.role === "ProjectManager" || user.role === "SiteEngineer" || user.role === "CommercialManager" || user.role === "QAQC") {
+      return true;
+    }
+    if (user.role === "Client") {
+      if (["Client", "All"].includes(cl.visibility || "Internal")) return true;
+      if (user.company_id && (cl.from_company_id === user.company_id || cl.to_company_id === user.company_id)) return true;
+      return false;
+    }
+    if (user.role === "Subcontractor") {
+      if (user.work_package_id && cl.work_package_id === user.work_package_id) return true;
+      if (user.company_id && (cl.from_company_id === user.company_id || cl.to_company_id === user.company_id)) return true;
+      if (cl.raised_by === user.name) return true;
+      const isOwner = db.prepare("SELECT 1 FROM record_owners WHERE module='clarifications' AND record_id=? AND user_id=?").get(cl.id, user.user_id);
+      return Boolean(isOwner);
+    }
+    return false;
+  };
 
   app.get("/api/clarifications/:id", authRequired, (req, res) => {
     try {
@@ -3814,11 +3920,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Clarification not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id)) {
-        res.status(403).json({ error: "Access denied" });
-        return;
-      }
-      if (req.user!.role === "Client" && !["Client", "All"].includes(existing.visibility || "Internal")) {
+      if (!checkClarificationAccess(req.user!, existing)) {
         res.status(403).json({ error: "Access denied" });
         return;
       }
@@ -3840,9 +3942,16 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Clarification not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id)) {
+      if (!checkClarificationAccess(req.user!, existing)) {
         res.status(403).json({ error: "Access denied" });
         return;
+      }
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        const isOwner = db.prepare("SELECT 1 FROM record_owners WHERE module='clarifications' AND record_id=? AND user_id=?").get(req.params.id, req.user!.user_id);
+        if (!isOwner && existing.raised_by !== req.user!.name) {
+          res.status(403).json({ error: "Only the author or contractor team may update this clarification" });
+          return;
+        }
       }
       const data = req.body || {};
       const now = new Date().toISOString();
@@ -3850,6 +3959,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       const officialResponse = data.official_response !== undefined ? data.official_response : existing.official_response;
       const respondedBy = officialResponse ? (existing.responded_by || req.user!.name) : existing.responded_by;
       const respondedAt = officialResponse ? (existing.responded_at || now) : existing.responded_at;
+
+      let visibility = existing.visibility;
+      if (data.visibility !== undefined) {
+        if (req.user!.role === "Admin" || req.user!.role === "ProjectManager") {
+          visibility = data.visibility;
+        }
+      }
 
       db.prepare(`
         UPDATE clarifications
@@ -3866,7 +3982,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         respondedBy,
         respondedAt,
         data.due_date ?? existing.due_date,
-        data.visibility ?? existing.visibility,
+        visibility,
         data.question_text ?? (data.question ?? existing.question_text),
         data.proposed_solution ?? existing.proposed_solution,
         req.params.id
@@ -3887,8 +4003,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Clarification not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id)) {
-        res.status(403).json({ error: "Permission denied" });
+      if (!hasProjectAccess(req.user!, existing.project_id) || req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        res.status(403).json({ error: "Only contractor management can submit an official answer" });
         return;
       }
       const { official_response, status } = req.body || {};
@@ -3914,7 +4030,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Clarification not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id)) {
+      if (!checkClarificationAccess(req.user!, existing)) {
         res.status(403).json({ error: "Permission denied" });
         return;
       }
@@ -3928,7 +4044,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       db.prepare(`
         INSERT INTO clarification_comments (id, clarification_id, user_id, user_name, company_name, comment_text, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, req.params.id, req.user!.user_id, req.user!.name, req.user!.role, text, now);
+      `).run(id, req.params.id, req.user!.user_id, req.user!.name, req.user!.company_name || req.user!.company || req.user!.role, text, now);
 
       res.status(201).json({ id, clarification_id: req.params.id, user_name: req.user!.name, comment_text: text, message: text, created_at: now });
     } catch (err: any) {
@@ -3941,7 +4057,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   app.get("/api/clarifications/:id/comments", authRequired, (req, res) => {
     try {
       const existing = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
-      if (!existing || !hasProjectAccess(req.user!, existing.project_id)) {
+      if (!existing || !checkClarificationAccess(req.user!, existing)) {
         res.status(403).json({ error: "Access denied" });
         return;
       }
@@ -3955,6 +4071,10 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   // --- PUBLISHED PROGRESS REPORTS (CLIENT VISIBILITY CONTROL) ---
   app.get("/api/progress_reports", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Subcontractor") {
+        res.json([]);
+        return;
+      }
       const projectId = req.query.project_id as string;
       let { where, params } = projectScopeSql(req.user!, projectId, "pr.project_id");
       if (!where) {
@@ -3979,6 +4099,10 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.get("/api/progress_reports/:id", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Subcontractor") {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
       const report = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
       if (!report) {
         res.status(404).json({ error: "Report not found" });
@@ -4006,13 +4130,16 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Report not found" });
         return;
       }
-      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role === "Client" || req.user!.role === "Subcontractor")) {
+      if (!hasProjectAccess(req.user!, existing.project_id) || req.user!.role === "Client" || req.user!.role === "Subcontractor") {
         res.status(403).json({ error: "Permission denied" });
         return;
       }
       const data = req.body || {};
       const now = new Date().toISOString();
-      const updatedStatus = data.status || existing.status;
+      let updatedStatus = data.status || existing.status;
+      if ((updatedStatus === "Published" || updatedStatus === "Published to Client") && req.user!.role !== "Admin" && req.user!.role !== "ProjectManager") {
+        updatedStatus = existing.status;
+      }
       const publishedAt = (updatedStatus === "Published" || updatedStatus === "Published to Client") ? (existing.published_at || now) : existing.published_at;
       const publishedBy = (updatedStatus === "Published" || updatedStatus === "Published to Client") ? (existing.published_by || req.user!.name) : existing.published_by;
 
@@ -4201,6 +4328,10 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.post("/api/progress_reports/:id/photos", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
       const report = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
       if (!report || !hasProjectAccess(req.user!, report.project_id)) {
         res.status(403).json({ error: "Access denied" });
@@ -4225,6 +4356,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.delete("/api/progress_reports/photos/:photoId", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
+      const photo = db.prepare("SELECT * FROM progress_report_photos WHERE id=?").get(req.params.photoId) as any;
+      if (!photo) {
+        res.status(404).json({ error: "Photo not found" });
+        return;
+      }
+      const report = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(photo.report_id) as any;
+      if (!report || !hasProjectAccess(req.user!, report.project_id)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
       db.prepare("DELETE FROM progress_report_photos WHERE id=?").run(req.params.photoId);
       res.json({ ok: true });
     } catch (err: any) {
@@ -4239,6 +4384,18 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       if (!doc || !hasProjectAccess(req.user!, doc.project_id)) {
         res.status(403).json({ error: "Access denied" });
         return;
+      }
+      if (req.user!.role === "Client" && !["Client", "All"].includes(doc.visibility || "Internal")) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      if (req.user!.role === "Subcontractor") {
+        const isOwner = db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(doc.id, req.user!.user_id);
+        const isAssigned = doc.subcontractor_id === req.user!.user_id;
+        if (!isOwner && !isAssigned) {
+          res.status(403).json({ error: "Access denied" });
+          return;
+        }
       }
       const rows = db.prepare("SELECT * FROM document_revisions WHERE document_id=? ORDER BY created_at DESC").all(req.params.id);
       res.json(rows.map(rowToDict));
@@ -4308,10 +4465,18 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   const getTransmittalsHandler = (req: any, res: any) => {
     try {
       const projectId = req.query.project_id as string;
-      const { where, params } = projectScopeSql(req.user!, projectId, "dt.project_id");
+      let { where, params } = projectScopeSql(req.user!, projectId, "dt.project_id");
       if (!where) {
         res.status(403).json({ error: "No access to project" });
         return;
+      }
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        if (req.user!.company_id) {
+          where += " AND (dt.sender_company_id = ? OR dt.recipient_company_id = ?)";
+          params.push(req.user!.company_id, req.user!.company_id);
+        } else {
+          where += " AND (dt.sender_company_id IS NULL AND dt.recipient_company_id IS NULL)";
+        }
       }
       const rows = db.prepare(`
         SELECT dt.*,
@@ -4339,6 +4504,12 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: "Access denied" });
         return;
       }
+      if (req.user!.role === "Client" || req.user!.role === "Subcontractor") {
+        if (!req.user!.company_id || (transmittal.sender_company_id !== req.user!.company_id && transmittal.recipient_company_id !== req.user!.company_id)) {
+          res.status(403).json({ error: "Access denied" });
+          return;
+        }
+      }
       const items = db.prepare("SELECT * FROM transmittal_items WHERE transmittal_id=?").all(req.params.id);
       res.json({ ...rowToDict(transmittal), items: items.map(rowToDict) });
     } catch (err: any) {
@@ -4354,6 +4525,9 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       if (!data.project_id || !hasProjectAccess(req.user!, data.project_id)) {
         res.status(403).json({ error: "Access denied" });
         return;
+      }
+      if ((req.user!.role === "Client" || req.user!.role === "Subcontractor") && req.user!.company_id) {
+        data.sender_company_id = req.user!.company_id;
       }
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
@@ -4411,11 +4585,31 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   // --- SUBCONTRACTOR PROGRESS SUBMISSION & VERIFICATION WORKFLOW ---
   app.get("/api/progress_submissions", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client") {
+        res.status(403).json({ error: "Access denied: subcontractor submissions are internal" });
+        return;
+      }
       const projectId = req.query.project_id as string;
-      const { where, params } = projectScopeSql(req.user!, projectId, "ps.project_id");
+      let { where, params } = projectScopeSql(req.user!, projectId, "ps.project_id");
       if (!where) {
         res.status(403).json({ error: "No access to project" });
         return;
+      }
+      if (req.user!.role === "Subcontractor") {
+        const subConds: string[] = [];
+        const subParams: any[] = [];
+        if (req.user!.work_package_id) {
+          subConds.push("ps.work_package_id = ?");
+          subParams.push(req.user!.work_package_id);
+        }
+        if (req.user!.company_id) {
+          subConds.push("ps.company_id = ?");
+          subParams.push(req.user!.company_id);
+        }
+        subConds.push("ps.submitted_by = ?");
+        subParams.push(req.user!.name);
+        where += ` AND (${subConds.join(" OR ")})`;
+        params.push(...subParams);
       }
       const rows = db.prepare(`
         SELECT ps.*,
@@ -4436,10 +4630,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   app.post("/api/progress_submissions", authRequired, (req, res) => {
     try {
+      if (req.user!.role === "Client") {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
       const data = req.body || {};
       if (!data.project_id || !hasProjectAccess(req.user!, data.project_id)) {
         res.status(403).json({ error: "Access denied" });
         return;
+      }
+      let wpId = data.work_package_id || null;
+      let compId = data.company_id || null;
+      if (req.user!.role === "Subcontractor") {
+        wpId = req.user!.work_package_id || wpId;
+        compId = req.user!.company_id || compId;
       }
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
@@ -4452,8 +4656,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       `).run(
         id,
         data.project_id,
-        data.work_package_id || null,
-        data.company_id || null,
+        wpId,
+        compId,
         req.user!.name,
         data.period_date || now.slice(0, 10),
         data.discipline || "MEP",
@@ -4464,7 +4668,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         now
       );
       writeAudit(req.user!.user_id, "progress_submissions", id, data.project_id, "submit", null, data);
-      res.status(201).json({ id, ...data, claimed_percent: parseImportNumber(claimedVal), status: "Submitted", created_at: now });
+      res.status(201).json({ id, ...data, work_package_id: wpId, company_id: compId, claimed_percent: parseImportNumber(claimedVal), status: "Submitted", created_at: now });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -4536,7 +4740,6 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         WHERE id=?
       `).run(finalStatus, finalPercent, req.user!.name, review_comments || "", now, req.params.id);
 
-      // If approved, update associated tasks in that work package if applicable
       if ((finalStatus === "Approved" || finalStatus === "Approved with Adjustments") && existing.work_package_id) {
         db.prepare(`
           UPDATE tasks
@@ -4569,12 +4772,23 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
 
-      const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=?").all(projectId) as any[];
-      const workTasks = tasks.filter(t => !t.is_milestone && !t.is_summary);
-      const overallProgress = workTasks.length
-        ? Math.round(workTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / workTasks.length)
-        : 0;
+      // Overall progress for Client is taken from the latest Published Progress Report to ensure vetted verification
+      const latestPublishedReport = db.prepare(`
+        SELECT overall_progress_percent FROM progress_reports
+        WHERE project_id = ? AND status IN ('Published', 'Published to Client')
+        ORDER BY period_end DESC, published_at DESC LIMIT 1
+      `).get(projectId) as any;
 
+      let overallProgress = latestPublishedReport?.overall_progress_percent;
+      if (overallProgress === undefined || overallProgress === null) {
+        const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=?").all(projectId) as any[];
+        const workTasks = tasks.filter(t => !t.is_milestone && !t.is_summary);
+        overallProgress = workTasks.length
+          ? Math.round(workTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / workTasks.length)
+          : 0;
+      }
+
+      const tasks = db.prepare("SELECT * FROM tasks WHERE project_id=?").all(projectId) as any[];
       const today = new Date().toISOString().slice(0, 10);
       const upcomingMilestones = tasks
         .filter(t => t.is_milestone && t.end >= today)
