@@ -17,7 +17,7 @@
     "test": "npm run test:all",
     "mobile:sync": "cap sync",
     "mobile:android": "cap open android",
-    "mobile:build:android": "cd android && gradlew assembleDebug",
+    "mobile:build:android": "node scripts/build_android.cjs",
     "mobile:ios": "cap open ios"
   },
   "dependencies": {
