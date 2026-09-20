@@ -1,0 +1,243 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and preferences securely tied to Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the authenticated user.",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name.",
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "description": "Selected MEP engineering or field role.",
+          "enum": ["Admin", "Project Manager", "Engineer", "Commercial", "QA/QC", "Safety", "Subcontractor", "Consultant", "Client"]
+        },
+        "preferredModel": {
+          "type": "string",
+          "description": "Preferred Gemini AI model tier.",
+          "enum": ["gemini-3.1-pro-preview", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "ChatConversation": {
+      "title": "ChatConversation",
+      "description": "Multi-turn Gemini AI conversation history session.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "persona": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "modelTier": {
+          "type": "string",
+          "enum": ["gemini-3.1-pro-preview", "gemini-3.5-flash", "gemini-3.1-flash-lite"]
+        },
+        "messageCount": {
+          "type": "number"
+        },
+        "lastMessage": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "title"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message inside a multi-turn chat conversation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "conversationId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "model", "system"]
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 50000
+        },
+        "groundingSources": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "conversationId", "userId", "role", "content"]
+    },
+    "SiteNote": {
+      "title": "SiteNote",
+      "description": "Personal site engineer field note or MEP calculation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "trade": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "tags": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "title", "content"]
+    },
+    "SupplierBookmark": {
+      "title": "SupplierBookmark",
+      "description": "Saved MEP supplier or vendor from Google Maps Grounding searches.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "rating": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "mapsUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "userId", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile documents"
+    },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/ChatConversation" },
+      "description": "User's Gemini AI chat sessions"
+    },
+    "/users/{userId}/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Individual messages in a chat session"
+    },
+    "/users/{userId}/notes/{noteId}": {
+      "schema": { "$ref": "#/entities/SiteNote" },
+      "description": "User's MEP site engineering notes"
+    },
+    "/users/{userId}/bookmarks/{bookmarkId}": {
+      "schema": { "$ref": "#/entities/SupplierBookmark" },
+      "description": "User's bookmarked local MEP suppliers and logistics points"
+    }
+  }
+}
