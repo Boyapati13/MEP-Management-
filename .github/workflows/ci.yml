@@ -29,9 +29,12 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Run Database Migration Suite
+        run: npm run test:migration
+
       - name: Start server in background
         run: |
-          NODE_ENV=production node dist/server.cjs &
+          MEP_DB_PATH=/tmp/mep-ci.db NODE_ENV=production node dist/server.cjs &
           echo "Waiting for server to start on port 3000..."
           for i in {1..30}; do
             if curl -s http://127.0.0.1:3000/api/health > /dev/null 2>&1 || curl -s http://127.0.0.1:3000/ > /dev/null 2>&1; then
@@ -49,3 +52,4 @@ jobs:
 
       - name: Run Master Enterprise End-to-End Test Suite
         run: npm run test:enterprise
+

@@ -30,8 +30,8 @@ declare global {
   }
 }
 
-const PORT = 3000;
-const DB_PATH = path.join(process.cwd(), "mep_pm.db");
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const DB_PATH = process.env.MEP_DB_PATH || path.join(process.cwd(), "mep_pm.db");
 const db = new DatabaseSync(DB_PATH);
 
 // Helper for row mapping
@@ -1072,6 +1072,8 @@ function initDb() {
   try { db.exec("ALTER TABLE change_orders ADD COLUMN visibility TEXT DEFAULT 'Internal';"); } catch {}
   try { db.exec("ALTER TABLE change_orders ADD COLUMN published_by TEXT;"); } catch {}
   try { db.exec("ALTER TABLE change_orders ADD COLUMN published_at TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN source_clarification_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE change_orders ADD COLUMN source_clarification_id TEXT;"); } catch {}
 
   seedUsers();
   seedData();
@@ -1101,7 +1103,7 @@ function seedData() {
 }
 
 // Permissions & Scope Helpers
-function hasProjectAccess(user: AuthenticatedUser, projectId?: string): boolean {
+function canAccessProject(user: AuthenticatedUser, projectId?: string): boolean {
   if (!projectId) return false;
   if (user.role === "Admin") return true;
 
@@ -1111,12 +1113,39 @@ function hasProjectAccess(user: AuthenticatedUser, projectId?: string): boolean 
   ).get(user.user_id, projectId);
   if (!memberRow) return false;
 
-  // If user belongs to a company, that company must ALSO participate in the project
+  // If user belongs to a company, that company must be Active AND participate in the project
   if (user.company_id) {
+    const comp = db.prepare("SELECT status FROM companies WHERE id=?").get(user.company_id) as any;
+    if (!comp || comp.status === "Inactive") return false;
+
     const compRow = db.prepare(
       "SELECT 1 FROM project_companies WHERE project_id=? AND company_id=?"
     ).get(projectId, user.company_id);
     if (!compRow) return false;
+  }
+  return true;
+}
+
+const hasProjectAccess = canAccessProject;
+
+function canAccessCompany(user: AuthenticatedUser, companyId?: string): boolean {
+  if (!companyId) return true;
+  if (user.role === "Admin") return true;
+  if (user.role === "Client") return false;
+  if (user.role === "Subcontractor") {
+    return user.company_id === companyId;
+  }
+  return true;
+}
+
+function canAccessWorkPackage(user: AuthenticatedUser, workPackageId?: string, projectId?: string): boolean {
+  if (!workPackageId) return true;
+  if (user.role === "Admin") return true;
+  if (projectId && !canAccessProject(user, projectId)) return false;
+
+  if (user.role === "Subcontractor") {
+    if (!user.work_package_id) return false;
+    return user.work_package_id === workPackageId;
   }
   return true;
 }
@@ -1158,19 +1187,83 @@ function canDelete(user: AuthenticatedUser): boolean {
   return perms ? perms.delete : false;
 }
 
+function canPerformAction(
+  user: AuthenticatedUser,
+  module: string,
+  action: "view" | "create" | "edit" | "delete" | "approve" | "publish"
+): boolean {
+  if (user.role === "Admin") return true;
+  const perms = ROLE_PERMS[user.role];
+  if (!perms) return false;
+
+  if (action === "view") return perms.view.includes(module);
+  if (action === "create" || action === "edit") return perms.edit.includes(module);
+  if (action === "delete") return Boolean(perms.delete);
+  if (action === "approve") return user.role === "ProjectManager" || user.role === "CommercialManager";
+  if (action === "publish") return user.role === "ProjectManager";
+  return false;
+}
+
+function externalRecordDto(record: any, user: AuthenticatedUser, module: string): any {
+  if (!record) return null;
+  const dto = { ...record };
+  delete dto.password_hash;
+
+  if (user.role === "Client") {
+    if (module === "documents" || module === "drawings") {
+      delete dto.subcontractor_id;
+      delete dto.subcontractor_username;
+      delete dto.markup_data;
+      delete dto.internal_notes;
+    }
+    if (module === "projects") {
+      delete dto.budget;
+      delete dto.contract_sum;
+      delete dto.internal_margin;
+      delete dto.target_cost;
+    }
+    if (module === "change_orders") {
+      delete dto.internal_cost;
+      delete dto.contractor_markup;
+      delete dto.internal_notes;
+    }
+    if (module === "progress_reports") {
+      delete dto.internal_comments;
+      delete dto.contractor_notes;
+    }
+    if (module === "clarifications") {
+      delete dto.internal_notes;
+    }
+  }
+
+  if (user.role === "Subcontractor") {
+    if (module === "projects") {
+      delete dto.budget;
+    }
+    if (module === "change_orders") {
+      delete dto.internal_contractor_budget;
+    }
+  }
+
+  return dto;
+}
+
 // Centralized record authorization helper enforcing project, company, work package, role, and visibility rules
 function canAccessRecord(
   user: AuthenticatedUser,
   record: any,
-  action: "view" | "edit" | "delete",
+  action: "view" | "edit" | "delete" | "create",
   module: string
 ): boolean {
   if (!record) return false;
-  if (!hasProjectAccess(user, record.project_id)) return false;
+  if (record.project_id && !canAccessProject(user, record.project_id)) return false;
   if (user.role === "Admin") return true;
 
   if (action === "view" && !canView(user, module)) return false;
-  if (action === "edit" && !canEdit(user, module)) return false;
+  if ((action === "edit" || action === "create") && !canEdit(user, module)) {
+    const isSpecialAllowed = (module === "documents" || module === "drawings" || module === "clarifications" || module === "progress_submissions") && user.role === "Subcontractor";
+    if (!isSpecialAllowed) return false;
+  }
   if (action === "delete" && !canDelete(user)) {
     const isOwnDoc = (module === "documents" || module === "drawings") && user.role === "Subcontractor" &&
       (record.subcontractor_id === user.user_id ||
@@ -1180,7 +1273,15 @@ function canAccessRecord(
 
   // Client role rules
   if (user.role === "Client") {
-    if (action !== "view") return false;
+    if (action !== "view") {
+      if (action === "create" && (module === "documents" || module === "clarifications")) {
+        return true;
+      }
+      return false;
+    }
+    if (module === "projects") {
+      return canAccessProject(user, record.id || record.project_id);
+    }
     if (module === "documents" || module === "drawings") {
       return record.visibility === "Client" || record.visibility === "All" || record.uploaded_by === user.name;
     }
@@ -1298,40 +1399,33 @@ const NOTIFY_WORTHY_STATUSES = new Set([
   "Approved", "Rejected", "Answered", "Completed", "Closed", "Rectified", "Certified",
 ]);
 
-// Authentication Middleware
-function authRequired(req: Request, res: Response, next: NextFunction): void {
+// Authentication Helper & Middleware
+function getCurrentUser(req: Request): AuthenticatedUser | null {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!token) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+  if (!token) return null;
+
   const session = db.prepare("SELECT * FROM sessions WHERE token=?").get(token) as any;
-  if (!session) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+  if (!session) return null;
+
   if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
     db.prepare("DELETE FROM sessions WHERE token=?").run(token);
-    res.status(401).json({ error: "Session expired. Please log in again." });
-    return;
+    return null;
   }
   // Re-fetch current live user and verify active status on every request (P1 session revocation)
   const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id FROM users WHERE id=?").get(session.user_id) as any;
   if (!userRow || userRow.status !== "Active") {
     db.prepare("DELETE FROM sessions WHERE token=?").run(token);
-    res.status(401).json({ error: "User account is inactive or not found" });
-    return;
+    return null;
   }
   if (userRow.company_id) {
     const comp = db.prepare("SELECT status FROM companies WHERE id=?").get(userRow.company_id) as any;
     if (comp && comp.status === "Inactive") {
       db.prepare("DELETE FROM sessions WHERE token=?").run(token);
-      res.status(401).json({ error: "User company is inactive" });
-      return;
+      return null;
     }
   }
-  req.user = {
+  return {
     user_id: userRow.id,
     name: userRow.name,
     role: userRow.role,
@@ -1341,6 +1435,15 @@ function authRequired(req: Request, res: Response, next: NextFunction): void {
     trade: userRow.trade || undefined,
     work_package_id: userRow.work_package_id || undefined,
   };
+}
+
+function authRequired(req: Request, res: Response, next: NextFunction): void {
+  const user = getCurrentUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  req.user = user;
   next();
 }
 
@@ -1432,8 +1535,112 @@ async function startServer() {
     });
   });
 
+  // Cache for Google's public certificates for Firebase ID Token verification
+  let googleCertsCache: { [kid: string]: string } = {};
+  let googleCertsExpiresAt = 0;
+
+  async function getGooglePublicKeys(): Promise<{ [kid: string]: string }> {
+    if (Date.now() < googleCertsExpiresAt && Object.keys(googleCertsCache).length > 0) {
+      return googleCertsCache;
+    }
+    try {
+      const res = await fetch("https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com", {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const cacheControl = res.headers.get("cache-control") || "";
+        const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+        const maxAgeSec = maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 3600;
+        googleCertsCache = await res.json();
+        googleCertsExpiresAt = Date.now() + maxAgeSec * 1000;
+        return googleCertsCache;
+      }
+    } catch {
+      // Offline fallback
+    }
+    return googleCertsCache;
+  }
+
+  async function verifyFirebaseIdToken(token: string): Promise<{ uid: string; email?: string }> {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      throw new Error("Malformed Firebase ID token: must contain 3 segments");
+    }
+
+    let header: any;
+    let payload: any;
+    try {
+      header = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf-8"));
+      payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+    } catch {
+      throw new Error("Invalid ID token format or payload");
+    }
+
+    if (header.alg !== "RS256") {
+      throw new Error("Invalid Firebase ID token algorithm: must be RS256");
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp < nowSec) {
+      throw new Error("Firebase ID token has expired");
+    }
+
+    if (!payload.sub && !payload.user_id) {
+      throw new Error("Invalid Firebase ID token claims: missing subject");
+    }
+
+    // Cryptographic signature verification
+    const signedData = Buffer.from(`${parts[0]}.${parts[1]}`, "utf8");
+    let sigBuffer: Buffer;
+    try {
+      sigBuffer = Buffer.from(parts[2], "base64url");
+      if (sigBuffer.length === 0) {
+        throw new Error("Empty signature");
+      }
+    } catch {
+      throw new Error("Invalid signature encoding");
+    }
+
+    let signatureValid = false;
+
+    // Check test public key if present (for deterministic test environments)
+    if (process.env.FIREBASE_TEST_PUBLIC_KEY) {
+      try {
+        const verify = crypto.createVerify("RSA-SHA256");
+        verify.update(signedData);
+        if (verify.verify(process.env.FIREBASE_TEST_PUBLIC_KEY, sigBuffer)) {
+          signatureValid = true;
+        }
+      } catch {}
+    }
+
+    // Check Google's official public certificates
+    if (!signatureValid) {
+      const certs = await getGooglePublicKeys();
+      const cert = header.kid ? certs[header.kid] : null;
+      if (cert) {
+        try {
+          const verify = crypto.createVerify("RSA-SHA256");
+          verify.update(signedData);
+          if (verify.verify(cert, sigBuffer)) {
+            signatureValid = true;
+          }
+        } catch {}
+      }
+    }
+
+    if (!signatureValid) {
+      throw new Error("Cryptographic signature verification failed: invalid token signature");
+    }
+
+    return {
+      uid: payload.sub || payload.user_id,
+      email: payload.email || undefined,
+    };
+  }
+
   // Firebase Google Auth SSO Endpoint (Hardened: P0 fix - requires valid ID token & pre-approved user)
-  app.post("/api/firebase-auth-login", (req, res) => {
+  app.post("/api/firebase-auth-login", async (req, res) => {
     try {
       const { id_token } = req.body || {};
       const authHeader = req.headers.authorization || "";
@@ -1446,44 +1653,18 @@ async function startServer() {
         return;
       }
 
-      // Verify the Firebase ID token cryptographically
-      let verifiedUid: string | null = null;
-      let verifiedEmail: string | null = null;
-
+      let verifiedIdentity: { uid: string; email?: string };
       try {
-        const parts = tokenToVerify.split(".");
-        if (parts.length !== 3) {
-          res.status(401).json({ error: "Malformed Firebase ID token" });
-          return;
-        }
-        const payloadJson = Buffer.from(parts[1], "base64").toString("utf-8");
-        const payload = JSON.parse(payloadJson);
-
-        const nowSec = Math.floor(Date.now() / 1000);
-        if (payload.exp && payload.exp < nowSec) {
-          res.status(401).json({ error: "Firebase ID token has expired" });
-          return;
-        }
-        if (!payload.sub && !payload.user_id) {
-          res.status(401).json({ error: "Invalid Firebase ID token claims" });
-          return;
-        }
-        verifiedUid = payload.sub || payload.user_id;
-        verifiedEmail = payload.email || null;
+        verifiedIdentity = await verifyFirebaseIdToken(tokenToVerify);
       } catch (err: any) {
-        res.status(401).json({ error: "Invalid ID token format or payload" });
-        return;
-      }
-
-      if (!verifiedUid) {
-        res.status(401).json({ error: "Could not verify identity from ID token" });
+        res.status(401).json({ error: err.message || "Cryptographic verification failed" });
         return;
       }
 
       // Match against pre-approved active application user - NEVER auto-create with all-project SiteEngineer!
-      let user = db.prepare("SELECT * FROM users WHERE (username=? OR (email IS NOT NULL AND email=?)) AND status='Active'").get(verifiedUid, verifiedEmail || "") as any;
-      if (!user && verifiedEmail) {
-        user = db.prepare("SELECT * FROM users WHERE email=? AND status='Active'").get(verifiedEmail) as any;
+      let user = db.prepare("SELECT * FROM users WHERE (username=? OR (email IS NOT NULL AND email=?)) AND status='Active'").get(verifiedIdentity.uid, verifiedIdentity.email || "") as any;
+      if (!user && verifiedIdentity.email) {
+        user = db.prepare("SELECT * FROM users WHERE email=? AND status='Active'").get(verifiedIdentity.email) as any;
       }
 
       if (!user) {
@@ -1506,7 +1687,7 @@ async function startServer() {
         user_id: user.id,
         name: user.name,
         role: user.role,
-        email: user.email || verifiedEmail || "",
+        email: user.email || verifiedIdentity.email || "",
         company: user.company || "",
         company_id: user.company_id || "",
         trade: user.trade || "",
@@ -1921,14 +2102,21 @@ async function startServer() {
       return;
     }
     const rows = db.prepare(`SELECT * FROM projects WHERE ${where} ORDER BY name`).all(...params);
-    // budget is an internal figure - never send it to a Client, even though
-    // every authenticated user (Client included) needs this endpoint just to
-    // populate the project picker.
-    const mapped = rows.map(rowToDict);
-    if (req.user!.role === "Client") {
-      for (const p of mapped as any[]) delete p!.budget;
-    }
+    const mapped = rows.map(r => externalRecordDto(rowToDict(r), req.user!, "projects"));
     res.json(mapped);
+  });
+
+  app.get("/api/projects/:id", authRequired, (req, res) => {
+    if (!hasProjectAccess(req.user!, req.params.id)) {
+      res.status(403).json({ error: "Forbidden: no access to this project" });
+      return;
+    }
+    const project = db.prepare("SELECT * FROM projects WHERE id=?").get(req.params.id);
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+    res.json(externalRecordDto(rowToDict(project), req.user!, "projects"));
   });
 
   app.post("/api/projects", authRequired, (req, res) => {
@@ -2147,8 +2335,12 @@ async function startServer() {
   });
 
   app.post("/api/attendance/punch-in", authRequired, (req, res) => {
-    const projectId = req.body?.project_id;
-    if (!hasProjectAccess(req.user!, projectId)) {
+    let projectId = req.body?.project_id;
+    if (!projectId) {
+      const defaultProj = db.prepare("SELECT project_id FROM project_memberships WHERE user_id=? AND active=1 LIMIT 1").get(req.user!.user_id) as any;
+      if (defaultProj) projectId = defaultProj.project_id;
+    }
+    if (!projectId || !hasProjectAccess(req.user!, projectId)) {
       res.status(403).json({ error: "No project access" });
       return;
     }
@@ -2164,7 +2356,7 @@ async function startServer() {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const today = now.split("T")[0];
-    const notes = req.body?.notes || "";
+    const notes = req.body?.shift_notes || req.body?.notes || "";
     db.prepare("INSERT INTO attendance VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', ?)").run(
       id, projectId, req.user!.user_id, req.user!.name, today, now, null, notes
     );
@@ -2411,7 +2603,7 @@ async function startServer() {
     const rawRows = db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(...params) as any[];
     const rows = rawRows.filter(r => table === "projects" ? hasProjectAccess(req.user!, r.id) : canAccessRecord(req.user!, r, "view", cfg.module));
     let cols = cfg.cols.filter((c: string) => c !== "attachment_data");
-    if (table === "projects" && req.user!.role === "Client") {
+    if (table === "projects" && (req.user!.role === "Client" || req.user!.role === "Subcontractor")) {
       cols = cols.filter((c: string) => c !== "budget");
     }
     const csvHeader = cols.join(",");
@@ -2500,12 +2692,13 @@ async function startServer() {
     const prerequisites: Record<string, any> = {
       power_available: row.power_available,
       installation_complete: row.installation_complete,
-      controls_complete: row.controls_complete,
-      interface_complete: row.interface_complete,
+      controls_complete: row.controls_complete || row.controls_online,
+      interface_complete: row.interface_complete || row.interface_ready,
       drawings_approved: row.drawings_approved,
     };
     const missing = Object.keys(prerequisites).filter(k => !prerequisites[k]);
-    res.json({ ready: missing.length === 0, missing, prerequisites });
+    const isReady = missing.length === 0;
+    res.json({ ready: isReady, is_ready: isReady, missing, prerequisites });
   });
 
   app.get("/api/handover/:projectId/readiness", authRequired, (req, res) => {
@@ -2545,7 +2738,7 @@ async function startServer() {
   app.post("/api/:table/:id/transition", authRequired, (req, res) => {
     const table = req.params.table;
     const recordId = req.params.id;
-    const newStatus = req.body?.status;
+    const newStatus = req.body?.status || req.body?.stage;
     const comment = req.body?.comment || null;
 
     const cfg = TABLE_CONFIG[table];
@@ -2682,9 +2875,10 @@ async function startServer() {
     }
 
     writeAudit(req.user!.user_id, "budget", docId, projectId, "import_boq", null, { file: filename, lines: imported, amount: totalAmount });
-    res.status(201).json({
+    res.status(200).json({
       document_id: docId,
       filename,
+      imported,
       imported_lines: imported,
       tender_amount: totalAmount,
       disciplines: Array.from(disciplines).sort(),
@@ -4229,6 +4423,113 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
+  // Convert Clarification to RFI (Section 16)
+  app.post("/api/clarifications/:id/convert-to-rfi", authRequired, (req, res) => {
+    try {
+      const { id } = req.params;
+      const clarification = db.prepare("SELECT * FROM clarifications WHERE id=?").get(id) as any;
+      if (!clarification) {
+        res.status(404).json({ error: "Clarification not found" });
+        return;
+      }
+      if (!canAccessRecord(req.user!, clarification, "edit", "clarifications")) {
+        res.status(403).json({ error: "No permission to convert this clarification" });
+        return;
+      }
+      if (!canEdit(req.user!, "rfis")) {
+        res.status(403).json({ error: "No permission to create RFIs" });
+        return;
+      }
+
+      const existingRfis = db.prepare("SELECT count(*) as count FROM rfis WHERE project_id=?").get(clarification.project_id) as any;
+      const rfiNum = `RFI-${String((existingRfis?.count || 0) + 1).padStart(3, "0")}`;
+      const rfiId = crypto.randomUUID();
+      const today = new Date().toISOString().slice(0, 10);
+      const dueDate = clarification.due_date || new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+      db.prepare(`
+        INSERT INTO rfis (id, project_id, number, subject, trade, raised_by, date_raised, due_date, status, source_clarification_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        rfiId,
+        clarification.project_id,
+        rfiNum,
+        clarification.title + ": " + clarification.question_text,
+        clarification.discipline || "General",
+        req.user!.name,
+        today,
+        dueDate,
+        "Open",
+        clarification.id
+      );
+
+      db.prepare("UPDATE clarifications SET status='Converted to RFI' WHERE id=?").run(id);
+
+      const createdRfi = db.prepare("SELECT * FROM rfis WHERE id=?").get(rfiId);
+      res.status(201).json({
+        message: "Clarification converted to RFI successfully",
+        rfi: createdRfi,
+        clarification_id: clarification.id
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Convert Clarification to Potential Variation (Section 16)
+  app.post("/api/clarifications/:id/convert-to-variation", authRequired, (req, res) => {
+    try {
+      const { id } = req.params;
+      const clarification = db.prepare("SELECT * FROM clarifications WHERE id=?").get(id) as any;
+      if (!clarification) {
+        res.status(404).json({ error: "Clarification not found" });
+        return;
+      }
+      if (!canAccessRecord(req.user!, clarification, "edit", "clarifications")) {
+        res.status(403).json({ error: "No permission to convert this clarification" });
+        return;
+      }
+      if (!canEdit(req.user!, "change_orders")) {
+        res.status(403).json({ error: "No permission to create Change Orders / Variations" });
+        return;
+      }
+
+      const existingCos = db.prepare("SELECT count(*) as count FROM change_orders WHERE project_id=?").get(clarification.project_id) as any;
+      const coNum = `VO-${String((existingCos?.count || 0) + 1).padStart(3, "0")}`;
+      const coId = crypto.randomUUID();
+      const today = new Date().toISOString().slice(0, 10);
+
+      db.prepare(`
+        INSERT INTO change_orders (id, project_id, number, title, trade, reason, cost_impact, schedule_impact_days, date_raised, status, source_clarification_id, visibility)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        coId,
+        clarification.project_id,
+        coNum,
+        clarification.title,
+        clarification.discipline || "General",
+        clarification.question_text + (clarification.proposed_solution ? `\nProposed Solution: ${clarification.proposed_solution}` : ""),
+        req.body?.cost_impact || 0,
+        req.body?.schedule_impact_days || 0,
+        today,
+        "Potential Variation",
+        clarification.id,
+        "Internal"
+      );
+
+      db.prepare("UPDATE clarifications SET status='Converted to Variation' WHERE id=?").run(id);
+
+      const createdCo = db.prepare("SELECT * FROM change_orders WHERE id=?").get(coId);
+      res.status(201).json({
+        message: "Clarification converted to Variation successfully",
+        variation: createdCo,
+        clarification_id: clarification.id
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // --- PUBLISHED PROGRESS REPORTS (CLIENT VISIBILITY CONTROL) ---
   app.get("/api/progress_reports", authRequired, (req, res) => {
     try {
@@ -4576,8 +4877,11 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(403).json({ error: "Permission denied" });
         return;
       }
-      const { new_revision_code, change_summary, attachment_name, attachment_data } = req.body || {};
-      if (!new_revision_code) {
+      const newRevisionCode = req.body?.new_revision_code || req.body?.revision;
+      const changeSummary = req.body?.change_summary || req.body?.notes;
+      const attachmentName = req.body?.attachment_name;
+      const attachmentData = req.body?.attachment_data;
+      if (!newRevisionCode) {
         res.status(400).json({ error: "New revision code is required" });
         return;
       }
@@ -4596,7 +4900,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         doc.revision || "Rev A",
         today,
         req.user!.name,
-        change_summary || "Superseded by " + new_revision_code,
+        changeSummary || "Superseded by " + newRevisionCode,
         doc.attachment_name || "",
         doc.attachment_data || "",
         now
@@ -4608,15 +4912,15 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         SET revision=?, date_added=?, attachment_name=?, attachment_data=?, status='Approved'
         WHERE id=?
       `).run(
-        new_revision_code,
+        newRevisionCode,
         today,
-        attachment_name || doc.attachment_name,
-        attachment_data || doc.attachment_data,
+        attachmentName || doc.attachment_name,
+        attachmentData || doc.attachment_data,
         doc.id
       );
 
-      writeAudit(req.user!.user_id, "documents", doc.id, doc.project_id, "new_revision", { old_rev: doc.revision }, { new_rev: new_revision_code, change_summary });
-      res.json({ ok: true, document_id: doc.id, revision: new_revision_code, superseded_revision_id: revId });
+      writeAudit(req.user!.user_id, "documents", doc.id, doc.project_id, "new_revision", { old_rev: doc.revision }, { new_rev: newRevisionCode, change_summary: changeSummary });
+      res.status(201).json({ ok: true, document_id: doc.id, revision: newRevisionCode, superseded_revision_id: revId });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -4789,6 +5093,42 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
+  app.get("/api/progress_submissions/:id", authRequired, (req, res) => {
+    try {
+      if (req.user!.role === "Client") {
+        res.status(403).json({ error: "Access denied: subcontractor submissions are internal" });
+        return;
+      }
+      const submission = db.prepare(`
+        SELECT ps.*, wp.name as work_package_name
+        FROM progress_submissions ps
+        LEFT JOIN work_packages wp ON wp.id = ps.work_package_id
+        WHERE ps.id = ?
+      `).get(req.params.id) as any;
+
+      if (!submission) {
+        res.status(404).json({ error: "Submission not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, submission.project_id)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      if (req.user!.role === "Subcontractor") {
+        const isWpMatch = !req.user!.work_package_id || req.user!.work_package_id === submission.work_package_id;
+        const isCoMatch = !req.user!.company_id || req.user!.company_id === submission.company_id;
+        const isAuthor = submission.submitted_by === req.user!.name;
+        if (!isWpMatch || !isCoMatch || !isAuthor) {
+          res.status(403).json({ error: "Forbidden: no access to this submission" });
+          return;
+        }
+      }
+      res.json(rowToDict(submission));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/progress_submissions", authRequired, (req, res) => {
     try {
       if (req.user!.role === "Client") {
@@ -4919,6 +5259,49 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
       writeAudit(req.user!.user_id, "progress_submissions", req.params.id, existing.project_id, "review", existing, { status: finalStatus, adjusted_percent: finalPercent, review_comments });
       res.json({ ok: true, id: req.params.id, status: finalStatus, adjusted_percent: finalPercent, reviewed_by: req.user!.name });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/progress_submissions/:id/verify", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM progress_submissions WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Submission not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager" && req.user!.role !== "SiteEngineer")) {
+        res.status(403).json({ error: "Only Project Managers or Site Engineers can verify progress submissions" });
+        return;
+      }
+      const data = req.body || {};
+      const now = new Date().toISOString();
+      const rawAdj = data.verified_percent !== undefined ? data.verified_percent : (data.verified_percentage !== undefined ? data.verified_percentage : data.adjusted_percent);
+      const finalPercent = rawAdj !== undefined ? parseImportNumber(rawAdj) : existing.claimed_percent;
+      const reviewComments = data.verification_notes || data.review_comments || "";
+
+      db.prepare(`
+        UPDATE progress_submissions
+        SET status='Approved with Adjustments', adjusted_percent=?, reviewed_by=?, review_comments=?, approved_at=?
+        WHERE id=?
+      `).run(finalPercent, req.user!.name, reviewComments, now, req.params.id);
+
+      if (existing.work_package_id) {
+        db.prepare(`
+          UPDATE tasks
+          SET progress = MAX(progress, ?)
+          WHERE work_package_id = ? AND status != 'Completed'
+        `).run(finalPercent, existing.work_package_id);
+      }
+
+      writeAudit(req.user!.user_id, "progress_submissions", req.params.id, existing.project_id, "verify", existing, data);
+      const updated = db.prepare("SELECT * FROM progress_submissions WHERE id=?").get(req.params.id) as any;
+      res.json({
+        ...rowToDict(updated),
+        verified_percent: updated.adjusted_percent,
+        verified_percentage: updated.adjusted_percent
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -5062,7 +5445,35 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         rows = db.prepare(`SELECT * FROM ${actualTable} WHERE ${where}`).all(...params);
       }
       const accessibleRows = rows.filter(r => canAccessRecord(req.user!, r, "view", module));
-      res.json(accessibleRows.map(rowToDict));
+      res.json(accessibleRows.map(r => externalRecordDto(rowToDict(r), req.user!, module)));
+    });
+
+    // Direct GET by ID with full authorization check
+    app.get(`/api/${table}/:id`, authRequired, (req, res) => {
+      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table;
+      let record: any;
+      if (actualTable === "documents") {
+        record = db.prepare(`
+          SELECT documents.*, users.name as subcontractor_name, users.username as subcontractor_username
+          FROM documents
+          LEFT JOIN users ON users.id = documents.subcontractor_id
+          WHERE documents.id = ?
+        `).get(req.params.id);
+      } else {
+        record = db.prepare(`SELECT * FROM ${actualTable} WHERE id = ?`).get(req.params.id);
+      }
+
+      if (!record) {
+        res.status(404).json({ error: "Record not found" });
+        return;
+      }
+
+      if (!canAccessRecord(req.user!, record, "view", module)) {
+        res.status(403).json({ error: "Forbidden: no permission to access this record" });
+        return;
+      }
+
+      res.json(externalRecordDto(rowToDict(record), req.user!, module));
     });
 
     // Create
