@@ -154,8 +154,8 @@ export const WorkPackageCommandCenterModal: React.FC<WorkPackageCommandCenterMod
           <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-xs text-slate-500 font-medium">Active Manpower</span>
             <div className="flex items-center space-x-2 mt-1">
-              <span className="text-2xl font-bold text-slate-800">{metrics.manpower_count}</span>
-              <span className="text-xs text-slate-500">workers assigned</span>
+              <span className="text-2xl font-bold text-slate-800">{metrics.manpower_present ?? metrics.manpower_count}</span>
+              <span className="text-xs text-slate-500">present / {metrics.manpower_assigned ?? metrics.manpower_count} assigned</span>
             </div>
             <div className="text-xs text-indigo-600 font-medium mt-1">
               {metrics.active_blockers_count} active alerts

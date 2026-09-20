@@ -9,6 +9,15 @@ import { createServer as createViteServer } from "vite";
 import { MEP_REFERENCE_KNOWLEDGE, MEP_DEFECT_PATTERNS, suggestFixFallback } from "./mep_brain";
 import { PDFParse } from "pdf-parse";
 import * as mammoth from "mammoth";
+import { runMigrations } from "./server/db/migrations";
+import { registerWorkPackageRoutes } from "./server/routes/workPackageRoutes";
+import { registerProcurementRoutes } from "./server/routes/procurementRoutes";
+import { registerRiskRoutes } from "./server/routes/riskRoutes";
+import { registerTaskRoutes } from "./server/routes/taskRoutes";
+import { registerProgressRoutes } from "./server/routes/progressRoutes";
+import { getNextSequence } from "./server/services/referenceSequence";
+import { syncProcurementTaskBlocker } from "./server/services/blockerService";
+import { calculateRiskScore } from "./server/services/riskService";
 
 interface AuthenticatedUser {
   user_id: string;
@@ -21,6 +30,8 @@ interface AuthenticatedUser {
   work_package_id?: string;
   specialization?: string;
   worker_id?: string;
+  access_scope?: 'company' | 'work_package' | 'explicit_packages';
+  allowed_work_package_ids?: string[] | string;
 }
 
 declare global {
@@ -37,7 +48,10 @@ const db = new DatabaseSync(DB_PATH);
 try {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA busy_timeout = 10000;");
-} catch {}
+  runMigrations(db);
+} catch (e: any) {
+  console.error("Migration runner warning:", e?.message);
+}
 
 // Helper for row mapping
 function rowToDict(row: any): Record<string, any> | null {
@@ -2367,7 +2381,7 @@ function getCurrentUser(req: Request): AuthenticatedUser | null {
     return null;
   }
   // Re-fetch current live user and verify active status on every request (P1 session revocation)
-  const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id, worker_id FROM users WHERE id=?").get(session.user_id) as any;
+  const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id, worker_id, access_scope, allowed_work_package_ids FROM users WHERE id=?").get(session.user_id) as any;
   if (!userRow || userRow.status !== "Active") {
     db.prepare("DELETE FROM sessions WHERE token=?").run(token);
     return null;
@@ -2389,6 +2403,8 @@ function getCurrentUser(req: Request): AuthenticatedUser | null {
     trade: userRow.trade || undefined,
     work_package_id: userRow.work_package_id || undefined,
     worker_id: userRow.worker_id || undefined,
+    access_scope: userRow.access_scope || 'work_package',
+    allowed_work_package_ids: userRow.allowed_work_package_ids || undefined,
   };
 }
 
@@ -2457,9 +2473,31 @@ async function startServer() {
     res.type("application/javascript").send(`window.MEP_API_URL = ${JSON.stringify(apiUrl)};`);
   });
 
-  // Health Check
+  // Health & Readiness Observability
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "mep-project-manager" });
+    res.json({
+      status: "ok",
+      service: "mep-project-manager",
+      version: "1.4.1",
+      git_sha: "c539a9d",
+      uptime: process.uptime()
+    });
+  });
+
+  app.get("/api/ready", (_req, res) => {
+    try {
+      const ping = db.prepare("SELECT 1 as ok").get() as any;
+      const migrations = db.prepare("SELECT COUNT(*) as count FROM _migrations").get() as any;
+      res.json({
+        ready: true,
+        db: ping && ping.ok === 1 ? "connected" : "error",
+        migrations_applied: migrations ? migrations.count : 0,
+        version: "1.4.1",
+        timestamp: new Date().toISOString()
+      });
+    } catch (e: any) {
+      res.status(503).json({ ready: false, error: e?.message || "Database not ready" });
+    }
   });
 
   // Auth Endpoints
@@ -5191,284 +5229,11 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
-  // --- WORK PACKAGE COMMAND CENTER ---
-  app.get("/api/work_packages/:id/command-center", authRequired, (req, res) => {
-    try {
-      if (req.user!.role === "Client" || !canView(req.user!, "work_packages")) {
-        res.status(403).json({ error: "No access to work packages" });
-        return;
-      }
-      const wp = db.prepare(`
-        SELECT wp.*,
-          c.name as company_name, c.trade as company_trade,
-          s.name as site_name,
-          wbs.name as wbs_name, wbs.code as wbs_code
-        FROM work_packages wp
-        LEFT JOIN companies c ON c.id = wp.company_id
-        LEFT JOIN sites s ON s.id = wp.site_id
-        LEFT JOIN wbs_items wbs ON wbs.id = wp.wbs_item_id
-        WHERE wp.id=?
-      `).get(req.params.id) as any;
-      if (!wp) {
-        res.status(404).json({ error: "Work package not found" });
-        return;
-      }
-      if (!hasProjectAccess(req.user!, wp.project_id)) {
-        res.status(403).json({ error: "No access to project" });
-        return;
-      }
-      if (req.user!.role === "Subcontractor" && req.user!.work_package_id && req.user!.work_package_id !== wp.id) {
-        res.status(403).json({ error: "Forbidden: cross-package access blocked" });
-        return;
-      }
-
-      // Tasks aggregation
-      const tasks = db.prepare(`
-        SELECT t.*,
-          sup.name as supervisor_name,
-          w.name as worker_name
-        FROM tasks t
-        LEFT JOIN users sup ON sup.id = t.supervisor_id
-        LEFT JOIN workers w ON w.id = t.assigned_worker_id
-        WHERE t.work_package_id=?
-        ORDER BY t.start ASC
-      `).all(req.params.id) as any[];
-
-      const totalTasks = tasks.length;
-      const completedTasks = tasks.filter(t => t.status === "Completed" || t.progress === 100).length;
-      const inProgressTasks = tasks.filter(t => t.status === "In Progress").length;
-      const blockedTasks = tasks.filter(t => t.status === "Blocked").length;
-      const notStartedTasks = tasks.filter(t => t.status === "Not Started" || (!t.status && t.progress === 0)).length;
-      const avgProgress = totalTasks > 0
-        ? Math.round(tasks.reduce((sum, t) => sum + (Number(t.progress) || 0), 0) / totalTasks)
-        : 0;
-
-      // Progress submissions / claims
-      const claims = db.prepare(`
-        SELECT * FROM progress_submissions WHERE work_package_id=? ORDER BY period_date DESC, created_at DESC LIMIT 10
-      `).all(req.params.id) as any[];
-      const totalClaimedAmount = claims.reduce((acc, c) => acc + (Number(c.claimed_amount) || 0), 0);
-      const totalCertifiedAmount = claims.filter(c => c.status === "Approved" || c.status === "Approved with Adjustments")
-        .reduce((acc, c) => acc + (Number(c.adjusted_amount || c.claimed_amount) || 0), 0);
-
-      // Blockers
-      const blockers = db.prepare(`
-        SELECT b.*, t.title as task_title
-        FROM task_blockers b
-        JOIN tasks t ON t.id = b.task_id
-        WHERE t.work_package_id=? AND b.status = 'Active'
-        ORDER BY b.created_at DESC
-      `).all(req.params.id) as any[];
-
-      // Assigned manpower
-      const workers = db.prepare(`
-        SELECT DISTINCT w.*, c.name as company_name
-        FROM workers w
-        LEFT JOIN companies c ON c.id = w.company_id
-        WHERE w.work_package_id=? OR w.id IN (SELECT assigned_worker_id FROM tasks WHERE work_package_id=? AND assigned_worker_id IS NOT NULL)
-      `).all(req.params.id, req.params.id) as any[];
-
-      // Open clarifications
-      const clarifications = db.prepare(`
-        SELECT * FROM clarifications WHERE work_package_id=? AND status != 'Closed' ORDER BY created_at DESC
-      `).all(req.params.id) as any[];
-
-      // Linked Purchase orders
-      const wpDiscipline = wp.discipline || wp.trade || null;
-      const pos = db.prepare(`
-        SELECT po.* FROM purchase_orders po
-        WHERE (po.trade = ? AND ? IS NOT NULL) OR po.task_id IN (SELECT id FROM tasks WHERE work_package_id=?)
-      `).all(wpDiscipline, wpDiscipline, req.params.id) as any[];
-
-      res.json({
-        work_package: rowToDict(wp),
-        metrics: {
-          total_tasks: totalTasks,
-          completed_tasks: completedTasks,
-          in_progress_tasks: inProgressTasks,
-          blocked_tasks: blockedTasks,
-          not_started_tasks: notStartedTasks,
-          avg_progress: avgProgress,
-          total_claimed_amount: totalClaimedAmount,
-          total_certified_amount: totalCertifiedAmount,
-          active_blockers_count: blockers.length,
-          manpower_count: workers.length,
-          open_clarifications_count: clarifications.length
-        },
-        tasks: tasks.map(rowToDict),
-        claims: claims.map(rowToDict),
-        blockers: blockers.map(rowToDict),
-        workers: workers.map(rowToDict),
-        clarifications: clarifications.map(rowToDict),
-        purchase_orders: pos.map(rowToDict)
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // --- PROCUREMENT -> PROGRAMME INTEGRATION ---
-  app.get("/api/procurement/programme-impact", authRequired, (req, res) => {
-    try {
-      const projectId = req.query.project_id as string;
-      if (!projectId || !hasProjectAccess(req.user!, projectId)) {
-        res.status(403).json({ error: "No access to project" });
-        return;
-      }
-      const pos = db.prepare(`
-        SELECT po.*,
-          t.title as task_title, t.start as task_start, t.end as task_end, t.status as task_status,
-          t.trade as task_trade, wp.code as work_package_code, wp.name as work_package_name
-        FROM purchase_orders po
-        LEFT JOIN tasks t ON t.id = po.task_id
-        LEFT JOIN work_packages wp ON wp.id = t.work_package_id
-        WHERE po.project_id=? AND po.task_id IS NOT NULL
-      `).all(projectId) as any[];
-
-      const impactItems = pos.map(po => {
-        const deliveryDate = po.expected_delivery_date || po.expected_delivery;
-        const taskStart = po.task_start;
-        let bufferDays: number | null = null;
-        let riskLevel: "Critical" | "Warning" | "On Track" | "Delivered" = "On Track";
-        let message = "Material scheduled on time";
-
-        if (po.status === "Delivered" || po.actual_delivery_date) {
-          riskLevel = "Delivered";
-          message = "Material arrived on site";
-        } else if (deliveryDate && taskStart) {
-          const dDel = new Date(deliveryDate).getTime();
-          const dTask = new Date(taskStart).getTime();
-          bufferDays = Math.round((dTask - dDel) / (1000 * 60 * 60 * 24));
-          if (bufferDays < 0) {
-            riskLevel = "Critical";
-            message = `Material delivery is delayed by ${Math.abs(bufferDays)} days past scheduled task start!`;
-          } else if (bufferDays <= 3) {
-            riskLevel = "Warning";
-            message = `Tight buffer: only ${bufferDays} days between delivery and task start`;
-          } else {
-            riskLevel = "On Track";
-            message = `Healthy buffer: ${bufferDays} days lead time`;
-          }
-        }
-
-        return {
-          po_id: po.id,
-          po_number: po.po_number,
-          vendor: po.vendor,
-          description: po.description,
-          amount: po.amount,
-          status: po.status,
-          expected_delivery: deliveryDate,
-          task_id: po.task_id,
-          task_title: po.task_title,
-          task_start: po.task_start,
-          task_trade: po.task_trade,
-          work_package_code: po.work_package_code,
-          buffer_days: bufferDays,
-          risk_level: riskLevel,
-          message
-        };
-      });
-
-      const criticalCount = impactItems.filter(i => i.risk_level === "Critical").length;
-      const warningCount = impactItems.filter(i => i.risk_level === "Warning").length;
-      const onTrackCount = impactItems.filter(i => i.risk_level === "On Track" || i.risk_level === "Delivered").length;
-
-      res.json({
-        project_id: projectId,
-        summary: {
-          total_linked: impactItems.length,
-          critical_lead_time_risks: criticalCount,
-          tight_lead_time_warnings: warningCount,
-          on_track_count: onTrackCount
-        },
-        items: impactItems
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // --- ADVANCED RISK MANAGEMENT: 5x5 HEAT MAP MATRIX ---
-  app.get(["/api/project_risks/matrix", "/api/risks/matrix"], authRequired, (req, res) => {
-    try {
-      const projectId = req.query.project_id as string;
-      if (!projectId || !hasProjectAccess(req.user!, projectId)) {
-        res.status(403).json({ error: "No access to project" });
-        return;
-      }
-      const risks = db.prepare(`
-        SELECT r.*, t.title as linked_task_title
-        FROM risks r
-        LEFT JOIN tasks t ON t.id = r.linked_task_id
-        WHERE r.project_id=?
-        ORDER BY r.risk_score DESC, r.target_date ASC
-      `).all(projectId) as any[];
-
-      const mapLevel = (val: any): number => {
-        if (typeof val === 'number') return Math.max(1, Math.min(5, Math.round(val)));
-        const s = String(val || '').toLowerCase();
-        if (s.includes('very high') || s.includes('critical') || s === '5') return 5;
-        if (s.includes('high') || s === '4') return 4;
-        if (s.includes('medium') || s.includes('moderate') || s === '3') return 3;
-        if (s.includes('low') || s === '2') return 2;
-        if (s.includes('very low') || s === '1') return 1;
-        const n = parseInt(s, 10);
-        return isNaN(n) ? 3 : Math.max(1, Math.min(5, n));
-      };
-
-      const grid: Record<string, any[]> = {};
-      for (let p = 1; p <= 5; p++) {
-        for (let i = 1; i <= 5; i++) {
-          grid[`${p}_${i}`] = [];
-        }
-      }
-
-      let criticalCount = 0;
-      let highCount = 0;
-      let mediumCount = 0;
-      let lowCount = 0;
-
-      const scoredRisks = risks.map(r => {
-        const prob = mapLevel(r.probability);
-        const imp = mapLevel(r.impact);
-        const score = prob * imp;
-        let level: 'Critical' | 'High' | 'Medium' | 'Low' = 'Low';
-        if (score >= 15) {
-          level = 'Critical';
-          criticalCount++;
-        } else if (score >= 10) {
-          level = 'High';
-          highCount++;
-        } else if (score >= 5) {
-          level = 'Medium';
-          mediumCount++;
-        } else {
-          level = 'Low';
-          lowCount++;
-        }
-        const item = { ...rowToDict(r), calculated_probability: prob, calculated_impact: imp, calculated_score: score, calculated_level: level };
-        grid[`${prob}_${imp}`].push(item);
-        return item;
-      });
-
-      res.json({
-        project_id: projectId,
-        total_risks: risks.length,
-        summary: {
-          critical: criticalCount,
-          high: highCount,
-          medium: mediumCount,
-          low: lowCount
-        },
-        matrix_grid: grid,
-        risks: scoredRisks,
-        top_risks: scoredRisks.slice(0, 5)
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+  // --- V1.4.1 EXTRACTED DOMAIN ROUTES ---
+  registerWorkPackageRoutes(app, db, authRequired, hasProjectAccess, rowToDict);
+  registerProcurementRoutes(app, db, authRequired, hasProjectAccess);
+  registerRiskRoutes(app, db, authRequired, hasProjectAccess);
+  registerTaskRoutes(app, db, authRequired, hasProjectAccess);
 
   // --- CLARIFICATIONS HUB (CLIENT <-> MAIN CONTRACTOR <-> SUBCONTRACTOR) ---
   app.get("/api/clarifications", authRequired, (req, res) => {
@@ -5988,30 +5753,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     }
   });
 
-  app.post("/api/progress_reports/:id/publish", authRequired, (req, res) => {
-    try {
-      const existing = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
-      if (!existing) {
-        res.status(404).json({ error: "Report not found" });
-        return;
-      }
-      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
-        res.status(403).json({ error: "Only Admin or Project Manager can publish progress reports" });
-        return;
-      }
-      const now = new Date().toISOString();
-      db.prepare(`
-        UPDATE progress_reports
-        SET status='Published to Client', published_at=?, published_by=?
-        WHERE id=?
-      `).run(now, req.user!.name, req.params.id);
-      writeAudit(req.user!.user_id, "progress_reports", req.params.id, existing.project_id, "publish", existing, { status: "Published to Client" });
-      const updated = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
-      res.json(rowToDict(updated));
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+  // Consolidated transactional publication & revision routes
+  registerProgressRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
 
   // Auto-compile live project data into a draft progress report
   app.post("/api/progress_reports/auto-compile", authRequired, (req, res) => {
@@ -6129,31 +5872,6 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       res.status(201).json({ id, ...data, created_at: now });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
-    }
-  });
-
-  app.post("/api/progress_reports/:id/publish", authRequired, (req, res) => {
-    try {
-      const existing = db.prepare("SELECT * FROM progress_reports WHERE id=?").get(req.params.id) as any;
-      if (!existing) {
-        res.status(404).json({ error: "Report not found" });
-        return;
-      }
-      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
-        res.status(403).json({ error: "Only Project Managers and Admins can publish progress reports to the Client" });
-        return;
-      }
-      const now = new Date().toISOString();
-      db.prepare(`
-        UPDATE progress_reports
-        SET status='Published to Client', published_at=?, published_by=?
-        WHERE id=?
-      `).run(now, req.user!.name, req.params.id);
-
-      writeAudit(req.user!.user_id, "progress_reports", req.params.id, existing.project_id, "publish", existing, { status: "Published to Client" });
-      res.json({ ok: true, id: req.params.id, status: "Published to Client", published_at: now, published_by: req.user!.name });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
     }
   });
 
@@ -9143,10 +8861,48 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         }
       }
       const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+
+      if (actualTable === "project_actions") {
+        if (!data.action_no) {
+          data.action_no = getNextSequence(db, data.project_id, "action");
+        }
+        data.created_by = req.user!.user_id;
+        data.created_at = new Date().toISOString();
+      }
+      if (actualTable === "project_decisions") {
+        if (!data.decision_no) {
+          data.decision_no = getNextSequence(db, data.project_id, "decision");
+        }
+        data.created_by = req.user!.user_id;
+        data.created_at = new Date().toISOString();
+      }
+      if (actualTable === "risks" && (data.probability !== undefined || data.impact !== undefined)) {
+        const evaluated = calculateRiskScore(data.probability, data.impact);
+        data.risk_score = evaluated.score;
+        data.risk_level = evaluated.level;
+        data.created_by = data.created_by || req.user!.user_id;
+        data.created_at = data.created_at || new Date().toISOString();
+      }
+
       const values = cols.map(c => (c === "id" ? id : data[c] !== undefined ? data[c] : null));
       const placeholders = cols.map(() => "?").join(",");
       db.prepare(`INSERT INTO ${actualTable} (${cols.join(",")}) VALUES (${placeholders})`).run(...values);
       db.prepare("INSERT OR IGNORE INTO record_owners VALUES (?, ?, ?)").run(module, id, req.user!.user_id);
+
+      if (actualTable === "purchase_orders" && data.task_id) {
+        try {
+          syncProcurementTaskBlocker(db, {
+            id,
+            project_id: data.project_id,
+            task_id: data.task_id,
+            po_number: data.po_number,
+            item_name: data.description,
+            expected_delivery_date: data.expected_delivery_date || data.expected_delivery,
+            status: data.status
+          });
+        } catch {}
+      }
+
       writeAudit(req.user!.user_id, module, id, data.project_id, "create", null, data);
       res.status(201).json(data);
     });
@@ -9170,6 +8926,24 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
 
       const data = req.body || {};
+
+      // Immutable governance fields protection
+      const immutableFields = ["id", "project_id", "created_by", "created_at", "action_no", "decision_no", "reference"];
+      for (const field of immutableFields) {
+        if (field in data && data[field] !== undefined && data[field] !== null && existing[field] && String(data[field]) !== String(existing[field])) {
+          res.status(400).json({ error: `Field '${field}' is immutable and cannot be altered` });
+          return;
+        }
+      }
+
+      if (actualTable === "risks" && (data.probability !== undefined || data.impact !== undefined)) {
+        const prob = data.probability !== undefined ? data.probability : existing.probability;
+        const imp = data.impact !== undefined ? data.impact : existing.impact;
+        const evaluated = calculateRiskScore(prob, imp);
+        data.risk_score = evaluated.score;
+        data.risk_level = evaluated.level;
+      }
+
       if (req.user!.role === "Subcontractor") {
         if (data.work_package_id && req.user!.work_package_id && data.work_package_id !== req.user!.work_package_id) {
           res.status(403).json({ error: "Cannot assign record to another work package" });
@@ -9229,6 +9003,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         db.prepare(`UPDATE ${actualTable} SET ${updates.join(",")} WHERE id=?`).run(...values);
       }
       const updated = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
+
+      if (actualTable === "purchase_orders") {
+        try {
+          syncProcurementTaskBlocker(db, {
+            id: req.params.id,
+            project_id: updated.project_id,
+            task_id: updated.task_id,
+            po_number: updated.po_number,
+            item_name: updated.description,
+            expected_delivery_date: updated.expected_delivery_date || updated.expected_delivery,
+            status: updated.status
+          });
+        } catch {}
+      }
 
       if ("status" in data && "status" in existing && data.status !== existing.status) {
         db.prepare("INSERT INTO task_status_history VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(

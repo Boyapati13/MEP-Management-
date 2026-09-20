@@ -328,7 +328,7 @@ function AppShell() {
           <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
             <HardHat size={18} className="text-white" />
           </div>
-          {sidebarOpen && <div><p className="font-bold text-gray-900 text-sm leading-tight">MEP Management</p><p className="text-xs text-gray-400">v1.2 Enterprise</p></div>}
+          {sidebarOpen && <div><p className="font-bold text-gray-900 text-sm leading-tight">MEP Management</p><p className="text-xs text-gray-400">v1.4.1 Enterprise</p></div>}
         </div>
       </div>
 
@@ -2489,7 +2489,7 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
     status: 'Active',
     budget: '',
     currency: 'USD',
-    contract_type: 'Lump Sum EPC',
+    contract_type: '',
     stage: 'Construction',
     consultant: '',
     main_contractor: '',
@@ -2538,7 +2538,7 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
       status: 'Active',
       budget: '',
       currency: 'USD',
-      contract_type: 'Lump Sum EPC',
+      contract_type: '',
       stage: 'Construction',
       consultant: '',
       main_contractor: '',
@@ -2562,7 +2562,7 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
       status: p.status || 'Active',
       budget: p.contract_value ?? p.budget ? String(p.contract_value ?? p.budget) : '',
       currency: p.currency || 'USD',
-      contract_type: p.contract_type || 'Lump Sum EPC',
+      contract_type: p.contract_type || '',
       stage: p.stage || 'Construction',
       consultant: p.consultant || '',
       main_contractor: p.main_contractor || '',
@@ -2795,10 +2795,13 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
             </FormField>
             <FormField label="Contract Type">
               <select value={formData.contract_type} onChange={e => setFormData(d => ({ ...d, contract_type: e.target.value }))} className={selectCls}>
+                <option value="">— Select Contract Type —</option>
                 <option value="Lump Sum EPC">Lump Sum EPC</option>
                 <option value="Design & Build">Design & Build</option>
                 <option value="Cost Plus">Cost Plus</option>
                 <option value="Re-measurable Unit Rate">Re-measurable Unit Rate</option>
+                <option value="Fixed Price">Fixed Price</option>
+                <option value="Framework Agreement">Framework Agreement</option>
               </select>
             </FormField>
             <FormField label="Currency">

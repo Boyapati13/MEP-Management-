@@ -352,6 +352,14 @@ export function WorkerMobileShell({ onExitMobile, isWorkerOnly }: Props) {
         </div>
       </header>
 
+      {/* Offline Truthfulness Banner */}
+      {!isOnline && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-inner border-b border-amber-600">
+          <WifiOff size={16} />
+          <span>Offline — actions requiring server connection are unavailable</span>
+        </div>
+      )}
+
       {/* ─── Main Content Tabs ─── */}
       <main className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4">
         {loading ? (

@@ -1,0 +1,230 @@
+<USER_REQUEST>
+MEP MANAGEMENT PLATFORM
+V1.4.1 — ENTERPRISE HARDENING, WORKFLOW INTEGRITY & PRODUCT MATURITY
+
+ROLE
+
+Act as:
+
+- Senior SaaS Architect
+- Senior Full-Stack Engineer
+- Application Security Engineer
+- MEP Project Controls Manager
+- Construction Operations Product Manager
+- QA Automation Engineer
+- DevOps / Release Engineer
+- Enterprise UX Architect
+
+Repository:
+
+Boyapati13/MEP-Management-
+
+CURRENT VERIFIED MAIN
+
+c539a9de303972e4a923587bb9a2a68cd436897b
+
+Title:
+
+fix(test): use compiled server and declare serverLogs in load and uat suites
+
+IMPORTANT
+
+Do not describe the platform as equivalent to Odoo, monday.com,
+Buildertrend, Procore or another mature commercial platform.
+
+This release is specifically intended to remove the gaps preventing the
+current MEP platform from moving from controlled pilot to production-grade
+operation.
+
+DO NOT rebuild the application.
+
+DO NOT introduce unrelated modules.
+
+DO NOT create another UI framework.
+
+Preserve existing:
+
+- React frontend
+- Express backend
+- SQLite-compatible architecture
+- authentication
+- Firebase verification
+- tenant/company/project isolation
+- project memberships
+- workforce
+- GPS attendance
+- payroll
+- Worker Mobile
+- Project Master
+- Control Tower
+- WBS
+- Tasks
+- Task Blockers
+- 2-Week Lookahead
+- Work Packages
+- Work Package Command Center
+- Procurement
+- RFIs
+- Submittals
+- Clarifications
+- Documents
+- Site Instructions
+- Quality
+- Risks
+- Project Actions
+- Project Decisions
+- Progress Reporting
+- Client Portal
+- Android/iOS Capacitor setup
+- existing test suites
+
+======================================================================
+1. RELEASE OBJECTIVE
+======================================================================
+
+V1.4.1 is NOT a feature-count release.
+
+It is a correctness, authorization, workflow, integration and production
+maturity release.
+
+The release must answer:
+
+Can we deploy the existing application to a real MEP contractor and trust:
+
+
+<truncated 29325 bytes>
+mark:
+
+500 requests
+50 concurrent workers
+0 HTTP failures
+
+CI performance thresholds may remain environment-sensitive but must be
+documented.
+
+Do not claim:
+
+"50 authenticated user sessions"
+
+unless the test genuinely creates 50 independent sessions.
+
+For release candidate staging test:
+
+at least 50 independent authenticated sessions
+multiple roles
+mixed reads/writes
+
+Publish actual measured results.
+
+======================================================================
+42. DEFINITION OF DONE
+======================================================================
+
+Release is complete only when:
+
+npm run lint
+PASS
+
+npm run build
+PASS
+
+npm run test:migration
+PASS
+
+npm run test:e2e
+PASS
+
+npm run test:v1.1
+PASS
+
+npm run test:enterprise
+PASS
+
+npm run test:workforce
+PASS
+
+npm run test:control-tower
+PASS
+
+npm run test:project-master
+PASS
+
+npm run test:uat
+PASS
+
+npm run test:load
+PASS
+
+npm run test:v1.4.1
+PASS
+
+Android build
+PASS
+
+and:
+
+Procurement authorization
+PASS
+
+Risk authorization
+PASS
+
+Subcontractor package isolation
+PASS
+
+Procurement auto-blocker
+PASS
+
+Readiness propagation
+PASS
+
+Decision governance
+PASS
+
+Action governance
+PASS
+
+Immutable provenance
+PASS
+
+Client zero leakage
+PASS
+
+Real role UAT
+PASS
+
+Concurrent reference generation
+PASS
+
+Backup/restore validation
+PASS
+
+main branch protection
+VERIFIED
+
+Do not claim production-ready unless these are observed.
+
+======================================================================
+43. POST-V1.4.1 STRATEGIC GAP REVIEW
+======================================================================
+
+Only after V1.4.1 is green decide whether the product should expand toward:
+
+A. MEP specialist construction platform
+
+or
+
+B. broader contractor ERP
+
+If A:
+
+prioritize:
+
+document/drawing intelligence
+commissioning
+asset handover
+material trace
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-20T23:31:26+02:00.
+</ADDITIONAL_METADATA>

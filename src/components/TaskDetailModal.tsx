@@ -1,7 +1,8 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import {
   X, Layers, MapPin, Briefcase, Users, Calendar, FileText,
-  DollarSign, ShoppingCart, ShieldCheck, Check, AlertCircle
+  DollarSign, ShoppingCart, ShieldCheck, Check, AlertCircle, Zap,
+  CheckCircle2, XCircle, Clock, RefreshCw
 } from 'lucide-react';
 import { sitesApi, workPackagesApi, workersApi, tasksApi, api } from '../api';
 
@@ -14,7 +15,9 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: TaskDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'scope' | 'hierarchy' | 'schedule' | 'refs' | 'evidence'>('scope');
+  const [activeTab, setActiveTab] = useState<'scope' | 'hierarchy' | 'schedule' | 'refs' | 'evidence' | 'readiness'>('scope');
+  const [readiness, setReadiness] = useState<any>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,7 +136,19 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
     }
   }, [open, task, projectId]);
 
+  // Load readiness data from authoritative backend endpoint
+  useEffect(() => {
+    if (activeTab === 'readiness' && task?.id) {
+      setReadinessLoading(true);
+      api.get(`/api/tasks/${task.id}/readiness`)
+        .then(r => setReadiness(r))
+        .catch(() => setReadiness(null))
+        .finally(() => setReadinessLoading(false));
+    }
+  }, [activeTab, task?.id]);
+
   if (!open) return null;
+
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -257,6 +272,17 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
           >
             <ShieldCheck size={14} /> 5. Quality Gate
           </button>
+          {task?.id && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('readiness')}
+              className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'readiness' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <Zap size={14} /> 6. Readiness
+            </button>
+          )}
         </div>
 
         {error && (
@@ -625,6 +651,107 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
                       className={inputCls}
                     />
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 6: READINESS (live from backend authoritative endpoint) */}
+          {activeTab === 'readiness' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Task Readiness — Tri-State Analysis</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Live evaluation from server against all 7 readiness gates</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReadinessLoading(true);
+                    api.get(`/api/tasks/${task?.id}/readiness`)
+                      .then(r => setReadiness(r))
+                      .catch(() => setReadiness(null))
+                      .finally(() => setReadinessLoading(false));
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50"
+                >
+                  <RefreshCw size={12} /> Refresh
+                </button>
+              </div>
+
+              {readinessLoading ? (
+                <div className="flex items-center justify-center py-12 text-gray-400">
+                  <div className="w-7 h-7 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3" />
+                  <span className="text-xs font-medium">Evaluating readiness gates...</span>
+                </div>
+              ) : readiness ? (
+                <div className="space-y-3">
+                  {/* Overall Status Banner */}
+                  <div className={`flex items-center gap-3 p-4 rounded-xl border-2 ${
+                    readiness.overall === 'ready'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : readiness.overall === 'blocked'
+                      ? 'bg-red-50 border-red-300 text-red-900'
+                      : 'bg-amber-50 border-amber-300 text-amber-900'
+                  }`}>
+                    {readiness.overall === 'ready' ? <CheckCircle2 size={22} className="flex-shrink-0" /> :
+                     readiness.overall === 'blocked' ? <XCircle size={22} className="flex-shrink-0" /> :
+                     <Clock size={22} className="flex-shrink-0" />}
+                    <div>
+                      <p className="font-bold text-sm capitalize">{readiness.overall} to Proceed</p>
+                      <p className="text-xs mt-0.5 opacity-75">
+                        {readiness.checks?.filter((c: any) => c.passed).length ?? 0} of {readiness.checks?.length ?? 0} gates passed
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Readiness Checks Table */}
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-100 border-b border-gray-200">
+                        <tr>
+                          <th className="py-2.5 px-4 text-left font-semibold text-gray-600 uppercase tracking-wide">Gate</th>
+                          <th className="py-2.5 px-4 text-left font-semibold text-gray-600 uppercase tracking-wide">Status</th>
+                          <th className="py-2.5 px-4 text-left font-semibold text-gray-600 uppercase tracking-wide">Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(readiness.checks || []).map((check: any, idx: number) => (
+                          <tr key={idx} className="bg-white hover:bg-gray-50/50">
+                            <td className="py-3 px-4 font-semibold text-gray-800">{check.gate || check.label || `Gate ${idx + 1}`}</td>
+                            <td className="py-3 px-4">
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-bold text-[11px] ${
+                                check.status === 'pass' || check.passed
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : check.status === 'blocked'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {(check.status === 'pass' || check.passed) ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                                {check.status || (check.passed ? 'Pass' : 'Fail')}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-gray-500">{check.detail || check.message || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {readiness.procurement_buffer_days != null && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+                      <span className="font-bold">Procurement Buffer: </span>
+                      {readiness.procurement_buffer_days >= 0
+                        ? `+${readiness.procurement_buffer_days} days ahead of task start`
+                        : `${readiness.procurement_buffer_days} days overdue — task may be blocked`}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <Zap size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="font-medium text-gray-600 text-sm">Readiness data unavailable</p>
+                  <p className="text-xs text-gray-400 mt-1">This task may not yet be linked to a work package or the server returned no data</p>
                 </div>
               )}
             </div>

@@ -81,6 +81,9 @@ jobs:
       - name: Run Release V1.4.0 High-Concurrency Load Benchmark
         run: npm run test:load
 
+      - name: Run V1.4.1 Enterprise Hardening Suite (HARD-001 to HARD-015)
+        run: npm run test:v1.4.1
+
       - name: Stop isolated server
         if: always()
         run: |
@@ -88,3 +91,9 @@ jobs:
             kill "$(cat /tmp/mep-ci-server.pid)" 2>/dev/null || true
           fi
           cat /tmp/mep-ci-server.log 2>/dev/null || true
+
+      - name: Verify build artifacts
+        if: success()
+        run: |
+          test -f dist/server.cjs && echo "✓ dist/server.cjs present" || (echo "✗ dist/server.cjs missing" && exit 1)
+          test -f dist/index.html && echo "✓ dist/index.html present" || (echo "✗ dist/index.html missing" && exit 1)

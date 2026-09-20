@@ -1,0 +1,1836 @@
+<USER_REQUEST>
+MEP MANAGEMENT PLATFORM
+V1.4.1 — ENTERPRISE HARDENING, WORKFLOW INTEGRITY & PRODUCT MATURITY
+
+ROLE
+
+Act as:
+
+- Senior SaaS Architect
+- Senior Full-Stack Engineer
+- Application Security Engineer
+- MEP Project Controls Manager
+- Construction Operations Product Manager
+- QA Automation Engineer
+- DevOps / Release Engineer
+- Enterprise UX Architect
+
+Repository:
+
+Boyapati13/MEP-Management-
+
+CURRENT VERIFIED MAIN
+
+c539a9de303972e4a923587bb9a2a68cd436897b
+
+Title:
+
+fix(test): use compiled server and declare serverLogs in load and uat suites
+
+IMPORTANT
+
+Do not describe the platform as equivalent to Odoo, monday.com,
+Buildertrend, Procore or another mature commercial platform.
+
+This release is specifically intended to remove the gaps preventing the
+current MEP platform from moving from controlled pilot to production-grade
+operation.
+
+DO NOT rebuild the application.
+
+DO NOT introduce unrelated modules.
+
+DO NOT create another UI framework.
+
+Preserve existing:
+
+- React frontend
+- Express backend
+- SQLite-compatible architecture
+- authentication
+- Firebase verification
+- tenant/company/project isolation
+- project memberships
+- workforce
+- GPS attendance
+- payroll
+- Worker Mobile
+- Project Master
+- Control Tower
+- WBS
+- Tasks
+- Task Blockers
+- 2-Week Lookahead
+- Work Packages
+- Work Package Command Center
+- Procurement
+- RFIs
+- Submittals
+- Clarifications
+- Documents
+- Site Instructions
+- Quality
+- Risks
+- Project Actions
+- Project Decisions
+- Progress Reporting
+- Client Portal
+- Android/iOS Capacitor setup
+- existing test suites
+
+======================================================================
+1. RELEASE OBJECTIVE
+======================================================================
+
+V1.4.1 is NOT a feature-count release.
+
+It is a correctness, authorization, workflow, integration and production
+maturity release.
+
+The release must answer:
+
+Can we deploy the existing application to a real MEP contractor and trust:
+
+1. every API authorization path;
+2. every workflow transition;
+3. every cross-module relationship;
+4. every client/subcontractor boundary;
+5. the programme-risk calculations;
+6. governance records and audit trails;
+7. release controls;
+8. realistic role-based UAT;
+9. realistic concurrent-user testing;
+10. operational diagnostics?
+
+If any answer is no, fix it.
+
+======================================================================
+2. CURRENT VERIFIED STRENGTHS — PRESERVE THEM
+======================================================================
+
+Current GitHub implementation already includes:
+
+- 591 passing automated assertions in the latest verified CI
+- migration suite
+- E2E suite
+- multi-company suite
+- enterprise suite
+- workforce suite
+- project control suite
+- project master suite
+- V1.4 UAT suite
+- load benchmark
+- Android build workflow
+
+Current functional modules include:
+
+- Project Control Tower
+- Project Master
+- WBS
+- Tasks
+- Lookahead
+- Blocker Engine
+- Work Package Command Center
+- workforce / GPS attendance
+- payroll
+- mobile Worker UX
+- Site Instructions
+- RFIs
+- Submittals
+- Clarifications
+- Procurement
+- Risks
+- Actions
+- Decisions
+- Progress Reports
+- Client publishing
+
+Do not regress these.
+
+======================================================================
+3. KNOWN RELEASE BLOCKER — PROCUREMENT API AUTHORIZATION
+======================================================================
+
+Current specialized route:
+
+GET /api/procurement/programme-impact
+
+must not rely only on:
+
+hasProjectAccess()
+
+Require explicit Procurement visibility.
+
+Target:
+
+hasProjectAccess(user, projectId)
+AND
+canView(user, "procurement")
+
+or a dedicated:
+
+canViewProgrammeProcurementRisk(user, projectId)
+
+Rules:
+
+Admin:
+allowed
+
+ProjectManager:
+allowed for assigned projects
+
+CommercialManager:
+allowed for assigned projects
+
+SiteEngineer:
+operational dates only if authorized
+
+Subcontractor:
+only own company / own work-package procurement records
+
+Worker:
+403
+
+Client:
+403 unless a future explicitly published procurement record exists
+
+Consultant:
+403 by default unless explicit role permission exists
+
+Never leak:
+
+vendor
+PO amount
+internal purchase status
+commercial values
+other company's records
+
+through specialized APIs.
+
+Add negative tests.
+
+======================================================================
+4. KNOWN RELEASE BLOCKER — RISK MATRIX AUTHORIZATION
+======================================================================
+
+Current:
+
+GET /api/project_risks/matrix
+GET /api/risks/matrix
+
+must require:
+
+project access
+AND
+risk module visibility.
+
+Worker:
+403
+
+Client:
+403 unless risk has an explicit published/client visibility state
+
+Subcontractor:
+own-company / own-package risks only where applicable
+
+ProjectManager/Admin:
+project scope
+
+Do not allow specialized dashboards to bypass normal module permissions.
+
+Create a reusable policy helper:
+
+canAccessRisk(user, risk, action)
+
+and a project-level helper:
+
+canViewRiskMatrix(user, projectId)
+
+======================================================================
+5. WORK PACKAGE COMMAND CENTER SUBCONTRACTOR ISOLATION
+======================================================================
+
+Review:
+
+GET /api/work_packages/:id/command-center
+
+Subcontractor access must not depend only on an optional
+user.work_package_id.
+
+Use deterministic scope.
+
+Recommended:
+
+if user.role === "Subcontractor":
+
+  require project membership
+
+  AND
+
+  (
+    wp.company_id === user.company_id
+    OR
+    wp.id === user.work_package_id
+  )
+
+Where company owns multiple packages, company-level permission may allow
+all of that company's project packages.
+
+Never expose:
+
+another subcontractor's workers
+progress claims
+procurement
+commercial data
+tasks
+clarifications
+
+Add explicit tests:
+
+SEC-WP-001
+Subcontractor A can open own package
+
+SEC-WP-002
+Subcontractor A cannot open Company B package
+
+SEC-WP-003
+Subcontractor with null work_package_id still cannot bypass company scope
+
+SEC-WP-004
+Direct UUID request returns 403
+
+======================================================================
+6. CENTRALIZE SPECIALIZED ENDPOINT AUTHORIZATION
+======================================================================
+
+Audit every specialized API that bypasses generic TABLE_CONFIG CRUD.
+
+Examples:
+
+/api/*/command-center
+/api/*/matrix
+/api/*/programme-impact
+/api/*/summary
+/api/*/dashboard
+/api/*/lookahead
+/api/*/client-summary
+/api/*/export
+/api/search
+/api/*/reports
+
+For each specialized API:
+
+authenticate
+→ active user
+→ active company
+→ project participation
+→ explicit project membership
+→ module permission
+→ company/work-package scope
+→ record visibility
+→ action permission
+→ response-field filtering
+
+Create helpers instead of copy/pasting checks.
+
+Examples:
+
+canAccessWorkPackage()
+canViewProcurementRisk()
+canAccessRisk()
+canAccessProjectAction()
+canAccessProjectDecision()
+canAccessProgressReport()
+
+Security must behave identically through:
+
+list
+detail
+dashboard
+search
+export
+command center
+related records
+workflow endpoints
+
+======================================================================
+7. PROCUREMENT → PROGRAMME RULES
+======================================================================
+
+Current programme impact classification is approximately:
+
+buffer < 0
+Critical
+
+buffer <= 3
+Warning
+
+buffer > 3
+On Track
+
+Document the actual production rule.
+
+Do not claim 7 days if code uses 3.
+
+Introduce configurable project thresholds:
+
+procurement_critical_buffer_days
+procurement_warning_buffer_days
+
+Recommended defaults:
+
+Critical:
+forecast delivery after required-on-site/task need date
+
+Warning:
+0–7 days positive buffer
+
+On Track:
+>7 days positive buffer
+
+Delivered:
+actual delivery exists
+
+Do not hardcode assumptions throughout routes.
+
+======================================================================
+8. PROCUREMENT → TASK BLOCKER AUTOMATION
+======================================================================
+
+Current implementation calculates risk but does not fully automate the
+Task Blocker lifecycle.
+
+Implement controlled automatic procurement blockers.
+
+If:
+
+linked purchase order/material
+AND
+forecast delivery is later than task material-required date / task start
+AND
+record is not delivered
+
+then:
+
+create or update ONE deterministic procurement blocker
+
+blocker_type:
+Procurement
+
+source_type:
+purchase_order
+
+source_id:
+PO ID
+
+task_id:
+linked task
+
+description:
+human-readable material delay
+
+impact_days:
+calculated delay
+
+Do not create duplicates on every recalculation.
+
+Use a unique logical identity such as:
+
+task_id + blocker_type + source_id
+
+When forecast becomes healthy or item is delivered:
+
+resolve the auto-generated blocker
+
+BUT:
+
+do not automatically resolve manually created procurement blockers.
+
+Then propagate:
+
+Procurement Risk
+→ Task Blocker
+→ Task Readiness
+→ Lookahead
+→ Work Package
+→ Control Tower
+
+Add integration tests proving the chain.
+
+======================================================================
+9. TASK READINESS ENGINE — SINGLE SOURCE OF TRUTH
+======================================================================
+
+Avoid separate conflicting readiness rules.
+
+Create one backend function:
+
+calculateTaskReadiness(taskId)
+
+Return:
+
+{
+  ready: boolean,
+  status,
+  blockers: [],
+  checks: {
+    predecessors,
+    procurement,
+    drawings,
+    submittals,
+    rfi,
+    workforce,
+    access
+  }
+}
+
+All of these must consume the same engine:
+
+Task Detail
+2-Week Lookahead
+Work Package Command Center
+Control Tower
+Programme-risk views
+
+Do not reproduce readiness calculations in React.
+
+======================================================================
+10. PROJECT DECISIONS — GOVERNANCE WORKFLOW
+======================================================================
+
+Current Decision creation defaults too easily to Approved.
+
+Replace this with controlled lifecycle:
+
+Draft
+→ Proposed
+→ Under Review
+→ Approved
+or
+Rejected
+→ Closed
+
+Fields should include:
+
+id
+project_id
+decision_no
+
+title
+category
+context
+options_considered
+
+decision_required_from_company_id
+decision_required_from_user_id
+
+decision_taken
+decided_by_user_id
+decided_by_name
+
+decision_date
+required_by
+
+cost_impact
+schedule_impact_days
+
+related_module
+related_record_id
+
+visibility
+
+status
+
+created_by
+created_at
+updated_at
+
+Do not allow generic browser input to overwrite:
+
+decision_no
+created_by
+created_at
+project_id
+
+Server generates/stamps them.
+
+Decision categories:
+
+Technical
+Design
+Commercial
+Client
+Programme
+Procurement
+Quality
+Site
+Other
+
+======================================================================
+11. PROJECT ACTIONS — GOVERNANCE WORKFLOW
+======================================================================
+
+Ensure these are immutable after creation:
+
+id
+project_id
+action_no
+created_by
+created_at
+
+Controlled status:
+
+Open
+→ In Progress
+→ Blocked
+→ Closed
+
+Reopening Closed should be an explicit action with audit.
+
+Fields:
+
+owner_user_id
+owner_company_id
+work_package_id
+source_type
+source_id
+priority
+due_date
+closed_date
+
+Add overdue calculation server-side.
+
+Do not trust user-submitted:
+
+closed_date
+created_by
+action_no
+
+======================================================================
+12. IMMUTABLE GOVERNANCE PROVENANCE
+======================================================================
+
+Generic PUT must never alter:
+
+created_by
+created_at
+issued_by
+published_by
+verified_by
+record number/reference
+
+unless an explicit specialized endpoint performs the action.
+
+Review TABLE_CONFIG for:
+
+project_actions
+project_decisions
+progress_reports
+risks
+site_instructions
+
+Protect immutable fields.
+
+All workflow transitions must audit:
+
+actor
+role
+timestamp
+old state
+new state
+reason/comment
+
+======================================================================
+13. RISK MATRIX CALCULATION FIX
+======================================================================
+
+Fix text normalization.
+
+Evaluate:
+
+"very low"
+
+BEFORE:
+
+"low"
+
+Expected:
+
+Very Low = 1
+Low = 2
+Medium = 3
+High = 4
+Very High = 5
+
+Likewise normalize impact.
+
+Create:
+
+normalizeRiskScale(value)
+
+Support:
+
+numeric 1..5
+Very Low
+Low
+Medium
+High
+Very High
+
+Reject unknown values rather than silently assigning a misleading score.
+
+======================================================================
+14. RISK SCORE SOURCE OF TRUTH
+======================================================================
+
+Do not sort Top Risks using a stale stored risk_score if the displayed
+matrix uses:
+
+probability × impact.
+
+Create one source of truth:
+
+calculateRiskScore(risk)
+
+Return:
+
+probability_numeric
+impact_numeric
+score
+level
+
+Use this for:
+
+matrix cell
+summary
+top risks
+Control Tower
+detail screen
+
+Either:
+
+recalculate stored values whenever risk changes
+
+or
+
+derive at read time consistently.
+
+Do not mix both inconsistently.
+
+======================================================================
+15. PROGRESS REPORT ROUTE CLEANUP
+======================================================================
+
+Current server registers:
+
+POST /api/progress_reports/:id/publish
+
+more than once.
+
+Consolidate to ONE route.
+
+One authoritative behavior.
+
+Requirements:
+
+report exists
+project membership
+role Admin or ProjectManager
+report currently publishable
+immutable publication timestamp
+published_by actor
+audit
+
+If already Published:
+
+return idempotent success
+
+or controlled 409
+
+Document which behavior is chosen.
+
+No duplicate handlers.
+
+======================================================================
+16. PUBLISHED REPORT SNAPSHOT INTEGRITY
+======================================================================
+
+Once published to Client:
+
+live task changes must not change the historical report.
+
+Ensure published Progress Report is an immutable snapshot.
+
+Fields required in snapshot:
+
+planned progress
+verified progress
+published progress
+period dates
+
+programme narrative
+procurement risks
+technical issues
+quality summary
+workforce summary
+commercial summary
+
+photos / references
+
+After publication:
+
+editing requires:
+
+new revision
+
+or
+
+explicit unpublish/reissue process restricted to authorized governance role.
+
+Do not silently mutate previously published data.
+
+======================================================================
+17. CLIENT PORTAL ZERO-LEAKAGE TESTING
+======================================================================
+
+Existing Client progress firewall is good.
+
+Expand negative tests.
+
+Client must NOT access:
+
+internal Control Tower
+unpublished progress
+internal Actions
+internal Risks
+internal Procurement
+payroll
+worker attendance detail
+internal Site Instructions
+unpublished Documents
+other clients/projects
+
+Client CAN access only explicit published/authorized items.
+
+Test direct UUID calls.
+
+Test search.
+
+Test exports.
+
+Test specialized APIs.
+
+======================================================================
+18. REAL SUBCONTRACTOR → PM UAT
+======================================================================
+
+Existing V1.4 UAT performs some workflow steps using Admin.
+
+Replace critical role-flow scenarios with actual role tokens.
+
+Create:
+
+Admin
+ProjectManager
+SiteSupervisor
+Subcontractor A
+Subcontractor B
+Worker A
+Client
+Consultant where applicable
+
+Scenario:
+
+Subcontractor A
+→ submits progress claim for own package
+
+PM
+→ verifies claim
+
+Tests:
+
+Subcontractor A cannot submit Company B package
+
+Subcontractor A cannot verify own claim
+
+Subcontractor B cannot read claim
+
+PM Project B cannot verify Project A claim
+
+Worker cannot submit package claim
+
+Client cannot verify claim
+
+Do the same style of true-role UAT for:
+
+Site Instructions
+Actions
+Decisions
+Procurement
+Progress publication
+
+======================================================================
+19. REALISTIC LOAD TEST
+======================================================================
+
+Current test uses:
+
+50 async workers
+500 requests
+one Admin token
+local ephemeral DB
+
+Keep it as a fast CI benchmark.
+
+Rename accurately:
+
+API Concurrency Benchmark
+
+Then add a second optional/staging performance suite:
+
+test_staging_load.ts
+
+Target:
+
+50–100 actual authenticated users
+
+mixed roles:
+
+PM
+Supervisor
+Subcontractor
+Worker
+Client
+
+mixed GET and write workloads:
+
+dashboard reads
+task reads
+task updates
+comments/activity
+attendance
+lookahead
+procurement
+actions
+progress
+
+Measure:
+
+success rate
+p50
+p95
+p99
+throughput
+database lock errors
+5xx errors
+
+Do not require the heavier staging test in every PR if cost is excessive.
+
+Require it for Release Candidate deployment.
+
+======================================================================
+20. SQLITE CONCURRENCY VALIDATION
+======================================================================
+
+Because current architecture uses SQLite:
+
+explicitly test:
+
+parallel attendance punches
+parallel task updates
+parallel SI evidence
+parallel Action creation
+parallel Decision creation
+parallel progress submissions
+
+Verify:
+
+WAL active
+busy_timeout configured
+
+No:
+
+SQLITE_BUSY data loss
+
+No:
+
+duplicate references
+
+No:
+
+last-write corruption
+
+Where reference numbering exists:
+
+do not use COUNT(*) + 1 without uniqueness protection.
+
+======================================================================
+21. RELEASE REFERENCE NUMBER SAFETY
+======================================================================
+
+Review numbering:
+
+SI-XXXX
+ACT-XXXX
+DEC-XXXX
+reports
+RFIs
+submittals
+
+Use:
+
+UNIQUE(project_id, reference)
+
+and collision-safe sequence generation.
+
+Browser timestamps are not reliable governance numbering.
+
+Do not generate formal Decision numbers only in React using Date.now().
+
+Server must generate official references.
+
+======================================================================
+22. BRANCH PROTECTION
+======================================================================
+
+Current GitHub main is not protected.
+
+Production release is not complete while arbitrary direct pushes can bypass
+review.
+
+Configure repository branch protection / ruleset for main:
+
+require pull request
+
+require CI success
+
+require Android build where relevant
+
+block force-push
+
+block deletion
+
+require branch up to date before merge where practical
+
+Do not make implementation depend on documentation only.
+
+Verify GitHub reports main protected after configuration.
+
+If connector permissions cannot change repository settings:
+
+document exact required repository rule and mark the release gate pending.
+
+======================================================================
+23. CI RELEASE GATE
+======================================================================
+
+CI must execute:
+
+npm run lint
+npm run build
+
+npm run test:migration
+npm run test:e2e
+npm run test:v1.1
+npm run test:enterprise
+npm run test:workforce
+npm run test:control-tower
+npm run test:project-master
+npm run test:uat
+npm run test:load
+
+Do not claim pass without observing GitHub Actions.
+
+Add a final explicit summary step.
+
+======================================================================
+24. UI — PROCUREMENT PROGRAMME RISK
+======================================================================
+
+The API currently exists but PM frontend exposure is incomplete.
+
+Create a dedicated PM Procurement Risk view.
+
+Display:
+
+Critical
+Warning
+On Track
+Delivered
+
+For every linked item:
+
+PO / Material
+Supplier
+Package
+Linked Task
+Required Date
+Forecast Date
+Buffer
+Risk
+Impact
+
+Example:
+
+PO-018
+Main LV Panel
+
+Task:
+Install Main LV Panel
+
+Required:
+18 Nov
+
+Forecast:
+22 Nov
+
+Buffer:
+-4 days
+
+CRITICAL
+
+Task:
+BLOCKED — PROCUREMENT
+
+Provide links to:
+
+Task
+Work Package
+Procurement record
+
+Do not expose PO amounts to roles without commercial permission.
+
+======================================================================
+25. WORK PACKAGE MANPOWER DISTRIBUTION
+======================================================================
+
+Current Command Center lists workers/trades.
+
+Add server-side grouped metrics:
+
+manpower_by_trade
+manpower_by_company
+manpower_by_supervisor
+
+Example:
+
+Electrical:
+12
+
+HVAC:
+7
+
+Fire:
+4
+
+Use actual active assignments/attendance depending on metric.
+
+Differentiate:
+
+Assigned Workforce
+
+from:
+
+Present Today
+
+Do not mix them.
+
+======================================================================
+26. ACTIVITY / COMMENT TIMELINE STANDARD
+======================================================================
+
+Mature work-management platforms provide context around records.
+
+Introduce a consistent activity timeline component for:
+
+Task
+Work Package
+RFI
+Submittal
+Action
+Decision
+Risk
+Site Instruction
+
+Use existing audit/activity records where possible.
+
+Show:
+
+actor
+timestamp
+event
+comment
+attachment
+old/new status
+
+Do not create independent unscoped chat tables unless needed.
+
+======================================================================
+27. NOTIFICATION RELIABILITY
+======================================================================
+
+Audit existing notifications.
+
+Ensure meaningful notifications for:
+
+task assignment
+task blocked
+task ready
+SI assigned
+SI verification
+RFI overdue
+submittal overdue
+Action assigned
+Action overdue
+Decision required
+Decision overdue
+procurement becomes Critical
+progress claim submitted
+progress verified
+report published
+
+Deduplicate repeated rule notifications.
+
+Notification authorization must follow record scope.
+
+======================================================================
+28. GLOBAL SEARCH SECURITY
+======================================================================
+
+Verify Global Search supports important modules.
+
+But security is more important than coverage.
+
+A result must appear only if the user could access the record using its
+canonical API.
+
+Add test matrix for:
+
+PM
+Subcontractor
+Worker
+Client
+
+Search for known unauthorized UUID/title and confirm zero result leakage.
+
+======================================================================
+29. EXPORT SECURITY
+======================================================================
+
+Same for exports.
+
+No route may allow:
+
+Client
+Worker
+Subcontractor A
+
+to export hidden records.
+
+Test:
+
+workers
+payroll
+procurement
+risks
+actions
+decisions
+progress
+documents
+
+======================================================================
+30. MOBILE OFFLINE TRUTHFULNESS
+======================================================================
+
+Current Worker Mobile detects online/offline state.
+
+Do NOT market this as offline-capable unless there is an actual durable sync
+queue.
+
+Implement either:
+
+A.
+Network awareness only
+
+and clearly display:
+"Offline — actions requiring server connection are unavailable"
+
+OR
+
+B.
+real offline command queue with:
+
+local persistence
+idempotency key
+retry
+conflict handling
+sync state
+server deduplication
+
+For punch-in/out:
+
+do not silently fabricate server punch time offline.
+
+If offline punches are later supported:
+
+store device capture time separately
+server received time separately
+mark exception
+require supervisor review.
+
+======================================================================
+31. PRODUCTION ERROR HANDLING
+======================================================================
+
+Replace silent:
+
+console.error()
+
+where users require feedback.
+
+Standardize API errors:
+
+{
+  error,
+  code,
+  request_id,
+  field_errors?
+}
+
+Frontend should show:
+
+human-readable message
+retry where appropriate
+no stack trace
+
+Log request_id server-side.
+
+======================================================================
+32. OBSERVABILITY
+======================================================================
+
+Add production basics:
+
+request ID
+structured HTTP logs
+
+uncaught exception logging
+unhandled rejection logging
+
+health:
+GET /api/health
+
+readiness:
+GET /api/ready
+
+readiness should verify:
+
+database writable/readable
+required schema initialized
+
+Do not include secrets.
+
+Add build/version SHA to health metadata.
+
+======================================================================
+33. BACKUP / RECOVERY
+======================================================================
+
+Define and test SQLite production backup.
+
+Add safe backup process compatible with WAL.
+
+Requirements:
+
+automated backup
+timestamp
+checksum
+retention configuration
+restore test
+
+Create a documented restore validation test.
+
+A product is not production-ready if database recovery is untested.
+
+======================================================================
+34. DATA IMPORT / EXPORT PRODUCTIZATION
+======================================================================
+
+Existing software competitors have mature onboarding.
+
+Audit import paths for:
+
+Projects
+WBS
+Tasks
+Workers
+Companies
+Work Packages
+BOQ
+Procurement
+
+Provide:
+
+template
+validation preview
+error rows
+import summary
+
+Never partially import invalid data without clear reporting.
+
+======================================================================
+35. ADMIN UX
+======================================================================
+
+Create an Admin Setup Checklist.
+
+Example:
+
+Company
+✓
+
+Project
+✓
+
+Companies
+✓
+
+Project Team
+✓
+
+Sites
+✓
+
+Work Packages
+✓
+
+Workers
+✓
+
+Shift Templates
+✓
+
+Programme
+!
+
+Client Access
+!
+
+The system should visibly identify missing configuration before users hit
+broken workflows.
+
+======================================================================
+36. DO NOT BUILD THESE YET
+======================================================================
+
+Do NOT attempt to match Odoo or Buildertrend breadth in this release.
+
+Do NOT add yet:
+
+full CRM
+marketing
+full accounting ledger
+bank reconciliation
+inventory ERP
+payments
+takeoff
+warranty
+website/ecommerce
+app marketplace
+
+Those are separate strategic product decisions.
+
+First make the existing MEP core production-grade.
+
+======================================================================
+37. MARKET-PARITY ROADMAP OUTPUT
+======================================================================
+
+As part of the implementation PR, create:
+
+docs/product-gap-matrix.md
+
+Use factual categories:
+
+MEP Platform
+Odoo
+monday.com
+Buildertrend
+
+Compare capability presence only.
+
+Do NOT write subjective scores.
+
+Categories:
+
+Project Control
+Scheduling
+Workforce
+Field Mobile
+Technical
+Procurement
+Quality
+Commercial
+Client Portal
+Subcontractor Portal
+Reporting
+Workflow Automation
+Integrations
+Accounting
+Inventory
+CRM/Sales
+Documents
+Resource Planning
+Custom Configuration
+Offline
+Audit/Security
+Platform Administration
+
+For our platform:
+
+mark:
+
+Implemented
+Partial
+Missing
+Not in Scope
+
+Include file/API evidence.
+
+======================================================================
+38. TEST SUITE — V1.4.1
+======================================================================
+
+Create:
+
+test_v1_4_1_hardening_suite.ts
+
+Script:
+
+"test:v1.4.1": "tsx test_v1_4_1_hardening_suite.ts"
+
+Add to test:all and CI.
+
+Required groups:
+
+01 Procurement Authorization
+
+02 Risk Authorization
+
+03 Command Center Company Isolation
+
+04 Task Readiness
+
+05 Procurement Auto-Blocker
+
+06 Procurement Auto-Resolve
+
+07 Decision Workflow
+
+08 Action Workflow
+
+09 Immutable Governance Fields
+
+10 Risk Scale Normalization
+
+11 Risk Score Consistency
+
+12 Progress Publication
+
+13 Client Zero Leakage
+
+14 Search Zero Leakage
+
+15 Export Zero Leakage
+
+16 Real Subcontractor Claim Flow
+
+17 PM Verification Flow
+
+18 Reference Number Concurrency
+
+19 SQLite Concurrent Writes
+
+20 Notification Deduplication
+
+======================================================================
+39. REQUIRED NEGATIVE TESTS
+======================================================================
+
+HARD-001
+Worker cannot call procurement programme-impact
+
+HARD-002
+Client cannot call procurement programme-impact
+
+HARD-003
+Client cannot call risk matrix
+
+HARD-004
+Worker cannot call risk matrix
+
+HARD-005
+Subcontractor A cannot open Package B Command Center
+
+HARD-006
+Subcontractor cannot read another company's workers
+
+HARD-007
+Client cannot search internal Action
+
+HARD-008
+Client cannot export internal Risk
+
+HARD-009
+Worker cannot mutate Decision
+
+HARD-010
+Subcontractor cannot verify own progress claim
+
+HARD-011
+PM from Project B cannot verify Project A claim
+
+HARD-012
+Published Report cannot be silently edited
+
+HARD-013
+Decision created_by cannot be overwritten
+
+HARD-014
+Action created_at cannot be overwritten
+
+HARD-015
+Concurrent Decision creation cannot generate duplicate decision_no
+
+======================================================================
+40. BOV MQABBA PRODUCTION UAT
+======================================================================
+
+Run an actual multi-role UAT.
+
+Users:
+
+ADMIN-BOV
+
+PM-BOV
+
+SUP-ELEC
+
+SUB-ELEC
+
+SUB-HVAC
+
+WORKER-ELEC-01
+
+CLIENT-BOV
+
+CONSULTANT-BOV
+
+Scenario:
+
+Admin
+→ creates/configures project
+
+PM
+→ WBS
+→ Packages
+→ Programme
+
+PM
+→ assigns Electrical task
+
+Worker
+→ GPS punch
+→ receives task
+→ evidence
+
+Supervisor
+→ verifies
+
+Subcontractor
+→ submits package progress claim
+
+PM
+→ verifies
+
+PO delivery moves after required task date
+
+System
+→ Critical procurement risk
+→ procurement task blocker
+→ task Blocked
+→ Lookahead Blocked
+→ Package Command Center warning
+→ Control Tower attention
+
+Commercial/PM
+→ updates forecast delivery
+
+System
+→ blocker resolves if rule is healthy
+
+Meeting
+→ Project Action
+
+Client decision
+→ Project Decision
+
+Decision approved
+→ audit immutable
+
+PM
+→ progress report draft
+
+Client
+→ cannot see draft
+
+PM
+→ publish
+
+Client
+→ sees published snapshot
+
+Client
+→ cannot see internal risk/procurement/payroll/workforce detail
+
+======================================================================
+41. PERFORMANCE GATES
+======================================================================
+
+Keep existing fast CI benchmark.
+
+Required fast benchmark:
+
+500 requests
+50 concurrent workers
+0 HTTP failures
+
+CI performance thresholds may remain environment-sensitive but must be
+documented.
+
+Do not claim:
+
+"50 authenticated user sessions"
+
+unless the test genuinely creates 50 independent sessions.
+
+For release candidate staging test:
+
+at least 50 independent authenticated sessions
+multiple roles
+mixed reads/writes
+
+Publish actual measured results.
+
+======================================================================
+42. DEFINITION OF DONE
+======================================================================
+
+Release is complete only when:
+
+npm run lint
+PASS
+
+npm run build
+PASS
+
+npm run test:migration
+PASS
+
+npm run test:e2e
+PASS
+
+npm run test:v1.1
+PASS
+
+npm run test:enterprise
+PASS
+
+npm run test:workforce
+PASS
+
+npm run test:control-tower
+PASS
+
+npm run test:project-master
+PASS
+
+npm run test:uat
+PASS
+
+npm run test:load
+PASS
+
+npm run test:v1.4.1
+PASS
+
+Android build
+PASS
+
+and:
+
+Procurement authorization
+PASS
+
+Risk authorization
+PASS
+
+Subcontractor package isolation
+PASS
+
+Procurement auto-blocker
+PASS
+
+Readiness propagation
+PASS
+
+Decision governance
+PASS
+
+Action governance
+PASS
+
+Immutable provenance
+PASS
+
+Client zero leakage
+PASS
+
+Real role UAT
+PASS
+
+Concurrent reference generation
+PASS
+
+Backup/restore validation
+PASS
+
+main branch protection
+VERIFIED
+
+Do not claim production-ready unless these are observed.
+
+======================================================================
+43. POST-V1.4.1 STRATEGIC GAP REVIEW
+======================================================================
+
+Only after V1.4.1 is green decide whether the product should expand toward:
+
+A. MEP specialist construction platform
+
+or
+
+B. broader contractor ERP
+
+If A:
+
+prioritize:
+
+document/drawing intelligence
+commissioning
+asset handover
+material trace
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-20T23:31:26+02:00.
+</ADDITIONAL_METADATA>
