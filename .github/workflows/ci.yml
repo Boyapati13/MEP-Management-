@@ -1,14 +1,18 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main, feature/** ]
+    branches: [ main, feature/**, fix/** ]
   pull_request:
     branches: [ main ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      MEP_DB_PATH: /tmp/mep-ci.db
+      NODE_ENV: production
 
     steps:
       - name: Checkout repository
@@ -32,17 +36,25 @@ jobs:
       - name: Run Database Migration Suite
         run: npm run test:migration
 
-      - name: Start server in background
+      - name: Start isolated production server
         run: |
-          MEP_DB_PATH=/tmp/mep-ci.db NODE_ENV=production node dist/server.cjs &
-          echo "Waiting for server to start on port 3000..."
+          rm -f "$MEP_DB_PATH" "$MEP_DB_PATH-wal" "$MEP_DB_PATH-shm"
+          node dist/server.cjs > /tmp/mep-ci-server.log 2>&1 &
+          echo $! > /tmp/mep-ci-server.pid
+          echo "Waiting up to 30 seconds for /api/health..."
+          ready=0
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:3000/api/health > /dev/null 2>&1 || curl -s http://127.0.0.1:3000/ > /dev/null 2>&1; then
-              echo "Server is live!"
+            if curl --fail --silent --show-error http://127.0.0.1:3000/api/health > /dev/null; then
+              ready=1
               break
             fi
             sleep 1
           done
+          if [ "$ready" -ne 1 ]; then
+            echo "Server failed to become healthy"
+            cat /tmp/mep-ci-server.log || true
+            exit 1
+          fi
 
       - name: Run E2E Test Suite
         run: npm run test:e2e
@@ -53,3 +65,13 @@ jobs:
       - name: Run Master Enterprise End-to-End Test Suite
         run: npm run test:enterprise
 
+      - name: Run Workforce Security & Payroll Suite
+        run: npm run test:workforce
+
+      - name: Stop isolated server
+        if: always()
+        run: |
+          if [ -f /tmp/mep-ci-server.pid ]; then
+            kill "$(cat /tmp/mep-ci-server.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/mep-ci-server.log 2>/dev/null || true
