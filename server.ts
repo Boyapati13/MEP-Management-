@@ -1833,7 +1833,8 @@ type WorkforceAction = "view" | "edit" | "update" | "assign" | "verify" | "close
 
 function getWorkerPrincipal(userId: string): any | null {
   return (db.prepare(
-    "SELECT w.*, c.name AS company_name FROM workers w LEFT JOIN companies c ON c.id=w.company_id WHERE w.user_id=?"
+    "SELECT w.*, c.name AS company_name FROM workers w LEFT JOIN companies c ON c.id=w.company_id " +
+    "WHERE w.user_id=? AND w.status='Active' ORDER BY w.created_at DESC LIMIT 1"
   ).get(userId) as any) || null;
 }
 
@@ -2042,7 +2043,9 @@ function attendanceStatusForRecord(record: any): string {
   if (!record.punch_out) {
     const site = record.site_id ? db.prepare("SELECT timezone FROM sites WHERE id=?").get(record.site_id) as any : null;
     const today = zonedParts(new Date(), site?.timezone || "UTC").date;
-    return record.work_date < today ? "Missing Punch" : "Present";
+    if (record.work_date < today) return "Missing Punch";
+    if ((record.late_minutes || 0) > 0) return "Late";
+    return "Present";
   }
   if ((record.late_minutes || 0) > 0) return "Late";
   return "Present";
@@ -6838,11 +6841,22 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     if (active) { res.status(409).json({ error: 'Already punched in' }); return; }
 
     const { lat, lng, accuracy } = req.body;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const accuracyM = Number(accuracy);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+        !Number.isFinite(accuracyM) || accuracyM < 0) {
+      res.status(400).json({ error: 'Valid lat, lng and non-negative GPS accuracy are required' }); return;
+    }
+    if (site.latitude == null || site.longitude == null) {
+      res.status(409).json({ error: 'Site GPS coordinates are not configured' }); return;
+    }
     let geofence: string | null = null;
     let distanceM: number | null = null;
-    if (lat != null && lng != null && site.latitude != null && site.longitude != null) {
-      distanceM = haversineDistance(parseFloat(lat), parseFloat(lng), site.latitude, site.longitude);
-      geofence = geofenceStatus(distanceM, site, accuracy != null ? parseFloat(accuracy) : undefined);
+    {
+      distanceM = haversineDistance(latitude, longitude, site.latitude, site.longitude);
+      geofence = geofenceStatus(distanceM, site, accuracyM);
     }
 
     const shift = resolved.shift || getWorkerShift(worker.id, resolved.workDate);
@@ -6855,8 +6869,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       'approved_overtime_minutes,late_minutes,attendance_status,ot_status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     ).run(
       id, projectId, req.user!.user_id, worker.name || req.user!.name, resolved.workDate, now, null, 'Open', notes,
-      siteId, worker.id, lat!=null?parseFloat(lat):null, lng!=null?parseFloat(lng):null,
-      accuracy!=null?parseFloat(accuracy):null, geofence, distanceM, shift?.id || null,
+      siteId, worker.id, latitude, longitude,
+      accuracyM, geofence, distanceM, shift?.id || null,
       worker.company_id || null, assignment.work_package_id || worker.work_package_id || null,
       assignment.supervisor_id || worker.supervisor_id || null, 0, 0, 0, 0, 0, 0,
       geofence && geofence !== 'Valid' ? 'Attendance Exception' : 'Present', 'None'
@@ -6880,20 +6894,31 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     if (!site || site.project_id !== active.project_id) { res.status(409).json({ error: 'Attendance site is no longer valid for the project' }); return; }
 
     const { lat, lng, accuracy } = req.body;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const accuracyM = Number(accuracy);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+        !Number.isFinite(accuracyM) || accuracyM < 0) {
+      res.status(400).json({ error: 'Valid lat, lng and non-negative GPS accuracy are required' }); return;
+    }
+    if (site.latitude == null || site.longitude == null) {
+      res.status(409).json({ error: 'Site GPS coordinates are not configured' }); return;
+    }
     const now = new Date().toISOString();
     let geofence: string | null = null;
     let distanceM: number | null = null;
-    if (lat != null && lng != null && site.latitude != null && site.longitude != null) {
-      distanceM = haversineDistance(parseFloat(lat), parseFloat(lng), site.latitude, site.longitude);
-      geofence = geofenceStatus(distanceM, site, accuracy != null ? parseFloat(accuracy) : undefined);
+    {
+      distanceM = haversineDistance(latitude, longitude, site.latitude, site.longitude);
+      geofence = geofenceStatus(distanceM, site, accuracyM);
     }
 
     db.prepare(
       "UPDATE attendance SET punch_out=?,status='Closed',punch_out_lat=?,punch_out_lng=?,punch_out_accuracy=?," +
       "punch_out_geofence_status=?,punch_out_distance_m=? WHERE id=?"
     ).run(
-      now, lat!=null?parseFloat(lat):null, lng!=null?parseFloat(lng):null,
-      accuracy!=null?parseFloat(accuracy):null, geofence, distanceM, active.id
+      now, latitude, longitude,
+      accuracyM, geofence, distanceM, active.id
     );
 
     let updated = recalculateAttendanceRecord(active.id) as any;
@@ -6950,7 +6975,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 
   // Overtime approval (blocks self-approval)
   app.post('/api/attendance/:id/overtime-approve', authRequired, (req, res) => {
-    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    if (!['Admin','ProjectManager','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No approval authority' }); return; }
     const record = db.prepare('SELECT * FROM attendance WHERE id=?').get(req.params.id) as any;
     if (!record) { res.status(404).json({ error: 'Not found' }); return; }
     if (!canAccessAttendance(req.user!, record, 'edit')) { res.status(403).json({ error: 'No access' }); return; }
@@ -6987,7 +7012,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   });
 
   app.post('/api/attendance_adjustments/:id/approve', authRequired, (req, res) => {
-    if (!['Admin','ProjectManager','SiteEngineer','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No approval authority' }); return; }
+    if (!['Admin','ProjectManager','SiteSupervisor'].includes(req.user!.role)) { res.status(403).json({ error: 'No approval authority' }); return; }
     const adj = db.prepare('SELECT * FROM attendance_adjustments WHERE id=?').get(req.params.id) as any;
     if (!adj) { res.status(404).json({ error: 'Not found' }); return; }
     const record = db.prepare('SELECT * FROM attendance WHERE id=?').get(adj.attendance_id) as any;
@@ -7566,6 +7591,14 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       if (!row.wid) continue;
       if (!byWorker.has(row.wid)) byWorker.set(row.wid, []);
       byWorker.get(row.wid)!.push(row);
+    }
+
+    const paidLeaveCandidates = db.prepare(
+      "SELECT DISTINCT lr.worker_id FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id " +
+      "WHERE lr.project_id=? AND lr.status='Approved' AND lt.is_paid=1 AND lr.start_date<=? AND lr.end_date>=? AND lr.worker_id IS NOT NULL"
+    ).all(period.project_id, period.period_end, period.period_start) as any[];
+    for (const row of paidLeaveCandidates) {
+      if (!byWorker.has(row.worker_id)) byWorker.set(row.worker_id, []);
     }
 
     const now = new Date().toISOString();
