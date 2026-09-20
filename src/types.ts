@@ -19,11 +19,62 @@ export interface User {
 export interface Project {
   id: string;
   name: string;
+  code?: string;
   client: string;
   status: string;
   start_date?: string;
   end_date?: string;
   budget?: number;
+  location?: string;
+  description?: string;
+  progress?: number;
+  calculated_progress?: number;
+  health?: 'GREEN' | 'AMBER' | 'RED' | 'BLUE' | string;
+  contract_value?: number;
+  open_snags?: number;
+  open_rfis?: number;
+}
+
+export interface ProjectUpdate {
+  id: string;
+  project_id: string;
+  project_name?: string;
+  title: string;
+  category: string;
+  content: string;
+  progress_percent?: number;
+  trade?: string;
+  work_package_id?: string;
+  weather?: string;
+  location?: string;
+  pinned?: number;
+  attachment_data?: string;
+  attachment_name?: string;
+  created_by: string;
+  created_by_name?: string;
+  created_at: string;
+}
+
+export interface TaskItem {
+  id: string;
+  project_id: string;
+  project_name?: string;
+  title: string;
+  description?: string;
+  trade?: string;
+  assignee?: string;
+  assigned_worker_id?: string;
+  start?: string;
+  end?: string;
+  progress?: number;
+  status: string;
+  priority?: string;
+  wbs_code?: string;
+  duration?: string;
+  is_summary?: number;
+  is_milestone?: number;
+  work_package_id?: string;
+  company_id?: string;
 }
 
 export interface Site {
@@ -381,6 +432,14 @@ export const STATUS_COLORS: Record<string, string> = {
   // Workers/sites
   Active: 'bg-emerald-100 text-emerald-700',
   Inactive: 'bg-gray-100 text-gray-500',
+  // Project & Task statuses
+  Planning: 'bg-indigo-100 text-indigo-700',
+  'On Track': 'bg-green-100 text-green-700',
+  Delayed: 'bg-red-100 text-red-700',
+  'Under Review': 'bg-amber-100 text-amber-700',
+  Completed: 'bg-emerald-100 text-emerald-700',
+  Blocked: 'bg-red-100 text-red-800',
+  'Not Started': 'bg-gray-100 text-gray-600',
 };
 
 export const GEOFENCE_COLORS: Record<string, string> = {

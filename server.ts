@@ -20,6 +20,7 @@ interface AuthenticatedUser {
   trade?: string;
   work_package_id?: string;
   specialization?: string;
+  worker_id?: string;
 }
 
 declare global {
@@ -313,7 +314,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "users", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -324,7 +325,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
     ],
     delete: true,
   },
@@ -338,7 +339,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "audit", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "costs", "budget",
@@ -349,7 +350,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "commissioning", "handover", "wbs", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "workforce", "sites", "workers", "site_instructions", "leave_requests", "shift_templates",
-      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments"
+      "payroll_periods", "payroll_entries", "attendance_adjustments", "payroll_profiles", "worker_assignments", "project_updates"
     ],
     delete: true,
   },
@@ -362,7 +363,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dependencies", "material_requests", "ncrs", "commissioning",
       "wbs", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "workforce", "sites", "workers", "site_instructions", "leave_requests", "attendance_adjustments", "worker_assignments"
+      "workforce", "sites", "workers", "site_instructions", "leave_requests", "attendance_adjustments", "worker_assignments", "project_updates"
     ],
     edit: [
       "tasks", "planner", "rfis", "submittals", "punchlist", "dailylogs", "documents",
@@ -370,7 +371,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "meeting_minutes", "timesheets", "equipment", "material_requests",
       "commissioning", "attendance",
       "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "site_instructions", "leave_requests", "attendance_adjustments"
+      "site_instructions", "leave_requests", "attendance_adjustments", "project_updates"
     ],
     delete: false,
   },
@@ -380,13 +381,13 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "procurement", "material_requests", "dependencies", "risks",
       "handover", "documents", "projects", "gantt", "wbs", "tasks", "planner", "submittals",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "payroll_periods", "payroll_entries", "payroll_profiles"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates"
     ],
     edit: [
       "costs", "budget", "change_orders", "purchase_orders",
       "procurement", "material_requests", "risks", "handover", "documents",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
-      "payroll_periods", "payroll_entries", "payroll_profiles"
+      "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates"
     ],
     delete: false,
   },
@@ -395,12 +396,12 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "punchlist", "inspections", "ncrs", "commissioning",
       "handover", "submittals", "rfis", "dailylogs", "documents",
       "site_today", "equipment", "tasks", "planner",
-      "companies", "work_packages", "clarifications", "transmittals", "progress_submissions"
+      "companies", "work_packages", "clarifications", "transmittals", "progress_submissions", "project_updates"
     ],
     edit: [
       "punchlist", "inspections", "ncrs", "commissioning",
       "handover", "documents",
-      "clarifications", "transmittals"
+      "clarifications", "transmittals", "project_updates"
     ],
     delete: false,
   },
@@ -410,11 +411,11 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dailylogs", "timesheets", "attendance", "site_today",
       "documents", "equipment", "tasks", "planner",
       "companies", "work_packages", "clarifications", "progress_reports",
-      "workforce", "sites", "workers"
+      "workforce", "sites", "workers", "project_updates"
     ],
     edit: [
       "safety_incidents", "risks", "inspections", "dailylogs",
-      "attendance", "documents", "clarifications"
+      "attendance", "documents", "clarifications", "project_updates"
     ],
     delete: false,
   },
@@ -424,12 +425,12 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "safety_incidents", "timesheets", "equipment", "dependencies",
       "material_requests", "site_today", "calendar", "attendance",
       "companies", "work_packages", "clarifications", "transmittals", "progress_submissions",
-      "site_instructions", "leave_requests", "workers"
+      "site_instructions", "leave_requests", "workers", "project_updates"
     ],
     edit: [
       "tasks", "planner", "submittals", "punchlist", "dailylogs", "documents", "safety_incidents",
       "timesheets", "dependencies", "material_requests", "attendance",
-      "clarifications", "progress_submissions", "leave_requests"
+      "clarifications", "progress_submissions", "leave_requests", "project_updates"
     ],
     delete: false,
   },
@@ -438,7 +439,7 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
       "dashboard", "tasks", "planner", "gantt", "rfis", "submittals", "punchlist",
       "costs", "change_orders", "inspections", "meeting_minutes", "ncrs",
       "commissioning", "handover", "documents", "site_today", "calendar",
-      "companies", "work_packages", "clarifications", "progress_reports", "transmittals"
+      "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "project_updates"
     ],
     edit: [
       "rfis", "submittals", "inspections", "commissioning", "handover",
@@ -446,36 +447,30 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
     ],
     delete: false,
   },
-  // Deliberately minimal: a Client sees client_dashboard (curated Project Health),
-  // documents, change_orders, and published progress reports / clarifications
   Client: {
-    view: ["client_dashboard", "projects", "documents", "change_orders", "progress_reports", "clarifications"],
+    view: ["client_dashboard", "projects", "documents", "change_orders", "progress_reports", "clarifications", "project_updates"],
     edit: [],
     delete: false,
   },
-  // Worker role: field-level access — own punch clock, tasks assigned to them,
-  // own leave requests, own attendance history. Cannot see other workers' data.
   Worker: {
     view: [
       "attendance", "tasks", "site_instructions", "leave_requests",
-      "timesheets", "documents", "workforce", "sites"
+      "timesheets", "documents", "workforce", "sites", "project_updates"
     ],
     edit: [
       "attendance", "site_instructions", "leave_requests", "timesheets"
     ],
     delete: false,
   },
-  // SiteSupervisor: all Worker perms + oversight of supervised workers,
-  // site control, OT/leave/correction approval.
   SiteSupervisor: {
     view: [
       "attendance", "tasks", "site_instructions", "leave_requests",
       "timesheets", "documents", "workforce", "sites", "workers",
-      "attendance_adjustments", "shift_templates", "worker_assignments"
+      "attendance_adjustments", "shift_templates", "worker_assignments", "project_updates"
     ],
     edit: [
       "attendance", "site_instructions", "leave_requests", "timesheets",
-      "attendance_adjustments", "tasks"
+      "attendance_adjustments", "tasks", "project_updates"
     ],
     delete: false,
   },
@@ -483,8 +478,12 @@ const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete: boole
 
 const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = {
   tasks: {
-    cols: ["id", "project_id", "title", "trade", "assignee", "start", "end", "progress", "status", "wbs_code", "duration", "is_summary", "is_milestone", "work_package_id", "company_id"],
+    cols: ["id", "project_id", "title", "description", "trade", "assignee", "assigned_worker_id", "start", "end", "progress", "status", "priority", "wbs_code", "duration", "is_summary", "is_milestone", "work_package_id", "company_id"],
     module: "tasks",
+  },
+  project_updates: {
+    cols: ["id", "project_id", "title", "category", "content", "progress_percent", "trade", "work_package_id", "weather", "location", "pinned", "attachment_data", "attachment_name", "created_by", "created_by_name", "created_at"],
+    module: "project_updates",
   },
   rfis: {
     cols: ["id", "project_id", "number", "subject", "trade", "raised_by", "date_raised", "due_date", "status"],
@@ -1340,9 +1339,34 @@ function initDb() {
       created_by TEXT,
       created_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS project_updates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Site Progress',
+      content TEXT NOT NULL,
+      progress_percent INTEGER,
+      trade TEXT,
+      work_package_id TEXT,
+      weather TEXT,
+      location TEXT,
+      pinned INTEGER DEFAULT 0,
+      attachment_data TEXT,
+      attachment_name TEXT,
+      created_by TEXT NOT NULL,
+      created_by_name TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_updates_proj ON project_updates(project_id, created_at DESC);
   `);
 
-
+  try { db.exec("ALTER TABLE projects ADD COLUMN code TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN location TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN description TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN progress INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'Medium';"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN description TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE tasks ADD COLUMN assigned_worker_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN work_package_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN company_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN work_package_id TEXT;"); } catch {}
@@ -1846,7 +1870,7 @@ function getCurrentUser(req: Request): AuthenticatedUser | null {
     return null;
   }
   // Re-fetch current live user and verify active status on every request (P1 session revocation)
-  const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id FROM users WHERE id=?").get(session.user_id) as any;
+  const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id, worker_id FROM users WHERE id=?").get(session.user_id) as any;
   if (!userRow || userRow.status !== "Active") {
     db.prepare("DELETE FROM sessions WHERE token=?").run(token);
     return null;
@@ -1867,6 +1891,7 @@ function getCurrentUser(req: Request): AuthenticatedUser | null {
     company: userRow.company || undefined,
     trade: userRow.trade || undefined,
     work_package_id: userRow.work_package_id || undefined,
+    worker_id: userRow.worker_id || undefined,
   };
 }
 
@@ -2571,13 +2596,13 @@ async function startServer() {
   });
 
   app.post("/api/projects", authRequired, (req, res) => {
-    if (req.user!.role !== "Admin") {
-      res.status(403).json({ error: "Admin access required to create project" });
+    if (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager") {
+      res.status(403).json({ error: "Admin or Project Manager access required to create project" });
       return;
     }
     const data = req.body || {};
     const id = crypto.randomUUID();
-    const cols = ["id", "name", "client", "status", "start_date", "end_date", "budget"];
+    const cols = ["id", "name", "client", "status", "start_date", "end_date", "budget", "code", "location", "description", "progress"];
     const values = [
       id,
       data.name || "Untitled Project",
@@ -2586,8 +2611,12 @@ async function startServer() {
       data.start_date || "",
       data.end_date || "",
       parseImportNumber(data.budget),
+      data.code || null,
+      data.location || null,
+      data.description || null,
+      data.progress ? parseInt(data.progress, 10) : 0,
     ];
-    db.prepare(`INSERT INTO projects (${cols.join(",")}) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(...values);
+    db.prepare(`INSERT INTO projects (${cols.join(",")}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...values);
     db.prepare(`
       INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role)
       VALUES (?, ?, 'Project Manager')
@@ -2607,13 +2636,13 @@ async function startServer() {
       return;
     }
     const data = req.body || {};
-    const cols = ["name", "client", "status", "start_date", "end_date", "budget"];
+    const cols = ["name", "client", "status", "start_date", "end_date", "budget", "code", "location", "description", "progress"];
     const updates: string[] = [];
     const vals: any[] = [];
     for (const c of cols) {
       if (c in data) {
         updates.push(`${c}=?`);
-        vals.push(c === "budget" ? parseImportNumber(data[c]) : data[c]);
+        vals.push(c === "budget" ? parseImportNumber(data[c]) : c === "progress" ? parseInt(data[c], 10) : data[c]);
       }
     }
     if (updates.length > 0) {
@@ -5818,6 +5847,233 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // =====================================================================
+  // PROJECT UPDATES & LIVE PROGRESS FEED API
+  // =====================================================================
+
+  app.get('/api/project_updates', authRequired, (req, res) => {
+    if (!canView(req.user!, 'project_updates')) { res.status(403).json({ error: 'No access' }); return; }
+    const projectId = req.query.project_id as string;
+    const category = req.query.category as string;
+    const trade = req.query.trade as string;
+    const { where, params } = projectScopeSql(req.user!, projectId);
+    if (!where) { res.status(403).json({ error: 'No project access' }); return; }
+    let sql = `SELECT u.*, p.name as project_name FROM project_updates u LEFT JOIN projects p ON p.id = u.project_id WHERE ${where}`;
+    if (category && category !== 'All') { sql += ' AND u.category = ?'; params.push(category); }
+    if (trade && trade !== 'All') { sql += ' AND u.trade = ?'; params.push(trade); }
+    sql += ' ORDER BY u.pinned DESC, u.created_at DESC';
+    const rows = db.prepare(sql).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/project_updates', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'project_updates')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { project_id, title, category, content, progress_percent, trade, work_package_id, weather, location, pinned, attachment_data, attachment_name } = req.body || {};
+    if (!project_id || !title || !content) {
+      res.status(400).json({ error: 'project_id, title, and content are required' });
+      return;
+    }
+    if (!hasProjectAccess(req.user!, project_id)) {
+      res.status(403).json({ error: 'No access to this project' });
+      return;
+    }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const authorName = req.user!.name || 'Site Engineer';
+    const prg = (progress_percent !== undefined && progress_percent !== null && progress_percent !== '') ? parseInt(String(progress_percent), 10) : null;
+
+    db.prepare(`
+      INSERT INTO project_updates (
+        id, project_id, title, category, content, progress_percent, trade,
+        work_package_id, weather, location, pinned, attachment_data, attachment_name,
+        created_by, created_by_name, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, project_id, title, category || 'Site Progress', content,
+      prg, trade || null, work_package_id || null, weather || null, location || null,
+      pinned ? 1 : 0, attachment_data || null, attachment_name || null,
+      req.user!.user_id, authorName, now
+    );
+
+    if (prg !== null && (req.user!.role === 'Admin' || req.user!.role === 'ProjectManager')) {
+      try {
+        db.prepare('UPDATE projects SET progress=? WHERE id=?').run(prg, project_id);
+      } catch {}
+    }
+
+    try {
+      const members = db.prepare('SELECT DISTINCT user_id FROM project_memberships WHERE project_id=? AND user_id != ?').all(project_id, req.user!.user_id) as any[];
+      for (const m of members) {
+        createNotification(
+          m.user_id, project_id, 'project_updates', id,
+          `Project Update: ${title}`,
+          `${authorName} posted a new ${category || 'update'}: "${title}"`
+        );
+      }
+    } catch {}
+
+    writeAudit(req.user!.user_id, 'project_updates', id, project_id, 'create', null, { title, category });
+    res.status(201).json(db.prepare('SELECT * FROM project_updates WHERE id=?').get(id));
+  });
+
+  app.get('/api/project_updates/:id', authRequired, (req, res) => {
+    if (!canView(req.user!, 'project_updates')) { res.status(403).json({ error: 'No access' }); return; }
+    const update = db.prepare('SELECT u.*, p.name as project_name FROM project_updates u LEFT JOIN projects p ON p.id = u.project_id WHERE u.id=?').get(req.params.id) as any;
+    if (!update) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, update.project_id)) { res.status(403).json({ error: 'No access' }); return; }
+    res.json(update);
+  });
+
+  app.delete('/api/project_updates/:id', authRequired, (req, res) => {
+    const update = db.prepare('SELECT * FROM project_updates WHERE id=?').get(req.params.id) as any;
+    if (!update) { res.status(404).json({ error: 'Not found' }); return; }
+    if (req.user!.role !== 'Admin' && update.created_by !== req.user!.user_id) {
+      res.status(403).json({ error: 'Only Admin or update creator can delete' });
+      return;
+    }
+    db.prepare('DELETE FROM project_updates WHERE id=?').run(req.params.id);
+    writeAudit(req.user!.user_id, 'project_updates', req.params.id, update.project_id, 'delete', update, null);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/projects/:id/feed', authRequired, (req, res) => {
+    const projectId = req.params.id;
+    if (!hasProjectAccess(req.user!, projectId)) {
+      res.status(403).json({ error: 'No access to this project' });
+      return;
+    }
+    const feed: any[] = [];
+
+    try {
+      const updates = db.prepare('SELECT * FROM project_updates WHERE project_id=? ORDER BY created_at DESC LIMIT 30').all(projectId) as any[];
+      for (const u of updates) {
+        feed.push({
+          id: u.id,
+          type: 'update',
+          category: u.category || 'Site Progress',
+          title: u.title,
+          content: u.content,
+          progress_percent: u.progress_percent,
+          trade: u.trade,
+          weather: u.weather,
+          location: u.location,
+          author: u.created_by_name || 'Team Member',
+          created_at: u.created_at,
+          attachment_data: u.attachment_data,
+          attachment_name: u.attachment_name,
+        });
+      }
+    } catch {}
+
+    try {
+      const reports = db.prepare('SELECT * FROM progress_reports WHERE project_id=? ORDER BY created_at DESC LIMIT 10').all(projectId) as any[];
+      for (const r of reports) {
+        feed.push({
+          id: r.id,
+          type: 'report',
+          category: 'Progress Report',
+          title: r.title || `Progress Report: ${r.report_date || r.created_at?.slice(0, 10)}`,
+          content: r.executive_summary || 'Formal progress report compiled and issued.',
+          progress_percent: r.overall_progress_percent,
+          author: 'Project Manager',
+          created_at: r.created_at,
+          status: r.status,
+        });
+      }
+    } catch {}
+
+    try {
+      const logs = db.prepare('SELECT * FROM dailylogs WHERE project_id=? ORDER BY log_date DESC LIMIT 15').all(projectId) as any[];
+      for (const l of logs) {
+        feed.push({
+          id: l.id,
+          type: 'dailylog',
+          category: 'Daily Site Log',
+          title: `Site Log: ${l.log_date || l.date || 'Site Entry'} (${l.trade || 'All Trades'})`,
+          content: [l.work_performed, l.delays ? `Delays: ${l.delays}` : '', l.safety_incidents ? `Safety: ${l.safety_incidents}` : ''].filter(Boolean).join(' • ') || 'Work recorded for site.',
+          crew: l.crew || l.workers_count,
+          weather: l.weather,
+          trade: l.trade,
+          author: 'Site Team',
+          created_at: l.log_date ? `${l.log_date}T18:00:00.000Z` : l.created_at || new Date().toISOString(),
+        });
+      }
+    } catch {}
+
+    try {
+      const milestones = db.prepare("SELECT * FROM tasks WHERE project_id=? AND is_milestone=1 AND status IN ('Completed', 'Closed') ORDER BY end DESC LIMIT 10").all(projectId) as any[];
+      for (const m of milestones) {
+        feed.push({
+          id: m.id,
+          type: 'milestone',
+          category: 'Milestone Completed',
+          title: `Milestone Achieved: ${m.title}`,
+          content: `Trade: ${m.trade || 'General'} • Target Date: ${m.end || m.start || 'Achieved'}`,
+          progress_percent: 100,
+          trade: m.trade,
+          author: 'Project Management',
+          created_at: m.end ? `${m.end}T17:00:00.000Z` : new Date().toISOString(),
+        });
+      }
+    } catch {}
+
+    feed.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    res.json(feed.slice(0, 50));
+  });
+
+  app.get('/api/projects/:id/overview', authRequired, (req, res) => {
+    const projectId = req.params.id;
+    if (!hasProjectAccess(req.user!, projectId)) {
+      res.status(403).json({ error: 'No access to this project' });
+      return;
+    }
+    const project = db.prepare('SELECT * FROM projects WHERE id=?').get(projectId) as any;
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+    const tasks = db.prepare('SELECT * FROM tasks WHERE project_id=? ORDER BY wbs_code ASC, start ASC').all(projectId) as any[];
+    const workPackages = db.prepare('SELECT * FROM work_packages WHERE project_id=?').all(projectId) as any[];
+    const members = db.prepare('SELECT u.id, u.name, u.role, u.email, pm.access_role FROM project_memberships pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id=?').all(projectId) as any[];
+    const companies = db.prepare('SELECT c.*, pc.relationship FROM project_companies pc JOIN companies c ON c.id = pc.company_id WHERE pc.project_id=?').all(projectId) as any[];
+    const recentUpdates = db.prepare('SELECT * FROM project_updates WHERE project_id=? ORDER BY created_at DESC LIMIT 6').all(projectId) as any[];
+    const rfis = db.prepare('SELECT status FROM rfis WHERE project_id=?').all(projectId) as any[];
+    const snags = db.prepare('SELECT status FROM punchlist WHERE project_id=?').all(projectId) as any[];
+    const ncrs = db.prepare('SELECT status FROM ncrs WHERE project_id=?').all(projectId) as any[];
+
+    const completedTasks = tasks.filter(t => ['completed', 'closed'].includes((t.status || '').toLowerCase())).length;
+    const inProgressTasks = tasks.filter(t => ['in progress', 'under review'].includes((t.status || '').toLowerCase())).length;
+    const avgProgress = tasks.length ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / tasks.length) : (project.progress || 0);
+
+    const openSnags = snags.filter(s => !['closed', 'complete verified'].includes((s.status || '').toLowerCase())).length;
+    const openRfis = rfis.filter(r => !['closed', 'answered'].includes((r.status || '').toLowerCase())).length;
+    const openNcrs = ncrs.filter(n => !['closed', 'rectified'].includes((n.status || '').toLowerCase())).length;
+
+    let health = (openNcrs > 2 || openSnags > 10) ? 'RED' : (openSnags > 0 || openRfis > 3) ? 'AMBER' : 'GREEN';
+
+    res.json({
+      project: {
+        ...project,
+        calculated_progress: avgProgress,
+        health,
+      },
+      stats: {
+        total_tasks: tasks.length,
+        completed_tasks: completedTasks,
+        in_progress_tasks: inProgressTasks,
+        work_packages_count: workPackages.length,
+        team_count: members.length,
+        subcontractors_count: companies.length,
+        open_snags: openSnags,
+        open_rfis: openRfis,
+        open_ncrs: openNcrs,
+      },
+      tasks: tasks.slice(0, 30),
+      work_packages: workPackages,
+      members,
+      companies,
+      recent_updates: recentUpdates,
+    });
   });
 
   // =====================================================================

@@ -13,11 +13,12 @@ import {
   BookOpen, Briefcase, MoreVertical, Check, RotateCcw, Send,
   ThumbsUp, ThumbsDown, Coffee, Plane, Stethoscope, Star,
   ChevronLeft, Upload, Map, Cpu, Package, HardHat, Grid,
-  PieChart, Sun, Moon, ChevronUp
+  PieChart, Sun, Moon, ChevronUp, Pin, Image as ImageIcon, CheckSquare, Folder, Trash2
 } from 'lucide-react';
 import {
   api, authApi, sitesApi, workersApi, workforceApi, attendanceApi,
-  instructionsApi, leaveApi, shiftsApi, payrollApi, projectsApi, getToken, setToken, clearToken
+  instructionsApi, leaveApi, shiftsApi, payrollApi, projectsApi,
+  dashboardApi, tasksApi, updatesApi, getToken, setToken, clearToken
 } from './api';
 import {
   STATUS_COLORS, PRIORITY_COLORS, GEOFENCE_COLORS, INSTRUCTION_TYPES
@@ -231,7 +232,8 @@ function NavGroup({ icon: Icon, label, children, defaultOpen }: { icon: any; lab
 
 // ─── Main App Shell ───────────────────────────────────────────────────────────
 type Page =
-  | 'dashboard' | 'projects' | 'tasks' | 'rfis' | 'submittals' | 'documents'
+  | 'dashboard' | 'projects' | 'project-detail' | 'tasks' | 'updates'
+  | 'rfis' | 'submittals' | 'documents'
   | 'ncrs' | 'inspections' | 'commissioning' | 'handover' | 'progress'
   | 'clarifications' | 'change_orders' | 'boq' | 'procurement' | 'risks'
   | 'punchlist' | 'dailylogs' | 'timesheets' | 'attendance' | 'equipment'
@@ -270,6 +272,12 @@ function AppShell() {
 
   function renderPage() {
     switch (page) {
+      case 'dashboard': return <ProjectDashboardPage navigate={navigate} />;
+      case 'projects': return <ProjectsPage navigate={navigate} />;
+      case 'project-detail': return <ProjectDetailPage projectId={pageParam} navigate={navigate} />;
+      case 'tasks': return <TasksPage navigate={navigate} />;
+      case 'updates': return <ProjectUpdatesPage navigate={navigate} />;
+      case 'progress': return <ProjectUpdatesPage navigate={navigate} />;
       case 'workforce': return <WorkforceDashboardPage />;
       case 'sites': return <SitesPage navigate={navigate} />;
       case 'site-detail': return <SiteDetailPage siteId={pageParam} navigate={navigate} />;
@@ -318,6 +326,9 @@ function AppShell() {
       <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
         {!isWorkerOnly && <>
           <NavItem icon={Home} label="Dashboard" active={page === 'dashboard'} onClick={() => navigate('dashboard')} />
+          <NavItem icon={Briefcase} label="Projects" active={page === 'projects' || page === 'project-detail'} onClick={() => navigate('projects')} />
+          <NavItem icon={TrendingUp} label="Project Updates" active={page === 'updates'} onClick={() => navigate('updates')} />
+          <NavItem icon={Grid} label="Tasks & Schedule" active={page === 'tasks'} onClick={() => navigate('tasks')} />
         </>}
 
         {isWorkerOnly && (
@@ -325,8 +336,7 @@ function AppShell() {
         )}
 
         {!isWorkerOnly && !isSupervisor && sidebarOpen && (
-          <NavGroup icon={Layers} label="Project" defaultOpen={true}>
-            <NavItem icon={Grid} label="Tasks" active={page === 'tasks'} onClick={() => navigate('tasks')} />
+          <NavGroup icon={Layers} label="Project Execution" defaultOpen={false}>
             <NavItem icon={FileText} label="Documents" active={page === 'documents'} onClick={() => navigate('documents')} />
             <NavItem icon={BookOpen} label="RFIs" active={page === 'rfis'} onClick={() => navigate('rfis')} />
             <NavItem icon={ClipboardList} label="Submittals" active={page === 'submittals'} onClick={() => navigate('submittals')} />
@@ -335,7 +345,7 @@ function AppShell() {
             <NavItem icon={Cpu} label="Commissioning" active={page === 'commissioning'} onClick={() => navigate('commissioning')} />
             <NavItem icon={Package} label="Handover" active={page === 'handover'} onClick={() => navigate('handover')} />
             <NavItem icon={MessageSquare} label="Clarifications" active={page === 'clarifications'} onClick={() => navigate('clarifications')} />
-            <NavItem icon={TrendingUp} label="Progress" active={page === 'progress'} onClick={() => navigate('progress')} />
+            <NavItem icon={TrendingUp} label="Progress Claims" active={page === 'progress'} onClick={() => navigate('progress')} />
           </NavGroup>
         )}
 
@@ -2095,6 +2105,1793 @@ function PayrollPeriodDetailPage({ periodId, navigate }: { periodId: string; nav
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+
+// ─── Project Dashboard Page ───────────────────────────────────────────────────
+function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: string) => void }) {
+  const { projects, selectedProject, setSelectedProject, reload: reloadProjects } = useProject();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [portfolio, setPortfolio] = useState<any[]>([]);
+  const [recentUpdates, setRecentUpdates] = useState<any[]>([]);
+  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [newProjectData, setNewProjectData] = useState({ name: '', code: '', client: '', status: 'Active', budget: '', location: '', description: '' });
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [port, updates, tasks] = await Promise.all([
+        projectsApi.portfolio().catch(() => projectsApi.list()),
+        updatesApi.list({ limit: '6' }).catch(() => []),
+        tasksApi.list({ limit: '8' }).catch(() => [])
+      ]);
+      setPortfolio(Array.isArray(port) ? port : []);
+      setRecentUpdates(Array.isArray(updates) ? updates : []);
+      setUpcomingTasks(Array.isArray(tasks) ? tasks : []);
+    } catch {
+      // fallback
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const activeProjects = portfolio.filter(p => p.status === 'Active');
+  const delayedProjects = portfolio.filter(p => p.status === 'Delayed' || p.health === 'RED');
+  const avgProgress = portfolio.length > 0
+    ? Math.round(portfolio.reduce((acc, p) => acc + (Number(p.calculated_progress ?? p.progress) || 0), 0) / portfolio.length)
+    : 0;
+  const totalBudget = portfolio.reduce((acc, p) => acc + (Number(p.budget ?? p.contract_value) || 0), 0);
+
+  const handleCreateProject = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newProjectData.name || !newProjectData.client) {
+      addToast('error', 'Project Name and Client are required');
+      return;
+    }
+    try {
+      await projectsApi.create({
+        name: newProjectData.name,
+        code: newProjectData.code || undefined,
+        client: newProjectData.client,
+        status: newProjectData.status,
+        budget: newProjectData.budget ? Number(newProjectData.budget) : 0,
+        location: newProjectData.location || undefined,
+        description: newProjectData.description || undefined
+      });
+      addToast('success', 'Project created successfully');
+      setShowNewProjectModal(false);
+      setNewProjectData({ name: '', code: '', client: '', status: 'Active', budget: '', location: '', description: '' });
+      reloadProjects();
+      loadData();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to create project');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Project Management & Updates</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Real-time MEP project portfolio, live site progress feed, and task execution</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadData} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          <button onClick={() => navigate('updates')} className={btnSecondary}><TrendingUp size={14} />Site Updates</button>
+          {['Admin', 'ProjectManager'].includes(user?.role) && (
+            <button onClick={() => setShowNewProjectModal(true)} className={btnPrimary}><Plus size={14} />New Project</button>
+          )}
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Portfolio" value={portfolio.length} icon={Briefcase} color="bg-blue-600" sub={`${activeProjects.length} Active • ${delayedProjects.length} Delayed`} />
+        <StatCard label="Avg Portfolio Progress" value={`${avgProgress}%`} icon={TrendingUp} color="bg-emerald-600" sub="across all active jobs" />
+        <StatCard label="Total Contract Value" value={`${(totalBudget / 1000000).toFixed(2)}M`} icon={DollarSign} color="bg-indigo-600" sub="approved budget" />
+        <StatCard label="Recent Updates Logged" value={recentUpdates.length} icon={Activity} color="bg-amber-600" sub="site posts & milestones" />
+      </div>
+
+      {/* Project Portfolio Overview Cards */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Building2 size={20} className="text-blue-600" /> Active MEP Projects
+          </h2>
+          <button onClick={() => navigate('projects')} className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+            View All Projects <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12"><Spinner size={32} /></div>
+        ) : portfolio.length === 0 ? (
+          <EmptyState icon={Briefcase} title="No projects found" subtitle="Create your first MEP project to begin tracking" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {portfolio.map((p) => {
+              const prog = Number(p.calculated_progress ?? p.progress) || 0;
+              const health = p.health || (prog > 70 ? 'GREEN' : prog > 30 ? 'AMBER' : 'BLUE');
+              const healthColor = health === 'GREEN' ? 'bg-emerald-500' : health === 'RED' ? 'bg-red-500' : 'bg-amber-500';
+
+              return (
+                <Card key={p.id} className="p-5 hover:shadow-md transition-shadow cursor-pointer border border-gray-100 flex flex-col justify-between" onClick={() => { setSelectedProject(p.id); navigate('project-detail', p.id); }}>
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div>
+                        {p.code && <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-600 mr-2">{p.code}</span>}
+                        <h3 className="font-bold text-gray-900 text-base hover:text-blue-600 transition-colors mt-1">{p.name}</h3>
+                        <p className="text-xs text-gray-500">{p.client}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn('w-2.5 h-2.5 rounded-full', healthColor)} title={`Health: ${health}`} />
+                        <Badge label={p.status || 'Active'} />
+                      </div>
+                    </div>
+
+                    {p.location && (
+                      <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
+                        <MapPin size={12} className="text-gray-400" /> {p.location}
+                      </p>
+                    )}
+
+                    {/* Progress Bar */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs font-medium text-gray-600 mb-1.5">
+                        <span>MEP Progress</span>
+                        <span className="font-bold text-gray-900">{prog}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                        <div
+                          className={cn('h-2.5 rounded-full transition-all duration-500', prog >= 100 ? 'bg-emerald-500' : prog >= 50 ? 'bg-blue-600' : 'bg-amber-500')}
+                          style={{ width: `${Math.min(prog, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-3 border-t border-gray-50 flex items-center justify-between text-xs text-gray-500">
+                    <span>Budget: <strong className="text-gray-900 font-semibold">{p.budget ? `${Number(p.budget).toLocaleString()}` : '—'}</strong></span>
+                    <span className="text-blue-600 font-medium flex items-center gap-0.5">Details <ChevronRight size={14} /></span>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Grid: Recent Site Updates & Quick Tasks */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Site Updates (2 Cols) */}
+        <div className="lg:col-span-2 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <TrendingUp size={20} className="text-emerald-600" /> Live Site Updates Feed
+            </h2>
+            <button onClick={() => navigate('updates')} className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              View All Feed <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <Card className="divide-y divide-gray-100 overflow-hidden">
+            {recentUpdates.length === 0 ? (
+              <div className="p-8 text-center text-gray-400">
+                <Activity size={36} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No site updates posted yet.</p>
+                <button onClick={() => navigate('updates')} className={btnPrimary + ' mt-3 text-xs'}><Plus size={12} /> Post First Update</button>
+              </div>
+            ) : (
+              recentUpdates.slice(0, 5).map(u => (
+                <div key={u.id} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        {u.pinned ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold"><Pin size={10} /> PINNED</span> : null}
+                        <Badge label={u.category || 'General'} color="bg-blue-50 text-blue-700" />
+                        {u.trade && <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700">{u.trade}</span>}
+                        {u.project_name && <span className="text-xs text-gray-400 font-medium">• {u.project_name}</span>}
+                      </div>
+                      <h4 className="text-sm font-semibold text-gray-900">{u.title}</h4>
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2">{u.content}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                        <span>{u.created_by_name || 'Site Team'}</span>
+                        <span>•</span>
+                        <span>{fmt(u.created_at)}</span>
+                        {u.location && <><span>•</span><span><MapPin size={10} className="inline mr-0.5" />{u.location}</span></>}
+                      </div>
+                    </div>
+                    {u.attachment_data && (
+                      <img src={u.attachment_data} alt="Site attachment" className="w-16 h-16 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </Card>
+        </div>
+
+        {/* Priority Tasks (1 Col) */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <CheckSquare size={20} className="text-blue-600" /> Tasks Programme
+            </h2>
+            <button onClick={() => navigate('tasks')} className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              View Tasks <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <Card className="divide-y divide-gray-100 overflow-hidden">
+            {upcomingTasks.length === 0 ? (
+              <div className="p-8 text-center text-gray-400">
+                <CheckSquare size={36} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No tasks scheduled.</p>
+                <button onClick={() => navigate('tasks')} className={btnSecondary + ' mt-3 text-xs'}><Plus size={12} /> Add Task</button>
+              </div>
+            ) : (
+              upcomingTasks.slice(0, 6).map(t => (
+                <div key={t.id} className="p-3.5 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', PRIORITY_COLORS[t.priority || 'Medium'] || 'bg-gray-100 text-gray-600')}>
+                        {t.priority || 'Normal'}
+                      </span>
+                      {t.trade && <span className="text-xs text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{t.trade}</span>}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 truncate">{t.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.project_name || (t.end ? `Due: ${fmtDate(t.end)}` : 'In progress')}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <Badge label={t.status || 'Not Started'} />
+                    <p className="text-xs font-semibold text-gray-700 mt-1">{t.progress || 0}%</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* Modal: New Project */}
+      <Modal open={showNewProjectModal} onClose={() => setShowNewProjectModal(false)} title="Create New Project" size="md">
+        <form onSubmit={handleCreateProject} className="space-y-4">
+          <FormField label="Project Name" required>
+            <input type="text" required value={newProjectData.name} onChange={e => setNewProjectData(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Al Wasl Tower MEP Package" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Project Code">
+              <input type="text" value={newProjectData.code} onChange={e => setNewProjectData(d => ({ ...d, code: e.target.value }))} placeholder="e.g. PRJ-202" className={inputCls} />
+            </FormField>
+            <FormField label="Status">
+              <select value={newProjectData.status} onChange={e => setNewProjectData(d => ({ ...d, status: e.target.value }))} className={selectCls}>
+                <option value="Planning">Planning</option>
+                <option value="Active">Active</option>
+                <option value="Delayed">Delayed</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Client / Employer" required>
+            <input type="text" required value={newProjectData.client} onChange={e => setNewProjectData(d => ({ ...d, client: e.target.value }))} placeholder="e.g. Emaar Properties / Dubai Holding" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Total Budget (USD)">
+              <input type="number" value={newProjectData.budget} onChange={e => setNewProjectData(d => ({ ...d, budget: e.target.value }))} placeholder="e.g. 5000000" className={inputCls} />
+            </FormField>
+            <FormField label="Location">
+              <input type="text" value={newProjectData.location} onChange={e => setNewProjectData(d => ({ ...d, location: e.target.value }))} placeholder="e.g. Downtown Dubai, UAE" className={inputCls} />
+            </FormField>
+          </div>
+          <FormField label="Project Scope / Description">
+            <textarea rows={3} value={newProjectData.description} onChange={e => setNewProjectData(d => ({ ...d, description: e.target.value }))} placeholder="Brief summary of MEP scope (HVAC, Electrical, Plumbing, Fire Fighting)..." className={inputCls} />
+          </FormField>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowNewProjectModal(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" className={btnPrimary}><Plus size={14} /> Create Project</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Projects Portfolio Page ──────────────────────────────────────────────────
+function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => void }) {
+  const { setSelectedProject, reload: reloadGlobalProjects } = useProject();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [showModal, setShowModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<any | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    code: '',
+    client: '',
+    status: 'Active',
+    budget: '',
+    location: '',
+    description: '',
+    start_date: '',
+    end_date: '',
+    progress: '0'
+  });
+
+  const loadProjects = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await projectsApi.portfolio().catch(() => projectsApi.list());
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      addToast('error', 'Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  const filtered = projects.filter(p => {
+    const matchesSearch =
+      (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.code || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.client || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.location || '').toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleOpenCreate = () => {
+    setEditingProject(null);
+    setFormData({
+      name: '',
+      code: `PRJ-${Math.floor(100 + Math.random() * 900)}`,
+      client: '',
+      status: 'Active',
+      budget: '',
+      location: '',
+      description: '',
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: '',
+      progress: '0'
+    });
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (p: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingProject(p);
+    setFormData({
+      name: p.name || '',
+      code: p.code || '',
+      client: p.client || '',
+      status: p.status || 'Active',
+      budget: p.budget ? String(p.budget) : '',
+      location: p.location || '',
+      description: p.description || '',
+      start_date: p.start_date || '',
+      end_date: p.end_date || '',
+      progress: p.progress != null ? String(p.progress) : '0'
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete project "${name}"?`)) return;
+    try {
+      await projectsApi.delete(id);
+      addToast('success', 'Project deleted');
+      loadProjects();
+      reloadGlobalProjects();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to delete project');
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.client) {
+      addToast('error', 'Project Name and Client are required');
+      return;
+    }
+    try {
+      const payload = {
+        name: formData.name,
+        code: formData.code || undefined,
+        client: formData.client,
+        status: formData.status,
+        budget: formData.budget ? Number(formData.budget) : 0,
+        location: formData.location || undefined,
+        description: formData.description || undefined,
+        start_date: formData.start_date || undefined,
+        end_date: formData.end_date || undefined,
+        progress: Number(formData.progress) || 0
+      };
+
+      if (editingProject) {
+        await projectsApi.update(editingProject.id, payload);
+        addToast('success', 'Project updated');
+      } else {
+        await projectsApi.create(payload);
+        addToast('success', 'Project created');
+      }
+      setShowModal(false);
+      loadProjects();
+      reloadGlobalProjects();
+    } catch (err: any) {
+      addToast('error', err.message || 'Operation failed');
+    }
+  };
+
+  const isManager = ['Admin', 'ProjectManager'].includes(user?.role);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Projects Portfolio</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Manage all active MEP jobs, contracts, schedules, and site operations</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadProjects} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          {isManager && (
+            <button onClick={handleOpenCreate} className={btnPrimary}><Plus size={14} />New Project</button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters and View Toggles */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2 flex-1 max-w-md bg-gray-50 px-3 py-2 rounded-xl border border-gray-200">
+          <Search size={16} className="text-gray-400 flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="Search projects by name, code, client, location..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="bg-transparent text-sm w-full focus:outline-none text-gray-800 placeholder-gray-400"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          {['All', 'Active', 'Planning', 'Delayed', 'Completed'].map(st => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={cn('px-3 py-1.5 rounded-xl text-xs font-medium transition-colors whitespace-nowrap',
+                statusFilter === st ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Projects Content */}
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner size={32} /></div>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={Briefcase} title="No matching projects" subtitle={search ? 'Try adjusting your search filters' : 'Create your first project to get started'} />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map(p => {
+            const prog = Number(p.calculated_progress ?? p.progress) || 0;
+            const health = p.health || (prog > 70 ? 'GREEN' : prog > 30 ? 'AMBER' : 'BLUE');
+            const healthBg = health === 'GREEN' ? 'bg-emerald-500' : health === 'RED' ? 'bg-red-500' : 'bg-amber-500';
+
+            return (
+              <Card
+                key={p.id}
+                className="p-5 hover:shadow-lg transition-all cursor-pointer border border-gray-100 flex flex-col justify-between"
+                onClick={() => { setSelectedProject(p.id); navigate('project-detail', p.id); }}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {p.code && <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700">{p.code}</span>}
+                        <Badge label={p.status || 'Active'} />
+                      </div>
+                      <h3 className="font-bold text-gray-900 text-lg mt-2 group-hover:text-blue-600 transition-colors">{p.name}</h3>
+                      <p className="text-xs font-medium text-gray-500 mt-0.5">{p.client}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5" title={`Health: ${health}`}>
+                      <span className={cn('w-3 h-3 rounded-full shadow-sm', healthBg)} />
+                    </div>
+                  </div>
+
+                  {p.description && (
+                    <p className="text-xs text-gray-600 mt-2.5 line-clamp-2">{p.description}</p>
+                  )}
+
+                  {p.location && (
+                    <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                      <MapPin size={12} className="text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{p.location}</span>
+                    </p>
+                  )}
+
+                  {/* Progress Bar */}
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+                      <span className="text-gray-600">Completion</span>
+                      <span className="text-gray-900">{prog}%</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className={cn('h-2.5 rounded-full transition-all duration-500', prog >= 100 ? 'bg-emerald-500' : prog >= 50 ? 'bg-blue-600' : 'bg-amber-500')}
+                        style={{ width: `${Math.min(prog, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-gray-400">Budget: </span>
+                    <span className="font-semibold text-gray-800">{p.budget ? `${Number(p.budget).toLocaleString()}` : '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {isManager && (
+                      <>
+                        <button onClick={(e) => handleOpenEdit(p, e)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Project">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={(e) => handleDelete(p.id, p.name, e)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete Project">
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                    <span className="text-blue-600 font-semibold flex items-center gap-0.5 ml-1">Open <ChevronRight size={14} /></span>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create / Edit Project Modal */}
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingProject ? 'Edit Project' : 'Create New Project'} size="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormField label="Project Name" required>
+            <input type="text" required value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Dubai Marina Mall HVAC Replacement" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Project Code">
+              <input type="text" value={formData.code} onChange={e => setFormData(d => ({ ...d, code: e.target.value }))} placeholder="e.g. PRJ-204" className={inputCls} />
+            </FormField>
+            <FormField label="Status">
+              <select value={formData.status} onChange={e => setFormData(d => ({ ...d, status: e.target.value }))} className={selectCls}>
+                <option value="Planning">Planning</option>
+                <option value="Active">Active</option>
+                <option value="Delayed">Delayed</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Client / Employer" required>
+            <input type="text" required value={formData.client} onChange={e => setFormData(d => ({ ...d, client: e.target.value }))} placeholder="e.g. Emaar Hospitality Group" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Budget (USD)">
+              <input type="number" value={formData.budget} onChange={e => setFormData(d => ({ ...d, budget: e.target.value }))} placeholder="e.g. 2400000" className={inputCls} />
+            </FormField>
+            <FormField label="Progress (%)">
+              <input type="number" min="0" max="100" value={formData.progress} onChange={e => setFormData(d => ({ ...d, progress: e.target.value }))} placeholder="0" className={inputCls} />
+            </FormField>
+          </div>
+          <FormField label="Site Location / Address">
+            <input type="text" value={formData.location} onChange={e => setFormData(d => ({ ...d, location: e.target.value }))} placeholder="e.g. Al Sufouh 2, Dubai, UAE" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Start Date">
+              <input type="date" value={formData.start_date} onChange={e => setFormData(d => ({ ...d, start_date: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="End Date">
+              <input type="date" value={formData.end_date} onChange={e => setFormData(d => ({ ...d, end_date: e.target.value }))} className={inputCls} />
+            </FormField>
+          </div>
+          <FormField label="Scope & Description">
+            <textarea rows={3} value={formData.description} onChange={e => setFormData(d => ({ ...d, description: e.target.value }))} placeholder="Comprehensive description of MEP scope..." className={inputCls} />
+          </FormField>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowModal(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" className={btnPrimary}><Check size={14} /> {editingProject ? 'Save Changes' : 'Create Project'}</button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Project Detail Page ──────────────────────────────────────────────────────
+function ProjectDetailPage({ projectId, navigate }: { projectId?: string; navigate: (page: Page, param?: string) => void }) {
+  const { selectedProject, setSelectedProject, projects, reload: reloadProjects } = useProject();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const activeProjectId = projectId || selectedProject || (projects[0]?.id ?? '');
+
+  const [loading, setLoading] = useState(true);
+  const [project, setProject] = useState<any | null>(null);
+  const [feed, setFeed] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'feed' | 'tasks' | 'team'>('overview');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // New update form state
+  const [updateTitle, setUpdateTitle] = useState('');
+  const [updateCategory, setUpdateCategory] = useState('Progress Milestone');
+  const [updateTrade, setUpdateTrade] = useState('HVAC');
+  const [updateContent, setUpdateContent] = useState('');
+  const [updateProgress, setUpdateProgress] = useState('');
+  const [updateLocation, setUpdateLocation] = useState('');
+  const [updateWeather, setUpdateWeather] = useState('Sunny');
+  const [updatePinned, setUpdatePinned] = useState(false);
+  const [updateAttachment, setUpdateAttachment] = useState<string | null>(null);
+
+  // New task form state
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskTrade, setTaskTrade] = useState('HVAC');
+  const [taskPriority, setTaskPriority] = useState('Medium');
+  const [taskStatus, setTaskStatus] = useState('Not Started');
+  const [taskStart, setTaskStart] = useState('');
+  const [taskEnd, setTaskEnd] = useState('');
+
+  const loadProjectDetails = useCallback(async () => {
+    if (!activeProjectId) return;
+    setLoading(true);
+    try {
+      const [projData, feedData, taskData] = await Promise.all([
+        projectsApi.overview(activeProjectId).catch(() => projectsApi.get(activeProjectId)),
+        projectsApi.feed(activeProjectId).catch(() => []),
+        tasksApi.list({ project_id: activeProjectId }).catch(() => [])
+      ]);
+      setProject(projData);
+      setFeed(Array.isArray(feedData) ? feedData : []);
+      setTasks(Array.isArray(taskData) ? taskData : []);
+    } catch (err: any) {
+      addToast('error', 'Failed to load project details');
+    } finally {
+      setLoading(false);
+    }
+  }, [activeProjectId, addToast]);
+
+  useEffect(() => {
+    loadProjectDetails();
+  }, [loadProjectDetails]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUpdateAttachment(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreateUpdate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!updateTitle || !updateContent) {
+      addToast('error', 'Title and Content are required');
+      return;
+    }
+    try {
+      await updatesApi.create({
+        project_id: activeProjectId,
+        title: updateTitle,
+        category: updateCategory,
+        trade: updateTrade,
+        content: updateContent,
+        progress_percent: updateProgress ? Number(updateProgress) : undefined,
+        location: updateLocation || undefined,
+        weather: updateWeather || undefined,
+        pinned: updatePinned ? 1 : 0,
+        attachment_data: updateAttachment || undefined
+      });
+      addToast('success', 'Site update posted successfully');
+      setShowUpdateModal(false);
+      setUpdateTitle('');
+      setUpdateContent('');
+      setUpdateAttachment(null);
+      setUpdateProgress('');
+      loadProjectDetails();
+      reloadProjects();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to post update');
+    }
+  };
+
+  const handleCreateTask = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!taskTitle) {
+      addToast('error', 'Task Title is required');
+      return;
+    }
+    try {
+      await tasksApi.create({
+        project_id: activeProjectId,
+        title: taskTitle,
+        trade: taskTrade,
+        priority: taskPriority,
+        status: taskStatus,
+        start: taskStart || undefined,
+        end: taskEnd || undefined,
+        progress: 0
+      });
+      addToast('success', 'Task added');
+      setShowTaskModal(false);
+      setTaskTitle('');
+      loadProjectDetails();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to add task');
+    }
+  };
+
+  if (loading && !project) {
+    return <div className="flex justify-center py-24"><Spinner size={32} /></div>;
+  }
+
+  const p = project || {};
+  const prog = Number(p.calculated_progress ?? p.progress) || 0;
+  const health = p.health || (prog > 70 ? 'GREEN' : prog > 30 ? 'AMBER' : 'BLUE');
+  const healthBg = health === 'GREEN' ? 'bg-emerald-500' : health === 'RED' ? 'bg-red-500' : 'bg-amber-500';
+
+  return (
+    <div className="space-y-6">
+      {/* Top Navigation & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <button onClick={() => navigate('projects')} className={btnSecondary}>
+          <ArrowLeft size={14} /> Back to Projects
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={loadProjectDetails} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          <button onClick={() => setShowUpdateModal(true)} className={btnPrimary}><Plus size={14} />Post Site Update</button>
+          <button onClick={() => setShowTaskModal(true)} className={btnSecondary}><CheckSquare size={14} />Add Task</button>
+        </div>
+      </div>
+
+      {/* Project Banner Header */}
+      <Card className="p-6 border border-gray-100 shadow-sm bg-gradient-to-r from-white via-blue-50/20 to-white">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              {p.code && <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">{p.code}</span>}
+              <Badge label={p.status || 'Active'} />
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700">
+                <span className={cn('w-2.5 h-2.5 rounded-full', healthBg)} />
+                Health: {health}
+              </div>
+            </div>
+
+            <h1 className="text-2xl font-black text-gray-900">{p.name || 'MEP Project'}</h1>
+            <p className="text-gray-500 text-sm mt-1">{p.client} • {p.location || 'Location not specified'}</p>
+
+            {p.description && (
+              <p className="text-xs text-gray-600 mt-2 max-w-3xl">{p.description}</p>
+            )}
+          </div>
+
+          <div className="lg:w-72 flex-shrink-0 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+              <span className="text-gray-600">Overall Progress</span>
+              <span className="text-blue-600 text-sm">{prog}%</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div
+                className={cn('h-3 rounded-full transition-all duration-500', prog >= 100 ? 'bg-emerald-500' : prog >= 50 ? 'bg-blue-600' : 'bg-amber-500')}
+                style={{ width: `${Math.min(prog, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100">
+              <span>Budget: <strong className="text-gray-700">{p.budget ? `${Number(p.budget).toLocaleString()}` : '—'}</strong></span>
+              <span>Tasks: <strong className="text-gray-700">{tasks.length}</strong></span>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 space-x-6">
+        {[
+          { id: 'overview', label: 'Overview & KPIs', icon: Briefcase },
+          { id: 'feed', label: `Live Feed & Updates (${feed.length})`, icon: TrendingUp },
+          { id: 'tasks', label: `Tasks & Programme (${tasks.length})`, icon: CheckSquare },
+          { id: 'team', label: 'Team & Directory', icon: Users },
+        ].map(tab => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={cn('flex items-center gap-2 py-3 border-b-2 font-semibold text-sm transition-colors',
+                active ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <Icon size={16} /> {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab: Overview */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Contract Value" value={p.budget ? `${(Number(p.budget) / 1000000).toFixed(2)}M` : '—'} icon={DollarSign} color="bg-blue-600" sub="Approved MEP Budget" />
+            <StatCard label="Open RFIs" value={p.open_rfis ?? 0} icon={BookOpen} color="bg-indigo-600" sub="Technical queries" />
+            <StatCard label="Active Snags / NCRs" value={p.open_snags ?? 0} icon={AlertTriangle} color="bg-amber-600" sub="Quality observations" />
+            <StatCard label="Scheduled Tasks" value={tasks.length} icon={CheckSquare} color="bg-emerald-600" sub={`${tasks.filter(t => t.status === 'Completed').length} completed`} />
+          </div>
+
+          {/* Trade Progress Breakdown */}
+          <Card className="p-6 border border-gray-100">
+            <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Layers size={18} className="text-blue-600" /> MEP Trade Progress Breakdown
+            </h3>
+            <div className="space-y-4">
+              {[
+                { trade: 'HVAC & Ducting', pct: p.hvac_progress ?? Math.min(prog + 5, 100), color: 'bg-cyan-500' },
+                { trade: 'Electrical & Containment', pct: p.electrical_progress ?? Math.max(prog - 8, 0), color: 'bg-yellow-500' },
+                { trade: 'Plumbing & Drainage', pct: p.plumbing_progress ?? prog, color: 'bg-blue-500' },
+                { trade: 'Fire Protection & Sprinklers', pct: p.fire_progress ?? Math.max(prog - 12, 0), color: 'bg-red-500' },
+                { trade: 'ELV & Building Automation (BMS)', pct: p.elv_progress ?? Math.max(prog - 15, 0), color: 'bg-purple-500' },
+              ].map(t => (
+                <div key={t.trade}>
+                  <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                    <span className="text-gray-700">{t.trade}</span>
+                    <span className="text-gray-900">{t.pct}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div className={cn('h-2 rounded-full transition-all duration-500', t.color)} style={{ width: `${t.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Feed */}
+      {activeTab === 'feed' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-900 text-base">Site Timeline & Activity Stream</h3>
+            <button onClick={() => setShowUpdateModal(true)} className={btnPrimary}><Plus size={14} />Post Update</button>
+          </div>
+
+          {feed.length === 0 ? (
+            <EmptyState icon={TrendingUp} title="No site updates posted" subtitle="Post the first update or daily log to start the activity stream" />
+          ) : (
+            <div className="space-y-4">
+              {feed.map((item, idx) => (
+                <Card key={item.id || idx} className={cn('p-5 border border-gray-100 transition-shadow hover:shadow-md', item.pinned ? 'border-l-4 border-l-amber-500 bg-amber-50/20' : '')}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        {item.pinned ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold"><Pin size={10} /> PINNED</span> : null}
+                        <Badge label={item.category || item.type || 'Update'} color="bg-blue-50 text-blue-700" />
+                        {item.trade && <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700">{item.trade}</span>}
+                        {item.progress_percent != null && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                            Progress: {item.progress_percent}%
+                          </span>
+                        )}
+                        {item.weather && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-sky-50 text-sky-700 flex items-center gap-1">
+                            <Sun size={12} /> {item.weather}
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="font-bold text-gray-900 text-base">{item.title}</h4>
+                      <p className="text-sm text-gray-700 mt-2 whitespace-pre-line">{item.content}</p>
+
+                      <div className="flex items-center gap-3 mt-4 text-xs text-gray-400 pt-2 border-t border-gray-50">
+                        <span className="font-medium text-gray-600">{item.created_by_name || 'Site Engineer'}</span>
+                        <span>•</span>
+                        <span>{fmt(item.created_at)}</span>
+                        {item.location && (
+                          <>
+                            <span>•</span>
+                            <span className="flex items-center gap-0.5"><MapPin size={10} />{item.location}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {item.attachment_data && (
+                      <div className="cursor-pointer flex-shrink-0" onClick={() => setSelectedImage(item.attachment_data)}>
+                        <img src={item.attachment_data} alt="Site attachment" className="w-24 h-24 rounded-xl object-cover border border-gray-200 hover:opacity-90 transition-opacity" />
+                        <span className="text-[10px] text-gray-400 block text-center mt-1">Click to zoom</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Tasks */}
+      {activeTab === 'tasks' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-900 text-base">Project Task Programme</h3>
+            <button onClick={() => setShowTaskModal(true)} className={btnPrimary}><Plus size={14} />Add Task</button>
+          </div>
+
+          {tasks.length === 0 ? (
+            <EmptyState icon={CheckSquare} title="No tasks scheduled" subtitle="Create tasks to organize MEP installation and inspections" />
+          ) : (
+            <Card className="divide-y divide-gray-100 overflow-hidden">
+              {tasks.map(t => (
+                <div key={t.id} className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={cn('text-xs px-2 py-0.5 rounded font-bold', PRIORITY_COLORS[t.priority || 'Medium'] || 'bg-gray-100 text-gray-600')}>
+                        {t.priority || 'Medium'}
+                      </span>
+                      {t.trade && <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold">{t.trade}</span>}
+                      {t.wbs_code && <span className="text-xs font-mono text-gray-400">{t.wbs_code}</span>}
+                    </div>
+                    <h4 className="text-sm font-bold text-gray-900">{t.title}</h4>
+                    {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
+                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
+                      <span>Start: {fmtDate(t.start)}</span>
+                      <span>•</span>
+                      <span>Due: {fmtDate(t.end)}</span>
+                      {t.assignee && <><span>•</span><span>Assigned: {t.assignee}</span></>}
+                    </div>
+                  </div>
+
+                  <div className="text-right flex-shrink-0 flex items-center gap-4">
+                    <div>
+                      <Badge label={t.status || 'Not Started'} />
+                      <p className="text-xs font-bold text-gray-800 mt-1">{t.progress || 0}% Complete</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Team */}
+      {activeTab === 'team' && (
+        <Card className="p-6 border border-gray-100">
+          <h3 className="font-bold text-gray-900 text-base mb-4">Project Stakeholders & Key Directory</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Employer / Client</p>
+              <p className="text-base font-bold text-gray-900 mt-1">{p.client || '—'}</p>
+            </div>
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Lead MEP Contractor</p>
+              <p className="text-base font-bold text-gray-900 mt-1">Apex MEP Contracting LLC</p>
+            </div>
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Site Location</p>
+              <p className="text-base font-bold text-gray-900 mt-1">{p.location || 'Downtown Dubai'}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Modal: Post Site Update */}
+      <Modal open={showUpdateModal} onClose={() => setShowUpdateModal(false)} title="Post Site Update" size="lg">
+        <form onSubmit={handleCreateUpdate} className="space-y-4">
+          <FormField label="Update Title" required>
+            <input type="text" required value={updateTitle} onChange={e => setUpdateTitle(e.target.value)} placeholder="e.g. Chilled Water Pipe Hydrostatic Pressure Test Passed" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="Category">
+              <select value={updateCategory} onChange={e => setUpdateCategory(e.target.value)} className={selectCls}>
+                <option value="Progress Milestone">Progress Milestone</option>
+                <option value="Daily Site Log">Daily Site Log</option>
+                <option value="Safety Notice">Safety Notice</option>
+                <option value="Quality Observation">Quality Observation</option>
+                <option value="Material Delivery">Material Delivery</option>
+                <option value="Weather Impact">Weather Impact</option>
+                <option value="General">General Update</option>
+              </select>
+            </FormField>
+            <FormField label="MEP Trade">
+              <select value={updateTrade} onChange={e => setUpdateTrade(e.target.value)} className={selectCls}>
+                <option value="HVAC">HVAC</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Plumbing">Plumbing</option>
+                <option value="Fire Fighting">Fire Fighting</option>
+                <option value="ELV">ELV</option>
+                <option value="General">General MEP</option>
+              </select>
+            </FormField>
+            <FormField label="Progress % Impact">
+              <input type="number" min="0" max="100" value={updateProgress} onChange={e => setUpdateProgress(e.target.value)} placeholder="e.g. 65" className={inputCls} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Location / Level">
+              <input type="text" value={updateLocation} onChange={e => setUpdateLocation(e.target.value)} placeholder="e.g. Podium Level 2 - Plant Room B" className={inputCls} />
+            </FormField>
+            <FormField label="Weather">
+              <select value={updateWeather} onChange={e => setUpdateWeather(e.target.value)} className={selectCls}>
+                <option value="Sunny">Sunny (Normal)</option>
+                <option value="Cloudy">Cloudy</option>
+                <option value="Rainy">Rain / Wet</option>
+                <option value="Extreme Heat">Extreme Heat (&gt;45°C)</option>
+                <option value="High Winds">High Winds</option>
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Content & Observations" required>
+            <textarea rows={4} required value={updateContent} onChange={e => setUpdateContent(e.target.value)} placeholder="Detail the works executed today, inspections attended, material received, manpower on task..." className={inputCls} />
+          </FormField>
+          <FormField label="Attach Site Photo">
+            <div className="flex items-center gap-4">
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              {updateAttachment && (
+                <div className="relative">
+                  <img src={updateAttachment} alt="Preview" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                  <button type="button" onClick={() => setUpdateAttachment(null)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5"><X size={10} /></button>
+                </div>
+              )}
+            </div>
+          </FormField>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="pinned-check" checked={updatePinned} onChange={e => setUpdatePinned(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4" />
+            <label htmlFor="pinned-check" className="text-xs font-semibold text-gray-700 flex items-center gap-1"><Pin size={12} /> Pin update to top of project feed</label>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowUpdateModal(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" className={btnPrimary}><Send size={14} /> Publish Update</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Add Task */}
+      <Modal open={showTaskModal} onClose={() => setShowTaskModal(false)} title="Add Task to Programme" size="md">
+        <form onSubmit={handleCreateTask} className="space-y-4">
+          <FormField label="Task Title" required>
+            <input type="text" required value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="e.g. Install Main AHU Ductwork Dampers" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="MEP Trade">
+              <select value={taskTrade} onChange={e => setTaskTrade(e.target.value)} className={selectCls}>
+                <option value="HVAC">HVAC</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Plumbing">Plumbing</option>
+                <option value="Fire Fighting">Fire Fighting</option>
+                <option value="ELV">ELV</option>
+              </select>
+            </FormField>
+            <FormField label="Priority">
+              <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)} className={selectCls}>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Start Date">
+              <input type="date" value={taskStart} onChange={e => setTaskStart(e.target.value)} className={inputCls} />
+            </FormField>
+            <FormField label="Due Date">
+              <input type="date" value={taskEnd} onChange={e => setTaskEnd(e.target.value)} className={inputCls} />
+            </FormField>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowTaskModal(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" className={btnPrimary}><Plus size={14} /> Add Task</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Image Zoom */}
+      <Modal open={!!selectedImage} onClose={() => setSelectedImage(null)} title="Attached Site Photo" size="lg">
+        {selectedImage && (
+          <div className="flex flex-col items-center justify-center p-2">
+            <img src={selectedImage} alt="Site attachment large" className="max-h-[70vh] rounded-xl object-contain shadow-lg" />
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Project Updates Page (Live Feed) ──────────────────────────────────────────
+function ProjectUpdatesPage({ navigate }: { navigate: (page: Page, param?: string) => void }) {
+  const { projects, selectedProject, setSelectedProject } = useProject();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const [updates, setUpdates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [tradeFilter, setTradeFilter] = useState('All');
+  const [showModal, setShowModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Form State
+  const [projectId, setProjectId] = useState(selectedProject || (projects[0]?.id ?? ''));
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('Progress Milestone');
+  const [trade, setTrade] = useState('HVAC');
+  const [content, setContent] = useState('');
+  const [progress, setProgress] = useState('');
+  const [location, setLocation] = useState('');
+  const [weather, setWeather] = useState('Sunny');
+  const [pinned, setPinned] = useState(false);
+  const [attachment, setAttachment] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedProject) setProjectId(selectedProject);
+  }, [selectedProject]);
+
+  const loadUpdates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (selectedProject) params.project_id = selectedProject;
+      if (categoryFilter !== 'All') params.category = categoryFilter;
+      if (tradeFilter !== 'All') params.trade = tradeFilter;
+      const data = await updatesApi.list(params);
+      setUpdates(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      addToast('error', 'Failed to load updates');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject, categoryFilter, tradeFilter, addToast]);
+
+  useEffect(() => {
+    loadUpdates();
+  }, [loadUpdates]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachment(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!projectId) {
+      addToast('error', 'Please select a project');
+      return;
+    }
+    if (!title || !content) {
+      addToast('error', 'Title and Content are required');
+      return;
+    }
+    try {
+      await updatesApi.create({
+        project_id: projectId,
+        title,
+        category,
+        trade,
+        content,
+        progress_percent: progress ? Number(progress) : undefined,
+        location: location || undefined,
+        weather: weather || undefined,
+        pinned: pinned ? 1 : 0,
+        attachment_data: attachment || undefined
+      });
+      addToast('success', 'Site update published');
+      setShowModal(false);
+      setTitle('');
+      setContent('');
+      setAttachment(null);
+      setProgress('');
+      loadUpdates();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to post update');
+    }
+  };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this update?')) return;
+    try {
+      await updatesApi.delete(id);
+      addToast('success', 'Update deleted');
+      loadUpdates();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to delete update');
+    }
+  };
+
+  const canPost = ['Admin', 'ProjectManager', 'SiteEngineer', 'SiteSupervisor', 'QAQC', 'SafetyOfficer'].includes(user?.role);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Project Updates & Live Site Feed</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Chronological site activity, milestone accomplishments, quality and safety logs</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadUpdates} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          {canPost && (
+            <button onClick={() => setShowModal(true)} className={btnPrimary}><Plus size={14} />Post Site Update</button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Header */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-gray-500">Project:</label>
+          <select
+            value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}
+            className="text-xs font-semibold border border-gray-200 rounded-xl px-2.5 py-1.5 bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Projects</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Category Filters */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {['All', 'Progress Milestone', 'Safety Notice', 'Quality Observation', 'Material Delivery', 'Daily Site Log'].map(c => (
+            <button
+              key={c}
+              onClick={() => setCategoryFilter(c)}
+              className={cn('px-2.5 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors',
+                categoryFilter === c ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Updates Stream */}
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner size={32} /></div>
+      ) : updates.length === 0 ? (
+        <EmptyState icon={TrendingUp} title="No updates found" subtitle="Publish a site update to notify project managers and stakeholders" />
+      ) : (
+        <div className="space-y-4">
+          {updates.map(u => (
+            <Card key={u.id} className={cn('p-5 border border-gray-100 transition-all hover:shadow-md', u.pinned ? 'border-l-4 border-l-amber-500 bg-amber-50/10' : '')}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    {u.pinned ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold"><Pin size={10} /> PINNED</span> : null}
+                    <Badge label={u.category || 'General'} color="bg-blue-50 text-blue-700" />
+                    {u.trade && <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700">{u.trade}</span>}
+                    {u.project_name && (
+                      <button onClick={() => { setSelectedProject(u.project_id); navigate('project-detail', u.project_id); }} className="text-xs font-semibold text-blue-600 hover:underline">
+                        • {u.project_name}
+                      </button>
+                    )}
+                    {u.progress_percent != null && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                        Progress: {u.progress_percent}%
+                      </span>
+                    )}
+                    {u.weather && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-sky-50 text-sky-700 flex items-center gap-1">
+                        <Sun size={12} /> {u.weather}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="font-bold text-gray-900 text-lg">{u.title}</h3>
+                  <p className="text-sm text-gray-700 mt-2 whitespace-pre-line leading-relaxed">{u.content}</p>
+
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 text-xs text-gray-400">
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-gray-700">{u.created_by_name || 'Site Team'}</span>
+                      <span>•</span>
+                      <span>{fmt(u.created_at)}</span>
+                      {u.location && <><span>•</span><span className="flex items-center gap-0.5"><MapPin size={10} />{u.location}</span></>}
+                    </div>
+                    {['Admin', 'ProjectManager'].includes(user?.role) && (
+                      <button onClick={e => handleDelete(u.id, e)} className="text-red-500 hover:text-red-700 transition-colors p-1" title="Delete Update">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {u.attachment_data && (
+                  <div className="cursor-pointer flex-shrink-0" onClick={() => setSelectedImage(u.attachment_data)}>
+                    <img src={u.attachment_data} alt="Site attachment" className="w-28 h-28 rounded-xl object-cover border border-gray-200 hover:opacity-90 transition-opacity shadow-sm" />
+                    <span className="text-[10px] text-gray-400 block text-center mt-1">Click to zoom</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Modal: Post Update */}
+      <Modal open={showModal} onClose={() => setShowModal(false)} title="Post Site Update" size="lg">
+        <form onSubmit={handleCreate} className="space-y-4">
+          <FormField label="Project" required>
+            <select required value={projectId} onChange={e => setProjectId(e.target.value)} className={selectCls}>
+              <option value="">Select Project...</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.code || 'MEP'})</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Update Title" required>
+            <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Fire Fighting Riser Pressure Testing Level 1-10 Passed" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="Category">
+              <select value={category} onChange={e => setCategory(e.target.value)} className={selectCls}>
+                <option value="Progress Milestone">Progress Milestone</option>
+                <option value="Daily Site Log">Daily Site Log</option>
+                <option value="Safety Notice">Safety Notice</option>
+                <option value="Quality Observation">Quality Observation</option>
+                <option value="Material Delivery">Material Delivery</option>
+                <option value="Weather Impact">Weather Impact</option>
+                <option value="General">General Update</option>
+              </select>
+            </FormField>
+            <FormField label="MEP Trade">
+              <select value={trade} onChange={e => setTrade(e.target.value)} className={selectCls}>
+                <option value="HVAC">HVAC</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Plumbing">Plumbing</option>
+                <option value="Fire Fighting">Fire Fighting</option>
+                <option value="ELV">ELV</option>
+                <option value="General">General MEP</option>
+              </select>
+            </FormField>
+            <FormField label="Progress % Impact">
+              <input type="number" min="0" max="100" value={progress} onChange={e => setProgress(e.target.value)} placeholder="e.g. 70" className={inputCls} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Site Location / Zone">
+              <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Tower B - Floor 12" className={inputCls} />
+            </FormField>
+            <FormField label="Weather Condition">
+              <select value={weather} onChange={e => setWeather(e.target.value)} className={selectCls}>
+                <option value="Sunny">Sunny (Normal)</option>
+                <option value="Cloudy">Cloudy</option>
+                <option value="Rainy">Rain / Wet</option>
+                <option value="Extreme Heat">Extreme Heat (&gt;45°C)</option>
+                <option value="High Winds">High Winds</option>
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Content & Observations" required>
+            <textarea rows={4} required value={content} onChange={e => setContent(e.target.value)} placeholder="Describe site execution, progress status, QA inspections passed, or blockers..." className={inputCls} />
+          </FormField>
+          <FormField label="Attach Site Photo">
+            <div className="flex items-center gap-4">
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              {attachment && (
+                <div className="relative">
+                  <img src={attachment} alt="Preview" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                  <button type="button" onClick={() => setAttachment(null)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5"><X size={10} /></button>
+                </div>
+              )}
+            </div>
+          </FormField>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="pinned-feed-check" checked={pinned} onChange={e => setPinned(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4" />
+            <label htmlFor="pinned-feed-check" className="text-xs font-semibold text-gray-700 flex items-center gap-1"><Pin size={12} /> Pin update to top of project feed</label>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowModal(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" className={btnPrimary}><Send size={14} /> Publish Update</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Image Zoom */}
+      <Modal open={!!selectedImage} onClose={() => setSelectedImage(null)} title="Site Photo Attachment" size="lg">
+        {selectedImage && (
+          <div className="flex flex-col items-center justify-center p-2">
+            <img src={selectedImage} alt="Site attachment preview" className="max-h-[70vh] rounded-xl object-contain shadow-lg" />
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Tasks & Schedule Page ────────────────────────────────────────────────────
+function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => void }) {
+  const { projects, selectedProject, setSelectedProject } = useProject();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [tradeFilter, setTradeFilter] = useState('All');
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<any | null>(null);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    project_id: selectedProject || (projects[0]?.id ?? ''),
+    title: '',
+    description: '',
+    trade: 'HVAC',
+    priority: 'Medium',
+    status: 'Not Started',
+    start: '',
+    end: '',
+    progress: '0',
+    wbs_code: ''
+  });
+
+  const loadTasks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (selectedProject) params.project_id = selectedProject;
+      const data = await tasksApi.list(params);
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      addToast('error', 'Failed to load tasks');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject, addToast]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  const filtered = tasks.filter(t => {
+    const matchesStatus = statusFilter === 'All' || t.status === statusFilter;
+    const matchesTrade = tradeFilter === 'All' || t.trade === tradeFilter;
+    const matchesSearch =
+      (t.title || '').toLowerCase().includes(search.toLowerCase()) ||
+      (t.description || '').toLowerCase().includes(search.toLowerCase()) ||
+      (t.wbs_code || '').toLowerCase().includes(search.toLowerCase());
+    return matchesStatus && matchesTrade && matchesSearch;
+  });
+
+  const handleOpenCreate = () => {
+    setEditingTask(null);
+    setFormData({
+      project_id: selectedProject || (projects[0]?.id ?? ''),
+      title: '',
+      description: '',
+      trade: 'HVAC',
+      priority: 'Medium',
+      status: 'Not Started',
+      start: new Date().toISOString().split('T')[0],
+      end: '',
+      progress: '0',
+      wbs_code: `MEP.${Math.floor(10 + Math.random() * 90)}`
+    });
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (t: any) => {
+    setEditingTask(t);
+    setFormData({
+      project_id: t.project_id || selectedProject,
+      title: t.title || '',
+      description: t.description || '',
+      trade: t.trade || 'HVAC',
+      priority: t.priority || 'Medium',
+      status: t.status || 'Not Started',
+      start: t.start || '',
+      end: t.end || '',
+      progress: t.progress != null ? String(t.progress) : '0',
+      wbs_code: t.wbs_code || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!formData.project_id || !formData.title) {
+      addToast('error', 'Project and Task Title are required');
+      return;
+    }
+    try {
+      const payload = {
+        project_id: formData.project_id,
+        title: formData.title,
+        description: formData.description || undefined,
+        trade: formData.trade,
+        priority: formData.priority,
+        status: formData.status,
+        start: formData.start || undefined,
+        end: formData.end || undefined,
+        progress: Number(formData.progress) || 0,
+        wbs_code: formData.wbs_code || undefined
+      };
+
+      if (editingTask) {
+        await tasksApi.update(editingTask.id, payload);
+        addToast('success', 'Task updated');
+      } else {
+        await tasksApi.create(payload);
+        addToast('success', 'Task created');
+      }
+      setShowModal(false);
+      loadTasks();
+    } catch (err: any) {
+      addToast('error', err.message || 'Operation failed');
+    }
+  };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this task?')) return;
+    try {
+      await tasksApi.delete(id);
+      addToast('success', 'Task deleted');
+      loadTasks();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to delete task');
+    }
+  };
+
+  const handleQuickStatus = async (task: any, newStatus: string) => {
+    try {
+      const prog = newStatus === 'Completed' ? 100 : newStatus === 'In Progress' ? Math.max(task.progress || 25, 25) : 0;
+      await tasksApi.update(task.id, { status: newStatus, progress: prog });
+      addToast('success', `Task status updated to ${newStatus}`);
+      loadTasks();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to update status');
+    }
+  };
+
+  const completedCount = tasks.filter(t => t.status === 'Completed').length;
+  const inProgressCount = tasks.filter(t => t.status === 'In Progress').length;
+  const blockedCount = tasks.filter(t => t.status === 'Blocked').length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Tasks & Schedule Programme</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Track work breakdowns, installation milestones, and trade completion</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadTasks} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          <button onClick={handleOpenCreate} className={btnPrimary}><Plus size={14} />Add Task</button>
+        </div>
+      </div>
+
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Tasks" value={tasks.length} icon={CheckSquare} color="bg-blue-600" sub="across all packages" />
+        <StatCard label="Completed" value={completedCount} icon={CheckCircle} color="bg-emerald-600" sub={`${tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0}% done`} />
+        <StatCard label="In Progress" value={inProgressCount} icon={Clock} color="bg-indigo-600" sub="currently executing" />
+        <StatCard label="Blocked / Overdue" value={blockedCount} icon={AlertTriangle} color="bg-red-600" sub="requires attention" />
+      </div>
+
+      {/* Filters Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2 flex-1 max-w-sm bg-gray-50 px-3 py-2 rounded-xl border border-gray-200">
+          <Search size={16} className="text-gray-400 flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="Search tasks, WBS, or description..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="bg-transparent text-sm w-full focus:outline-none text-gray-800 placeholder-gray-400"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}
+            className="text-xs font-semibold border border-gray-200 rounded-xl px-2.5 py-2 bg-gray-50 text-gray-800 focus:outline-none"
+          >
+            <option value="">All Projects</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={tradeFilter}
+            onChange={e => setTradeFilter(e.target.value)}
+            className="text-xs font-semibold border border-gray-200 rounded-xl px-2.5 py-2 bg-gray-50 text-gray-800 focus:outline-none"
+          >
+            <option value="All">All Trades</option>
+            <option value="HVAC">HVAC</option>
+            <option value="Electrical">Electrical</option>
+            <option value="Plumbing">Plumbing</option>
+            <option value="Fire Fighting">Fire Fighting</option>
+            <option value="ELV">ELV</option>
+          </select>
+
+          <div className="flex items-center gap-1">
+            {['All', 'Not Started', 'In Progress', 'Completed', 'Blocked'].map(st => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={cn('px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap',
+                  statusFilter === st ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Task List */}
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner size={32} /></div>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={CheckSquare} title="No tasks found" subtitle="Add tasks to assign trades and schedule MEP works" />
+      ) : (
+        <Card className="divide-y divide-gray-100 overflow-hidden">
+          {filtered.map(t => (
+            <div key={t.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  {t.wbs_code && <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">{t.wbs_code}</span>}
+                  <span className={cn('text-xs px-2 py-0.5 rounded font-bold', PRIORITY_COLORS[t.priority || 'Medium'] || 'bg-gray-100 text-gray-700')}>
+                    {t.priority || 'Medium'}
+                  </span>
+                  {t.trade && <span className="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold">{t.trade}</span>}
+                  {t.project_name && <span className="text-xs text-gray-400 font-medium">• {t.project_name}</span>}
+                </div>
+
+                <h3 className="font-bold text-gray-900 text-base">{t.title}</h3>
+                {t.description && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{t.description}</p>}
+
+                <div className="flex items-center gap-3 text-xs text-gray-400 mt-2 flex-wrap">
+                  {t.start && <span>Start: {fmtDate(t.start)}</span>}
+                  {t.end && <><span>•</span><span>Due: {fmtDate(t.end)}</span></>}
+                  {t.assignee && <><span>•</span><span className="text-gray-600 font-medium">Assigned: {t.assignee}</span></>}
+                </div>
+              </div>
+
+              {/* Progress & Quick Status */}
+              <div className="flex items-center gap-4 flex-shrink-0">
+                <div className="w-32">
+                  <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                    <span className="text-gray-500">Progress</span>
+                    <span className="text-gray-900">{t.progress || 0}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={cn('h-2 rounded-full transition-all duration-500', (t.progress || 0) >= 100 ? 'bg-emerald-500' : 'bg-blue-600')}
+                      style={{ width: `${Math.min(t.progress || 0, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <select
+                  value={t.status || 'Not Started'}
+                  onChange={e => handleQuickStatus(t, e.target.value)}
+                  className="text-xs font-semibold border border-gray-200 rounded-xl px-2.5 py-1.5 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Not Started">Not Started</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Blocked">Blocked</option>
+                </select>
+
+                <div className="flex items-center gap-1">
+                  <button onClick={() => handleOpenEdit(t)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Task">
+                    <Edit2 size={14} />
+                  </button>
+                  <button onClick={e => handleDelete(t.id, e)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete Task">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Modal: Create / Edit Task */}
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingTask ? 'Edit Task' : 'Add Task to Programme'} size="md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <FormField label="Project" required>
+            <select required value={formData.project_id} onChange={e => setFormData(d => ({ ...d, project_id: e.target.value }))} className={selectCls}>
+              <option value="">Select Project...</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Task Title" required>
+            <input type="text" required value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} placeholder="e.g. Pre-Commissioning Flush of Chilled Water Network" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="MEP Trade">
+              <select value={formData.trade} onChange={e => setFormData(d => ({ ...d, trade: e.target.value }))} className={selectCls}>
+                <option value="HVAC">HVAC</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Plumbing">Plumbing</option>
+                <option value="Fire Fighting">Fire Fighting</option>
+                <option value="ELV">ELV</option>
+              </select>
+            </FormField>
+            <FormField label="Priority">
+              <select value={formData.priority} onChange={e => setFormData(d => ({ ...d, priority: e.target.value }))} className={selectCls}>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Status">
+              <select value={formData.status} onChange={e => setFormData(d => ({ ...d, status: e.target.value }))} className={selectCls}>
+                <option value="Not Started">Not Started</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Blocked">Blocked</option>
+              </select>
+            </FormField>
+            <FormField label="Progress (%)">
+              <input type="number" min="0" max="100" value={formData.progress} onChange={e => setFormData(d => ({ ...d, progress: e.target.value }))} placeholder="0" className={inputCls} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Start Date">
+              <input type="date" value={formData.start} onChange={e => setFormData(d => ({ ...d, start: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="Due Date">
+              <input type="date" value={formData.end} onChange={e => setFormData(d => ({ ...d, end: e.target.value }))} className={inputCls} />
+            </FormField>
+          </div>
+          <FormField label="WBS Code / Task Identifier">
+            <input type="text" value={formData.wbs_code} onChange={e => setFormData(d => ({ ...d, wbs_code: e.target.value }))} placeholder="e.g. MEP.02.04" className={inputCls} />
+          </FormField>
+          <FormField label="Task Description / Details">
+            <textarea rows={3} value={formData.description} onChange={e => setFormData(d => ({ ...d, description: e.target.value }))} placeholder="Execution requirements, inspection checklist, or technical details..." className={inputCls} />
+          </FormField>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowModal(false)} className={btnSecondary}>Cancel</button>
+            <button type="submit" className={btnPrimary}><Check size={14} /> {editingTask ? 'Save Changes' : 'Add Task'}</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

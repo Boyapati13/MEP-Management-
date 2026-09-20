@@ -142,4 +142,46 @@ export const reportsApi = {
 // Projects
 export const projectsApi = {
   list: () => api.get<any[]>('/api/projects'),
+  get: (id: string) => api.get<any>(`/api/projects/${id}`),
+  create: (data: any) => api.post<any>('/api/projects', data),
+  update: (id: string, data: any) => api.put<any>(`/api/projects/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/projects/${id}`),
+  overview: (id: string) => api.get<any>(`/api/projects/${id}/overview`),
+  feed: (id: string) => api.get<any[]>(`/api/projects/${id}/feed`),
+  portfolio: () => api.get<any[]>('/api/portfolio'),
+  members: (id: string) => api.get<any[]>(`/api/projects/${id}/members`),
+  companies: (id: string) => api.get<any[]>(`/api/projects/${id}/companies`),
+};
+
+// Dashboard
+export const dashboardApi = {
+  get: (projectId?: string) => api.get<any>(`/api/dashboard${projectId ? `?project_id=${projectId}` : ''}`),
+  portfolio: () => api.get<any[]>('/api/portfolio'),
+  operationsToday: (date?: string, projectId?: string) => {
+    const p = new URLSearchParams();
+    if (date) p.set('date', date);
+    if (projectId) p.set('project_id', projectId);
+    return api.get<any>(`/api/operations/today?${p.toString()}`);
+  },
+};
+
+// Tasks & Schedule
+export const tasksApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/tasks${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/tasks/${id}`),
+  create: (data: any) => api.post<any>('/api/tasks', data),
+  update: (id: string, data: any) => api.put<any>(`/api/tasks/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/tasks/${id}`),
+  history: (id: string) => api.get<any[]>(`/api/tasks/${id}/history`),
+};
+
+// Project Updates & Site Progress
+export const updatesApi = {
+  list: (params?: Record<string, string>) => api.get<any[]>(`/api/project_updates${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  get: (id: string) => api.get<any>(`/api/project_updates/${id}`),
+  create: (data: any) => api.post<any>('/api/project_updates', data),
+  delete: (id: string) => api.delete<any>(`/api/project_updates/${id}`),
+  feed: (projectId: string) => api.get<any[]>(`/api/projects/${projectId}/feed`),
+  dailyLogs: (projectId?: string) => api.get<any[]>(`/api/dailylogs${projectId ? `?project_id=${projectId}` : ''}`),
+  createDailyLog: (data: any) => api.post<any>('/api/dailylogs', data),
 };
