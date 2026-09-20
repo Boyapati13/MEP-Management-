@@ -96,6 +96,72 @@ function parseImportNumber(val: any): number {
   return isNaN(num) ? 0.0 : num;
 }
 
+function normaliseProjectDateCandidate(value: any): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const iso = raw.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) return iso[1] + "-" + iso[2].padStart(2, "0") + "-" + iso[3].padStart(2, "0");
+  const european = raw.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](20\d{2})\b/);
+  if (european) return european[3] + "-" + european[2].padStart(2, "0") + "-" + european[1].padStart(2, "0");
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return null;
+}
+
+type ProjectSetupSource = {
+  id: string;
+  name: string;
+  text: string;
+};
+
+type ProjectSetupSuggestion = {
+  field: "name" | "client" | "start_date" | "end_date" | "budget";
+  value: string | number;
+  confidence: "High" | "Medium" | "Low";
+  source_document_id: string;
+  source_document_name: string;
+  source_excerpt: string;
+};
+
+function fallbackProjectSetupSuggestions(sources: ProjectSetupSource[]): ProjectSetupSuggestion[] {
+  const found = new Map<string, ProjectSetupSuggestion>();
+  const add = (field: ProjectSetupSuggestion["field"], value: string | number | null, source: ProjectSetupSource, excerpt: string, confidence: ProjectSetupSuggestion["confidence"] = "Medium") => {
+    if (value === null || value === "" || found.has(field)) return;
+    found.set(field, {
+      field,
+      value,
+      confidence,
+      source_document_id: source.id,
+      source_document_name: source.name,
+      source_excerpt: excerpt.slice(0, 500),
+    });
+  };
+
+  for (const source of sources) {
+    const lines = source.text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      let m = line.match(/^(?:project\s+(?:name|title)|project)\s*[:\-]\s*(.+)$/i);
+      if (m) add("name", m[1].trim(), source, line, "High");
+
+      m = line.match(/^(?:client|employer|owner)(?:\s+name)?\s*[:\-]\s*(.+)$/i);
+      if (m) add("client", m[1].trim(), source, line, "High");
+
+      m = line.match(/^(?:commencement|start)(?:\s+date)?\s*[:\-]\s*(.+)$/i);
+      if (m) add("start_date", normaliseProjectDateCandidate(m[1]), source, line, "High");
+
+      m = line.match(/^(?:practical\s+completion|completion|end)(?:\s+date)?\s*[:\-]\s*(.+)$/i);
+      if (m) add("end_date", normaliseProjectDateCandidate(m[1]), source, line, "High");
+
+      m = line.match(/^(?:contract\s+(?:value|sum)|tender\s+(?:sum|value)|budget)\s*[:\-]?\s*(?:EUR|€|GBP|£|USD|\$)?\s*([0-9][0-9,.\s]*)/i);
+      if (m) {
+        const amount = parseImportNumber(m[1].replace(/\s/g, ""));
+        if (amount > 0) add("budget", amount, source, line, "High");
+      }
+    }
+  }
+  return Array.from(found.values());
+}
+
 function hashPassword(password: string): string {
   // Per-user random salt, stored alongside the hash as "salt:hash". Verifying
   // against the legacy fixed-salt format (below) is preserved for any
@@ -875,8 +941,24 @@ function canDelete(user: AuthenticatedUser): boolean {
   return perms ? perms.delete : false;
 }
 
+function auditSafeValue(module: string, value: any): any {
+  if (value === null || value === undefined) return value;
+  if (module !== "documents") return value;
+  const safe = { ...value };
+  if ("attachment_data" in safe) {
+    const size = typeof safe.attachment_data === "string" ? safe.attachment_data.length : 0;
+    safe.attachment_data = size ? "[attachment omitted from audit: " + size + " chars]" : null;
+  }
+  if (typeof safe.markup_data === "string" && safe.markup_data.length > 10000) {
+    safe.markup_data = "[large markup omitted from audit: " + safe.markup_data.length + " chars]";
+  }
+  return safe;
+}
+
 function writeAudit(userId: string, module: string, recordId: string, projectId: string, action: string, oldValue: any = null, newValue: any = null) {
   try {
+    const safeOldValue = auditSafeValue(module, oldValue);
+    const safeNewValue = auditSafeValue(module, newValue);
     db.prepare(`
       INSERT INTO audit_logs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -886,8 +968,8 @@ function writeAudit(userId: string, module: string, recordId: string, projectId:
       module,
       recordId,
       action,
-      oldValue !== null ? JSON.stringify(oldValue) : null,
-      newValue !== null ? JSON.stringify(newValue) : null,
+      safeOldValue !== null ? JSON.stringify(safeOldValue) : null,
+      safeNewValue !== null ? JSON.stringify(safeNewValue) : null,
       new Date().toISOString()
     );
   } catch (err) {
@@ -1457,8 +1539,8 @@ async function startServer() {
   });
 
   app.put("/api/projects/:id", authRequired, (req, res) => {
-    if (!hasProjectAccess(req.user!, req.params.id) || req.user!.role !== "Admin") {
-      res.status(403).json({ error: "Admin access required" });
+    if (!hasProjectAccess(req.user!, req.params.id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
+      res.status(403).json({ error: "Admin or Project Manager access required" });
       return;
     }
     const existing = db.prepare("SELECT * FROM projects WHERE id=?").get(req.params.id) as any;
@@ -1799,12 +1881,15 @@ async function startServer() {
       const queryParams = [...baseParams, ...columns.map(() => like)];
       const rows = db.prepare(`SELECT * FROM ${table} WHERE ${scope} AND (${clauses}) LIMIT 25`).all(...queryParams) as any[];
       for (const row of rows) {
+        const record = rowToDict(row) as any;
+        if (table === "documents" && record) delete record.attachment_data;
+        if (table === "projects" && req.user!.role === "Client" && record) delete record.budget;
         results.push({
           module: table,
           id: row.id,
           project_id: row.project_id || row.id,
           title: row.title || row.name || row.description || row.subject || row.material || row.number,
-          record: rowToDict(row),
+          record,
         });
       }
     }
@@ -2663,6 +2748,159 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Project setup intelligence: extract only explicitly stated project
+  // metadata from uploaded setup documents. Nothing is written automatically;
+  // the UI presents every suggestion for human review before PUT /api/projects/:id.
+  app.post("/api/projects/:id/extract-setup-data", authRequired, async (req: Request, res: Response) => {
+    try {
+      const projectId = req.params.id;
+      if (!hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+      if (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager") {
+        res.status(403).json({ error: "Only an Admin or Project Manager can analyze project setup documents" });
+        return;
+      }
+
+      const requestedIds = Array.isArray(req.body?.document_ids) ? new Set(req.body.document_ids.map(String)) : null;
+      const docs = (db.prepare(
+        "SELECT id, name, attachment_name, attachment_data FROM documents WHERE project_id=? AND attachment_data IS NOT NULL ORDER BY date_added DESC"
+      ).all(projectId) as any[]).filter(d => !requestedIds || requestedIds.has(String(d.id))).slice(0, 12);
+
+      if (!docs.length) {
+        res.status(400).json({ error: "No uploaded project documents were found to analyze" });
+        return;
+      }
+
+      const sources: ProjectSetupSource[] = [];
+      const skipped: { id: string; name: string; reason: string }[] = [];
+      let combinedChars = 0;
+      const MAX_COMBINED_CHARS = 60000;
+
+      for (const doc of docs) {
+        if (combinedChars >= MAX_COMBINED_CHARS) break;
+        const extracted = await extractDocumentText(doc.attachment_data, doc.attachment_name || doc.name);
+        if (extracted.kind !== "text") {
+          skipped.push({
+            id: doc.id,
+            name: doc.name || doc.attachment_name || "Document",
+            reason: extracted.kind === "unsupported" ? extracted.reason : "Image metadata extraction is not included in this setup pass",
+          });
+          continue;
+        }
+        const remaining = MAX_COMBINED_CHARS - combinedChars;
+        const text = extracted.text.slice(0, Math.min(12000, remaining));
+        if (!text.trim()) continue;
+        sources.push({ id: doc.id, name: doc.name || doc.attachment_name || "Document", text });
+        combinedChars += text.length;
+      }
+
+      if (!sources.length) {
+        res.status(400).json({ error: "The uploaded files did not contain readable text for project setup extraction", skipped });
+        return;
+      }
+
+      let suggestions = fallbackProjectSetupSuggestions(sources);
+      let source: "ai" | "reference" = "reference";
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (apiKey) {
+        try {
+          const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
+          const sourceText = sources.map(s =>
+            "--- DOCUMENT ID: " + s.id + " | NAME: " + s.name + " ---\n" + s.text
+          ).join("\n\n");
+          const prompt = [
+            "You are extracting project setup metadata from construction/MEP contract documents.",
+            "Extract ONLY values explicitly stated in the supplied documents. Never infer or invent missing values.",
+            "Return ONLY valid JSON. Dates must be YYYY-MM-DD. Budget must be a plain number without currency symbols.",
+            "For every non-null field include the exact source document id and a short exact source excerpt.",
+            "Allowed confidence values: High, Medium, Low.",
+            "JSON shape:",
+            "{",
+            '  "name": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
+            '  "client": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
+            '  "start_date": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
+            '  "end_date": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
+            '  "budget": {"value": number|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string}',
+            "}",
+            "",
+            sourceText
+          ].join("\n");
+
+          let result: any;
+          try {
+            result = await ai.models.generateContent({ model: "gemini-3.8-flash", contents: prompt });
+          } catch {
+            result = await ai.models.generateContent({ model: "gemini-3.6-flash", contents: prompt });
+          }
+          const raw = String(result.text || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+          const parsed = JSON.parse(raw);
+          const sourceMap = new Map(sources.map(s => [s.id, s]));
+          const aiSuggestions: ProjectSetupSuggestion[] = [];
+
+          for (const field of ["name", "client", "start_date", "end_date", "budget"] as const) {
+            const item = parsed?.[field];
+            if (!item || item.value === null || item.value === undefined || item.value === "") continue;
+            const src = sourceMap.get(String(item.source_document_id || ""));
+            if (!src) continue;
+            let value: string | number | null = item.value;
+            if (field === "start_date" || field === "end_date") value = normaliseProjectDateCandidate(item.value);
+            if (field === "budget") {
+              const amount = typeof item.value === "number" ? item.value : parseImportNumber(item.value);
+              value = amount > 0 ? amount : null;
+            }
+            if ((field === "name" || field === "client") && typeof value !== "string") value = String(value || "").trim();
+            if (value === null || value === "") continue;
+            const confidence = ["High", "Medium", "Low"].includes(item.confidence) ? item.confidence : "Medium";
+            aiSuggestions.push({
+              field,
+              value,
+              confidence,
+              source_document_id: src.id,
+              source_document_name: src.name,
+              source_excerpt: String(item.source_excerpt || "").slice(0, 500),
+            });
+          }
+
+          if (aiSuggestions.length) {
+            const merged = new Map<string, ProjectSetupSuggestion>(suggestions.map(s => [s.field, s]));
+            for (const s of aiSuggestions) merged.set(s.field, s);
+            suggestions = Array.from(merged.values());
+            source = "ai";
+          }
+        } catch (err: any) {
+          console.warn("Project setup extraction AI failed, using deterministic extraction:", err?.message);
+        }
+      }
+
+      writeAudit(
+        req.user!.user_id,
+        "projects",
+        projectId,
+        projectId,
+        "analyze_setup_documents",
+        null,
+        {
+          document_ids: sources.map(s => s.id),
+          fields_found: suggestions.map(s => s.field),
+          extraction_source: source,
+        }
+      );
+
+      res.json({
+        project_id: projectId,
+        source,
+        analyzed_documents: sources.map(s => ({ id: s.id, name: s.name })),
+        skipped,
+        suggestions,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Project document analysis failed" });
     }
   });
 
