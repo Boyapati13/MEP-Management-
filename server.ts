@@ -850,6 +850,42 @@ function initDb() {
   try { db.exec("ALTER TABLE change_orders ADD COLUMN published_by TEXT;"); } catch {}
   try { db.exec("ALTER TABLE change_orders ADD COLUMN published_at TEXT;"); } catch {}
 
+  // Performance Optimization: Database indexes on foreign keys and frequently filtered columns.
+  // Improves query execution time from O(N) full table scans (SCAN TABLE) to O(log N)
+  // B-tree index lookups (SEARCH TABLE USING INDEX) across all project-scoped API endpoints.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_rfis_project_id ON rfis(project_id);
+    CREATE INDEX IF NOT EXISTS idx_submittals_project_id ON submittals(project_id);
+    CREATE INDEX IF NOT EXISTS idx_punchlist_project_id ON punchlist(project_id);
+    CREATE INDEX IF NOT EXISTS idx_dailylogs_project_id ON dailylogs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
+    CREATE INDEX IF NOT EXISTS idx_costs_project_id ON costs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_boq_items_project_id ON boq_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_change_orders_project_id ON change_orders(project_id);
+    CREATE INDEX IF NOT EXISTS idx_purchase_orders_project_id ON purchase_orders(project_id);
+    CREATE INDEX IF NOT EXISTS idx_safety_incidents_project_id ON safety_incidents(project_id);
+    CREATE INDEX IF NOT EXISTS idx_inspections_project_id ON inspections(project_id);
+    CREATE INDEX IF NOT EXISTS idx_meeting_minutes_project_id ON meeting_minutes(project_id);
+    CREATE INDEX IF NOT EXISTS idx_timesheets_project_id ON timesheets(project_id);
+    CREATE INDEX IF NOT EXISTS idx_attendance_project_id ON attendance(project_id);
+    CREATE INDEX IF NOT EXISTS idx_equipment_project_id ON equipment(project_id);
+    CREATE INDEX IF NOT EXISTS idx_wbs_items_project_id ON wbs_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_dependencies_project_id ON dependencies(project_id);
+    CREATE INDEX IF NOT EXISTS idx_procurement_items_project_id ON procurement_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_material_requests_project_id ON material_requests(project_id);
+    CREATE INDEX IF NOT EXISTS idx_risks_project_id ON risks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_ncrs_project_id ON ncrs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_commissioning_tests_project_id ON commissioning_tests(project_id);
+    CREATE INDEX IF NOT EXISTS idx_handover_items_project_id ON handover_items(project_id);
+    CREATE INDEX IF NOT EXISTS idx_task_status_history_task_id ON task_status_history(task_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_project_id ON audit_logs(project_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+    CREATE INDEX IF NOT EXISTS idx_plan_buckets_project_id ON plan_buckets(project_id);
+    CREATE INDEX IF NOT EXISTS idx_plan_tasks_project_id ON plan_tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_plan_task_checklist_project_id ON plan_task_checklist(project_id);
+  `);
+
   seedUsers();
   seedData();
   ensureMemberships();
