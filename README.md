@@ -1,0 +1,359 @@
+# MEP Project Manager
+
+A full-stack **Mechanical, Electrical & Plumbing (MEP) project management system** for construction and fit-out contractors. It covers the full delivery lifecycle of an MEP contract — schedule, RFIs, submittals, snagging, daily logs, BOQ/commercial control, procurement, safety, quality (NCRs), commissioning and handover — behind an 8-role permission system, with an embedded AI technical advisor for standards-based engineering guidance.
+
+The application was originally scaffolded in Google AI Studio (see `metadata.json`) and is now a self-contained Node/Express + SQLite app that can be run and deployed independently.
+
+## Contents
+
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Architecture Notes](#architecture-notes)
+- [Getting Started](#getting-started)
+- [First Login](#first-login)
+- [Roles & Permissions](#roles--permissions)
+- [Data Model](#data-model)
+- [API Overview](#api-overview)
+- [AI Technical Advisor](#ai-technical-advisor)
+- [Document Intelligence & Planner](#document-intelligence--planner)
+- [Project Setup from Documents](#project-setup-from-documents)
+- [Client Portal & Publishing](#client-portal--publishing)
+- [Upload Size Limit](#upload-size-limit)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Known Limitations & Hardening Notes](#known-limitations--hardening-notes)
+- [License](#license)
+
+## Key Features
+
+**Project & Portfolio**
+- Multi-project portfolio dashboard with live status, budget and progress roll-ups
+- Work Breakdown Structure (WBS), task scheduling with progress, milestones and summary tasks, and task dependency tracking with impact analysis
+- Project membership and subcontractor assignment per project
+
+**Field Execution**
+- Daily site logs (weather, crew, workers on site, delays, safety notes)
+- Punch list / snagging with photo attachments, grouped by each project's own real Location text (not a fixed template) with click-to-filter and AI-assisted fix suggestions
+- Time & attendance with punch-in/punch-out (camera permission requested for site verification)
+- Timesheets and equipment tracking
+
+**Documents & Drawings**
+- Drawing/document register with revision tracking
+- On-drawing markup tooling (`pdf.js` for rendering PDFs, `jsPDF` for exporting marked-up sheets) - both self-hosted from /public/vendor, not loaded from a CDN
+- AI-assisted Q&A directly against an uploaded drawing image
+
+**Commercial**
+- Bill of Quantities (BOQ) with tender vs. revised vs. installed vs. claimed vs. certified quantities
+- Bulk BOQ import from spreadsheet/CSV uploads
+- Change orders with a full commercial workflow (potential variation → technical/commercial review → approval → PO → execution → claim → certification → payment)
+- Purchase orders, generated directly from procurement items
+- Cost tracking (planned vs. actual by category)
+
+**Quality & Safety**
+- Non-Conformance Reports (NCRs) with root cause, corrective action and verification
+- Inspections and witness testing
+- Safety incident logging with severity and corrective actions
+- Risk register with probability/impact scoring
+
+**Procurement & Materials**
+- Procurement item tracking from requisition through supplier selection, PO, delivery and inspection
+- Material requests tied to BOQ and drawing references
+
+**Commissioning & Handover**
+- Commissioning test records with pre-requisite readiness checks (power, installation, controls, interface, drawings approved)
+- Handover item tracking (O&M manuals, certificates, spares, training) with per-system/contractor readiness scoring
+
+**Cross-cutting**
+- Full audit log of every create/update/delete across modules
+- Global search across projects and records
+- CSV/table export for any data table
+- Role-based dashboards ("Today's Operations" view)
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Server-rendered `index.html` single-page app (vanilla JS + CSS), `pdf.js` (v4, ESM) and `jsPDF` (UMD) for drawing tooling, both self-hosted under /public/vendor |
+| Frontend scaffold (unused) | Vite 6 + React 19 + TypeScript + Tailwind 4 (`src/`) |
+| Backend | Node.js + Express 4, single TypeScript file (`server.ts`), run directly via `tsx` in dev |
+| Database | SQLite via Node's built-in `node:sqlite` module (`DatabaseSync`) — no native driver dependency |
+| AI | Google Gemini via `@google/genai`, grounded by the shared `mep_brain.ts` reference-knowledge module |
+| Document parsing | `pdf-parse` (PDF text extraction), `mammoth` (DOCX text extraction) |
+| File uploads | `multer` |
+| Build | Vite (client) + `esbuild` (server bundle to CJS) |
+
+## Architecture Notes
+
+This repo currently ships **two frontends**, and only one of them is live:
+
+- **`index.html`** is the real application — a large, self-contained single-page app (login screen, all modules, drawing markup, AI chat) served directly by Express and talking to the `/api/*` endpoints below.
+- **`src/App.tsx`** is the default Vite + React scaffold from the original AI Studio template. It currently renders an empty `<div>` and is not wired into the running app. Keep this in mind before assuming UI changes belong in `src/` — today they belong in `index.html`.
+
+In development, Express mounts Vite's dev middleware (`vite.middlewares`) in SPA mode. In production (`NODE_ENV=production`), it serves the built `dist/` folder and falls back to `dist/index.html` for any unmatched route (client-side routing friendly).
+
+Authentication is a simple **bearer-token session** model: `POST /api/login` issues a token stored in a `sessions` table; subsequent requests send `Authorization: Bearer <token>`, verified by `authRequired` middleware. Authorization is then enforced per-module via a role → `{view, edit, delete}` permission map (`ROLE_PERMS`), plus per-project membership checks (`hasProjectAccess`) and, for a few modules, per-record ownership checks (`record_owners`).
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js **22+** (the app uses the built-in `node:sqlite` module — no separate SQLite package to install)
+- npm (or `bun`, since a `bun.lock` is present — either works)
+
+### Installation
+
+```bash
+git clone https://github.com/Boyapati13/MEP-Management-.git
+cd MEP-Management-
+npm install
+```
+
+### Environment variables
+
+Copy the example file and fill in your own values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | Optional | Enables the AI Technical Advisor and drawing Q&A (`/api/ai/chat`, `/api/drawing/ask-ai`). Without it, those endpoints fall back to a generic canned engineering response instead of failing. |
+| `APP_URL` | Optional | Self-referential URL for the deployed app; used for links/callbacks. Not required for local development. |
+
+### Run in development
+
+```bash
+npm run dev
+```
+
+This runs `tsx server.ts` directly (no build step needed) on **http://localhost:3000**. The SQLite database file `mep_pm.db` is created automatically on first run. It is git-ignored, so each environment gets its own local database. A fresh database starts **completely empty** — no demo projects, no sample tasks — except for a single bootstrap administrator account (see below).
+
+### Build & run in production
+
+```bash
+npm run build   # vite build (client) + esbuild bundle of server.ts -> dist/server.cjs
+NODE_ENV=production npm start
+```
+
+### Type-check
+
+```bash
+npm run lint   # tsc --noEmit
+```
+
+## First Login
+
+On first startup, `seedUsers()` creates exactly **one** account — there is no demo company, no sample project, and no other pre-created users:
+
+| Username | Password | Role |
+|---|---|---|
+| `admin` | `ChangeMe123!` | Admin |
+
+**You'll be prompted to set a new password immediately after first login** - the account is flagged to force this, and the UI blocks access to the rest of the app until you do. From this one account you create real projects and invite real users through the UI (Admin → Personnel Directory → Add Enterprise User) or via `POST /api/users`.
+
+## Roles & Permissions
+
+| Role | Focus |
+|---|---|
+| **Admin** | Enterprise-wide administration: users, roles, security audit, full database access |
+| **ProjectManager** | Overall delivery leadership: schedule, submittals, budgets, change orders, procurement, commercial closeout |
+| **SiteEngineer** | Field coordination: inspections, punch lists, drawing markups, RFIs, daily logs, attendance, equipment |
+| **CommercialManager** | BOQ, valuations, change orders, purchase orders, cost variance |
+| **QAQC** | Inspections, NCRs, witness testing, handover packages |
+| **SafetyOfficer** | Incident investigation, risk mitigation, safety audits, attendance monitoring |
+| **Subcontractor** | Trade-scoped punch snags, daily logs, material requests, timesheets |
+| **Consultant** | Technical review of RFIs/submittals, inspection sign-off, compliance auditing |
+| **Client** | Curated, read-only project visibility - own workspace (see [Client Portal & Publishing](#client-portal--publishing)) |
+
+Exact per-module view/edit/delete permissions per role live in `ROLE_PERMS` in `server.ts`.
+
+## Data Model
+
+All modules are backed by SQLite tables, most exposed through a generic CRUD layer keyed off a central `TABLE_CONFIG` map:
+
+`projects`, `users`, `sessions`, `project_memberships`, `record_owners`, `audit_logs`, `tasks`, `task_status_history`, `dependencies`, `wbs_items`, `rfis`, `submittals`, `punchlist`, `dailylogs`, `documents`, `costs`, `boq_items`, `change_orders`, `purchase_orders`, `procurement_items`, `material_requests`, `safety_incidents`, `inspections`, `meeting_minutes`, `timesheets`, `equipment`, `risks`, `ncrs`, `commissioning_tests`, `handover_items`, `attendance`, `plan_buckets`, `plan_tasks`, `plan_task_checklist`, `notifications`
+
+`documents` and `change_orders` additionally carry `visibility` (`Internal` | `Client` | `All`, default `Internal`), `published_by`, and `published_at` - see [Client Portal & Publishing](#client-portal--publishing).
+
+Status-driven modules (`submittals`, `change_orders`, and others) enforce a formal workflow state machine defined in `WORKFLOW_STATUSES`, applied via `POST /api/:table/:id/transition`.
+
+Two `TABLE_CONFIG` keys (`drawings`, `daily_logs`) are intentional URL aliases for a different real table (`documents`, `dailylogs`) rather than tables of their own — every generic route resolves the alias internally, and any code that iterates `TABLE_CONFIG` keys directly (e.g. the project-delete cascade) must resolve and de-duplicate them first, or it will try to query a table that doesn't exist.
+
+## API Overview
+
+All endpoints below (except `/api/login` and `/api/health`) require `Authorization: Bearer <token>`.
+
+**Auth & Users**
+`POST /api/login` · `POST /api/logout` · `GET /api/me` · `PUT /api/me/password` · `GET /api/users` · `POST /api/users` · `PUT /api/users/:id` · `DELETE /api/users/:id` · `POST /api/users/:id/reset-password` · `POST /api/users/:id/toggle-status` · `GET /api/roles`
+
+**Projects**
+`GET /api/projects` · `POST /api/projects` · `PUT /api/projects/:id` · `DELETE /api/projects/:id` · `GET/PUT /api/projects/:id/members` · `GET /api/projects/:id/subcontractors` · `GET /api/users/:id/projects` · `PUT /api/users/:id/projects` · `POST /api/projects/:id/extract-setup-data`
+
+**Dashboards & Search**
+`GET /api/dashboard` · `GET /api/portfolio` · `GET /api/operations/today` · `GET /api/search` · `GET /api/export/:table`
+
+**Generic module CRUD** (one set of routes per table in `TABLE_CONFIG`, including `plan_buckets` / `plan_tasks` / `plan_task_checklist` - see [Document Intelligence & Planner](#document-intelligence--planner) below)
+`GET /api/:table` · `POST /api/:table` · `PUT /api/:table/:id` · `DELETE /api/:table/:id` · `POST /api/:table/:id/transition` (for modules with a defined workflow)
+
+**Specialized workflows**
+`POST /api/attendance/punch-in` / `punch-out` · `GET /api/tasks/:id/history` · `POST /api/dependencies/:id/complete` · `POST /api/boq/import` (file upload) · `POST /api/procurement_items/:id/create-po` · `GET /api/commissioning_tests/:id/readiness` · `GET /api/handover/:projectId/readiness` · `GET /api/drawings/:id` · `POST /api/drawings/:id/markups` · `POST /api/documents/:id/analyze` · `GET /api/projects/:id/planner` · `GET /api/projects/:id/client-summary`
+
+**AI**
+`POST /api/ai/chat` · `POST /api/drawing/ask-ai` · `POST /api/ai/suggest-fix`
+
+**Ops**
+`GET /api/health` · `GET /api/audit`
+
+## AI Technical Advisor
+
+`POST /api/ai/chat` and `POST /api/drawing/ask-ai` call Google Gemini (`@google/genai`) with the user's question plus `mep_brain.ts`'s general MEP/electrical engineering reference knowledge (BS 7671 test sequences, cable containment spacing tables, HVAC/electrical separation rules, plumbing/fire-protection/UPS guidance) so answers are grounded in real standards rather than pure model recall — without being tied to any specific project, tender, or client. `drawing/ask-ai` additionally accepts a base64 drawing/photo (`image_data`) for multimodal questions about a specific sheet. If `GEMINI_API_KEY` is not configured, or the API call fails, both endpoints fall back to a structured generic engineering response so the UI never breaks.
+
+## Document Intelligence & Planner
+
+`mep_brain.ts` is the single shared module grounding three AI-assisted features in the same reference knowledge, rather than each duplicating its own copy:
+
+1. **`POST /api/ai/suggest-fix`** — describe a defect (from a punch list item, an NCR, or free text) and get back a likely cause, a recommended fix, and a reference standard. Wired into the Punch List "Suggest Fix" button in the UI. Grounded in `MEP_DEFECT_PATTERNS`, a table of ~12 concrete defect→cause→fix patterns across Electrical, HVAC, Plumbing, Fire Protection and ELV/Data. Without `GEMINI_API_KEY`, falls back to deterministic keyword matching against that same table (`suggestFixFallback`) - less flexible with novel phrasing, but still functional.
+
+2. **`POST /api/documents/:id/analyze`** — reads an uploaded document and turns it into a Microsoft-Planner-style board: **Buckets** (grouped by trade/discipline or document section) → **Tasks** (one per discrete scope item, with title, description, trade, priority, and a due date *only* if one is explicitly stated in the source - never invented) → **Checklist** (sub-steps, where the text implies them). Every generated task keeps a `source_excerpt` pointing back to the exact text it came from, so nothing is a black box. Reachable from the Documents view via the "Analyze" button on any uploaded file.
+
+   - **Text extraction** by file type: PDF via `pdf-parse` (note: v2's class-based `PDFParse` API, not the older v1 function export), DOCX via `mammoth`, CSV/TXT read directly, images passed straight to Gemini multimodal.
+   - **AI structuring**: the extracted text (or image) is sent to Gemini with a strict JSON-only prompt built from `MEP_REFERENCE_KNOWLEDGE`.
+   - **Fallback without AI** (no `GEMINI_API_KEY`, the call fails, or the response isn't valid JSON): one bucket ("Imported Items"), one task per CSV row or per line/paragraph of extracted text. This is deliberately simple - it does not attempt sentence-boundary detection, so a PDF whose text wraps mid-sentence can split a single requirement across two tasks. The AI path does not have this limitation.
+
+3. **`GET /api/projects/:id/planner`** — one call returns the whole board (buckets, with nested tasks, with nested checklist) in display order, for the Planner view's Kanban-style UI. Moving a task between buckets, changing its status, and toggling checklist items all go through the generic CRUD `PUT /api/plan_tasks/:id` and `PUT /api/plan_task_checklist/:id` routes rather than bespoke endpoints.
+
+## Project Setup from Documents
+
+The **Add Project / Edit Project** workflow can now accept multiple project setup documents (contract, tender, BOQ, programme, specifications, drawings and related files) at the same time the project is created or maintained. Files are stored in the normal Documents register rather than duplicated on the project record.
+
+For readable text formats (PDF, DOCX, CSV/TXT/TSV), the application can extract a small set of foundational project fields: **project name, client/employer, commencement date, completion date and contract value/budget**. If Gemini is configured it performs structured extraction with document provenance; without Gemini, deterministic label-based extraction still works for explicitly labelled values such as `Client:`, `Start Date:`, `Completion Date:` and `Contract Value:`.
+
+Extraction is deliberately **review-only**. The server never writes extracted values automatically. The UI opens a **Review Extracted Project Data** step showing the proposed value, confidence, source document and source excerpt. The Admin/Project Manager can accept, edit or ignore each field before the project is updated.
+
+`POST /api/projects/:id/extract-setup-data` is restricted to Admin/ProjectManager users with access to the project. The endpoint analyzes only documents belonging to that project and returns suggestions with source provenance.
+
+## Client Portal & Publishing
+
+A `Client` role with a genuinely separate, curated workspace - built after reviewing an external architecture proposal for a full multi-tenant/company/workspace model. This is a deliberately scoped **first phase** of that proposal, not the whole thing - see [Known Limitations](#known-limitations--hardening-notes) for exactly what's deferred.
+
+**The core principle, implemented as stated in the proposal that prompted this:** *"access control should be enforced by the API and data model, never merely by hiding UI elements."* A Client's restrictions are enforced in the SQL query itself, on every relevant endpoint - not just by hiding nav items in the frontend. Verified directly: a Client hitting `GET /api/documents` or `GET /api/drawings/:id` for an unpublished record gets an empty list or a 403, respectively, regardless of what the UI does or doesn't show.
+
+- **`documents` and `change_orders`** carry a `visibility` column (`Internal` | `Client` | `All`, defaults to `Internal`) plus `published_by`/`published_at`. Contractor-created records start `Internal` regardless of what's sent at creation time; publishing only happens via an explicit `PUT` by an Admin/ProjectManager, which server-stamps `published_by`/`published_at`. The deliberate exception is a **Client-originated document submission**: a Client assigned to the project may upload a file through Documents, and the server forces it to a safe client-submission category and `visibility='Client'` so the Client can see their own submission. This does not give the Client permission to edit/publish contractor records.
+- **Query-level enforcement**: the generic `GET /api/:table` list handler adds `AND visibility IN ('Client','All')` to the query itself when the requesting user's role is `Client`, for `documents`/`drawings`/`change_orders`. The bespoke `GET /api/drawings/:id` endpoint (used by the Drawing Markup Studio) checks the same condition before returning a single record - and, while auditing it for this, was also found to have no project-access check at all (any authenticated user could previously fetch any drawing by ID regardless of project membership); fixed at the same time.
+- **`GET /api/projects/:id/client-summary`** — a curated, aggregate-only endpoint: overall progress (computed from real task data, not stored/cached), the next upcoming milestone (`tasks.is_milestone`), and the lists of published documents/change orders. Deliberately never exposes the raw `tasks` list itself to a Client's own API access - "Client Portal" nav access includes `client_dashboard`, `documents`, and `change_orders` only; there is no `tasks` view permission for the role, so `GET /api/tasks` is a 403 for a Client even though the summary internally computes progress from it.
+- **Frontend**: a `Client Portal` nav item replaces the normal `Dashboard` for this role (curated view, not a cut-down version of the internal one) - Project Health metrics, next milestone, and tables of exactly the documents/change-orders published to them.
+- **Client document submissions**: Clients can upload a new `Client Submission`, `Clarification Attachment`, `Client Drawing`, or `Other` file to an assigned project from the Documents view. The server enforces project membership, forces safe visibility metadata, blocks client edits after upload, and prevents cross-project submission.
+- **Subcontractor documents**: Subcontractors continue to upload documents only within projects they are assigned to; each upload is stamped to their own user/subcontractor identity. External users are blocked from the internal subcontractor-directory endpoint that exposes usernames used by internal assignment workflows.
+
+**Security follow-up (same day, after an external review of the Phase 1 commit above):** the review found that the Client's restrictions, while correctly enforced on the direct document/change-order/summary endpoints, were bypassable through several routes that didn't apply the same checks. All confirmed against the actual code before fixing, then fixed and covered with 16 new automated assertions:
+
+- **Global search** (`GET /api/search`) iterated all 14 searchable tables checking only project scope, never `canView()` per module or Client visibility - a Client could search and read RFIs, NCRs, BOQ, and other modules with zero view permission for, and could find unpublished documents/change orders through search even though the direct list endpoint correctly hid them. Fixed: skips any table the role can't view, and applies the same visibility filter as the direct endpoints for documents/change orders.
+- **CSV export** (`GET /api/export/:table`) checked `canView()` but never applied the Client visibility filter, so a Client could export every document/change order for a project regardless of publish status. Fixed.
+- **`POST /api/drawings/:id/markups`** had no access control at all - any authenticated user, including a Client, who knew or guessed a document UUID could overwrite its markup data. Fixed: now requires project access and `documents` edit permission, same as every other write endpoint.
+- **`GET /api/projects`** did `SELECT *`, which includes `budget` - handed to every authenticated user including a Client, despite budget being described as internal-only. Fixed: budget is stripped from the response specifically for the Client role (same treatment applied to the CSV export of `projects`).
+- **`GET /api/projects/:id/members`** used a `LEFT JOIN` with no `WHERE` clause restricting to the target project, so it returned every user in the entire system - not scoped to the project, and open to anyone with mere project access. This was a company-wide user-directory leak, not specific to the Client role. Fixed: restricted to Admin, and the query now only returns users with an actual membership row for that project. (This endpoint isn't currently called from the frontend, so nothing broke.)
+- **`GET /api/projects/:id/client-summary`** checked project membership but not the Client role specifically, so any project member (a Subcontractor, for instance) could call the client-facing summary endpoint directly. Fixed: now 403s for anyone who isn't `Client`.
+- **Publishing was ordinary editing, not a separate privilege** - anyone with `documents`/`change_orders` edit access (Site Engineer, QA/QC, Safety Officer) could set `visibility` to `Client`, deciding what an external party sees. Fixed: setting visibility to `Client`/`All` now requires the `Admin` or `ProjectManager` role specifically, regardless of general edit access to that module.
+- **Published records stayed live and mutable** - editing a published document's or change order's content afterward (attachment, title, cost, status, etc.) didn't reset its publish state, so a client could end up seeing edited content under a stale `published_at` timestamp that no longer reflected what was actually reviewed at publish time. Fixed with a lighter mitigation than full version snapshots: editing any content field of a currently-published record automatically reverts it to `Internal` (clearing `published_by`/`published_at`) unless the same request also explicitly re-publishes it. A client immediately stops seeing a record the moment its content changes, until someone with publish authority consciously republishes it. **Full immutable per-revision publication snapshots** (a `portal_publications` table so a client keeps seeing the exact previously-published revision even after the source document changes, per the reviewer's stronger recommendation) is not built - this lighter fix addresses the same underlying risk (stale-looking-current content) without the bigger schema/versioning work.
+
+**Still deferred from the review, deliberately:** a curated progress-snapshot workflow (the reviewer's recommendation that a PM explicitly publish a reported % / narrative / forecast date, rather than the Client Portal computing progress live from internal task data) is a real product change, not a bug fix - documented as a future phase rather than rushed in alongside the security patch above.
+
+**One thing outside this codebase worth doing:** the review also noted that `main` currently has no branch protection or required status checks on GitHub, so test results reported in a commit message aren't independently enforced before code lands. That's a repository setting, not something fixable via a code change - worth configuring directly in GitHub's branch protection rules.
+
+## Upload Size Limit
+
+Reported as "can't upload the project document" and reproduced directly (a real 40MB file through the actual Documents upload flow, not a guess): the JSON body limit was `50mb`, but every attachment goes through base64 first, which inflates a binary file by roughly a third - so the real usable ceiling was closer to **36MB**, not 50MB. Realistic tender/drawing PDFs and site-photo sets routinely exceed that. Worse, hitting the limit produced a bare native `alert("Payload Too Large")` with no explanation and no guidance, after however long the (doomed) upload took to fail.
+
+Fixed on both ends:
+- **Server**: the JSON/urlencoded body limit is now `150mb` (≈110MB of real file content after base64 inflation), and a dedicated error-handling middleware catches the body-parser's size/parse errors and returns a clear JSON message instead of Express's default text/html response.
+- **Client**: the Documents upload modal and the site-photo capture modal both check `file.size` against a 100MB threshold *before* attempting the slow read-and-upload, so an over-limit file fails in about a second with a specific, actionable message ("This file is 120.0 MB, which is over the 100 MB limit...") instead of after a long wait with a cryptic one.
+
+Verified end to end through the actual browser UI, not just the API: a 40MB file that previously failed now uploads and appears in the Documents list; a 120MB file now fails instantly with the new message instead of slowly with the old one. Also covered by 2 new automated assertions (a ~60MB upload succeeding, and an over-the-new-limit upload getting the clean JSON error).
+
+Base64-in-JSON is still not the right long-term architecture for very large files (that would mean streaming multipart uploads straight to disk/object storage) - this fix meaningfully raises the practical ceiling for the documents this app is meant to handle, but doesn't change the underlying architecture noted in Known Limitations.
+
+## Testing
+
+There is no integrated test runner (`npm test` is not defined). Instead, a standalone script exercises a **running server** end-to-end over HTTP:
+
+```bash
+# In one terminal
+npm run dev
+
+# In another terminal
+npx tsx test_e2e_suite.ts
+```
+
+The suite is **fully self-seeding**: it logs in as the bootstrap `admin` account, creates its own temporary test project(s) and one temporary user per role via the real API, runs 111 assertions covering auth, RBAC, project-scoping/isolation, schedule, drawings/markups, RFIs, submittals, punch list, BOQ, change orders, purchase orders, daily logs, safety, NCRs, commissioning, handover, the AI advisor, the audit trail, MEP-brain fix suggestions, the document-to-Planner pipeline, and notifications — then deletes everything it created. It does not depend on any server-side demo data, so it works against a genuinely fresh install.
+
+It prints `[PASS]` / `[FAIL]` per assertion and exits non-zero on any failure, so it's suitable to wire into CI against a server started in a previous step.
+
+**Verified (fresh clone, this environment, Node 22.22.2):** `npm install` → `tsc --noEmit` → `npm run build` → boot against a brand-new database → all 111 assertions passing with a completely clean server log (no errors, no unhandled exceptions) → repeated to confirm idempotency. `npm audit` reports 0 vulnerabilities. The document-analyze and suggest-fix tests, and the AI advisor test, only exercise the built-in fallback responses, since no `GEMINI_API_KEY` was configured in this environment — the live Gemini paths (including document structuring quality) are untested here. The PDF and DOCX extraction paths were separately verified against real generated files outside the test suite (see commit history).
+
+⚠️ Prior to this update, the app **crashed on every fresh-database boot** and had no way to log in without hardcoded demo credentials embedded directly in the login page. Both are now fixed — see [Known Limitations](#known-limitations--hardening-notes) for the full list of what changed.
+
+## Project Structure
+
+```
+.
+├── server.ts              # Express app: routes, RBAC, SQLite schema & bootstrap admin account (~2.6k lines)
+├── mep_brain.ts            # Shared MEP reference knowledge + defect/fix patterns (AI advisor, suggest-fix, document analyze)
+├── index.html              # The actual frontend application (vanilla JS SPA)
+├── api-config.js            # Runtime API base URL override (window.MEP_API_URL)
+├── src/                    # Unused Vite + React scaffold (App.tsx renders an empty div)
+├── public/                 # Static assets
+├── test_e2e_suite.ts       # Self-seeding full-suite HTTP integration tests (111 assertions)
+├── vite.config.ts
+├── tsconfig.json
+└── .env.example
+```
+
+## Known Limitations & Hardening Notes
+
+These are worth addressing before any production/internet-facing deployment. Earlier rounds of fixes (the fresh-install crash, cascading-delete bugs, demo-data removal, the `qs` vulnerability, and more) are summarized in commit history rather than repeated here as this section was getting long — see `git log`.
+
+**Still open:**
+- **No MFA/SSO.** Authentication is username + password only.
+- **Deferred from the full multi-workspace architecture** (the Client Portal above is a deliberately scoped Phase 1 of this, not the whole proposal):
+  - No `tenants`/`companies` data model - a company (main contractor, subcontractor firm, client organization) isn't a first-class entity yet; project membership is still user-to-project directly, matching every other role.
+  - No work-package/trade-scoped subcontractor visibility - a Subcontractor's access is still "their assigned project" rather than "their assigned package within a project" (`XYZ Electrical → Hotel Alpha → Electrical LV package` from the proposal).
+  - No Clarifications Hub (`clarifications`/`clarification_messages` with SC↔MC↔Client threads, escalation to RFI/Change Order).
+  - No subcontractor progress-submission approval workflow (subcontractor proposes % complete → main contractor accepts/rejects → becomes official progress). Progress is still entered directly by whoever has edit access to `tasks`.
+  - Publishing/visibility currently only covers `documents` and `change_orders` - not RFIs, submittals, or a per-record "Selected Companies" audience beyond the binary Internal/Client split.
+- **`plan_tasks.assigned_to`** exists in the schema and generic CRUD, and now triggers an in-app notification when set - but the Planner UI still doesn't expose a way to pick an assignee from the task detail modal; it can only be set via a direct API call.
+- **File uploads** (`multer`, BOQ import) should be checked for file-type restrictions and virus scanning if exposed beyond a trusted network - the size limit itself is now handled (see below).
+- **`alert()` is used for error handling** in a few places (e.g. the Drawing Markup Studio's PDF-load failure message) - functional, but a native blocking browser dialog is a dated pattern for a polished app; an inline error banner would look and behave better, and not incidentally block headless browser automation the way it blocked screenshot testing during this pass.
+- **The Drawing Markup Studio toolbar has three buttons styled with the same "accent" primary-action color** (Sample MEP PDF, Ask Worker AI, Create Snag from Markup) - not wrong, but three simultaneous "primary" actions dilutes which one is actually primary.
+- **Notifications are in-app only** - no email/push/SMS layer. The `createNotification()` helper is a natural place to add an email send (e.g. via `nodemailer`) behind an `SMTP_*` env var check, following the same "works without it, better with it" pattern as `GEMINI_API_KEY` - not built yet.
+- **Notification bell dropdown uses fixed positioning** near the top-left rather than anchoring precisely under the bell icon - functional, not pixel-perfect.
+- **Single SQLite file** for the whole database, and file attachments are stored as base64 inside it rather than in separate object storage. Fine for one team's internal use; won't hold up as a scaled, multi-tenant product.
+- `vite` is listed in both `dependencies` and `devDependencies` in `package.json` — harmless (it resolves to one copy either way) but redundant; worth picking one.
+- No CI configuration is currently checked in; `test_e2e_suite.ts` is a good candidate to run on every push.
+- No `LICENSE` file is currently present in the repo.
+
+**Fixed this round (security hardening):**
+- Password hashing now uses a unique random salt per user (`scrypt`), instead of one salt shared by every account - verified backward-compatible with any hash created before this change.
+- Sessions now expire 12 hours after login and are rejected (and deleted) by `authRequired` once expired, instead of lasting forever.
+- Login now rate-limits: 5 failed attempts for a username triggers a 60-second lockout (`429`), as basic brute-force protection.
+- The bootstrap `admin` account is flagged `must_change_password`; the login response and `GET /api/me` surface it, and the frontend now blocks access behind a mandatory password-change screen until `PUT /api/me/password` succeeds. There's also a new self-service password change endpoint for any user (`PUT /api/me/password`, requires the current password) - previously password changes could only be done by an Admin resetting someone else's password.
+- The UI's ~75 decorative pictograph emoji (used as ad-hoc icons throughout nav, buttons, and role badges) were removed in favor of plain text labels and a small set of neutral typographic symbols (✕ ✓ ✎ → ☰), for a more professional look. A proper SVG icon set would be the next step beyond this pass.
+
+**Added this round (feature parity with generic PM tools):**
+- **Real drag-and-drop** on the Planner board - dragging a task card to a different bucket column calls `PUT /api/plan_tasks/:id` to move it, instead of only being possible through a dropdown in the detail modal.
+- **In-app notifications.** New `notifications` table plus a generic hook in the shared `PUT /api/:table/:id` handler: whenever a record's status changes to something "decision-worthy" (Approved, Rejected, Answered, Completed, Closed, Rectified, Certified), the record's creator (looked up via the existing `record_owners` table - no new per-table columns needed) gets a notification, unless they made the change themselves. Also fires when a record's `assigned_to` changes. Surfaced via a bell icon with an unread-count badge, polling every 45 seconds, plus `GET /api/notifications`, `PUT /api/notifications/:id/read`, and `PUT /api/notifications/read-all`.
+
+**Fixed this round (visual/UX audit, done via actual screenshots - see below):**
+- Removed leftover hardcoded "DLI / OPERATIONS PLATFORM" placeholder branding from the login screen.
+- Fixed the notification bell (added last round) rendering as a bare, unstyled text link - replaced with a real SVG icon in a proper button, fixed `.user-chip`'s layout (wasn't actually `flex`, so `margin-left:auto` was silently doing nothing), and fixed the dropdown's position (first guess overlapped the sidebar header).
+- Added a proper empty-state treatment (bordered panel, message, call-to-action button) to the shared table renderer used by most modules, plus the Dashboard and Projects views. Previously these just showed a sparse line of text above a large empty void.
+- Found and fixed `renderProjects` rendering a bare `<table>` with zero empty-state handling at all - worse than every other view.
+- **Rebuilt the Punch List's "floor plan" feature entirely - it was completely fictional.** `FLOOR_PLANS` was a hardcoded object with fixed room names ("AHU Plant Room", "Server & BMS Hub", "Wet Riser B", etc.) that rendered identically for every project regardless of what it actually was - a retail fit-out or a school would show the exact same fabricated MEP-building rooms. The `x_percent`/`y_percent` pin-coordinate columns in the schema were unused anywhere in the frontend. Zone matching was English-language keyword guessing against those fixed names, not real data. Replaced with zones derived entirely from each project's own real `location` text on its punch items - grouped, counted, color-coded by open-item severity, laid out in a responsive grid instead of hand-positioned SVG boxes, with an honest empty state when no locations have been recorded yet. Verified against a school-extension test project (real locations like "Classroom 4B", "Main Hall") to confirm it's genuinely data-driven and not just a relabeled version of the same fixed content. The Drawing Markup Studio's separate, honestly-labeled "Sample MEP PDF" practice canvas still uses the original `FLOOR_PLANS`/`generateFloorPlanSvg` - that one was left alone since it never claimed to represent a real project.
+- **Found and fixed a real bug in the Planner board that the 64-assertion test suite could never have caught.** `renderPlanner()` built its API URL from `currentProjectId` directly, but that variable holds the literal string `"ALL"` whenever the project selector is on its default "All Projects" state - so it was requesting `/api/projects/ALL/planner`, matching zero real rows, and silently rendering the empty state even when real analyzed board data existed (confirmed the data was there via a direct API call while the UI showed nothing). Every other view in the app already resolves `currentProjectId === 'ALL'` to a real project ID before building its URL; `renderPlanner` was simply missing that one line. This is exactly the category of bug that only shows up by actually using the rendered UI - the test suite calls the API directly with real project IDs and has no way to exercise the frontend's default-state handling, no matter how much backend coverage it has.
+- **Self-hosted pdf.js and jsPDF instead of loading them from cdnjs.cloudflare.com.** This was found while trying to screenshot the Drawing Markup Studio: it hung indefinitely because the CDN was unreachable and the resulting error surfaced as a blocking native `alert()`. Real construction sites often have restricted or unreliable internet, so a hard dependency on a third-party CDN for a core feature was a genuine reliability risk, not just a sandbox artifact. Also found and removed pdf.js being loaded three separate times (duplicate `<script>` tag, three separate `workerSrc` assignments scattered across the file). Upgraded to the latest patched versions in the process (the CDN-pinned versions had 1 high and 1 critical unpatched vulnerability between them). pdf.js ships ESM-only from v4 onward, so it's loaded via dynamic `import()` and attached to `window.pdfjsLib`, keeping every existing call site unchanged.
+
+**How the visual audit was done:** a real headless-Chrome screenshot pipeline (`puppeteer-core` driving a pre-cached Chrome binary already present in the sandbox), rather than editing HTML/CSS and assuming the result - every fix above was confirmed with a before/after screenshot, not just a passing type-check. Screens inspected: login, dashboard, Projects, Documents, the Drawing Markup Studio, the Punch List, the Gantt chart, RFIs, NCRs, Users & Roles (both tabs), the Planner board, and the AI advisor drawer. The Gantt chart, RFIs, NCRs, and Users & Roles screens were all clean on inspection - no issues found. Not yet inspected: Submittals, Change Orders, Costs, BOQ, the remaining Site & Quality / Closeout module tables, and Attendance/camera-capture flows.
+
+## License
+
+No license file is currently included in this repository. Add a `LICENSE` file (e.g. MIT, Apache-2.0, or a proprietary notice) to clarify usage terms for anyone outside the project.

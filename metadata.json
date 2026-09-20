@@ -1,0 +1,6 @@
+{
+  "name": "MEP Project Manager",
+  "description": "Construction-grade MEP project management platform with Work Packages, Clarifications Hub, Published Client Progress Reports, Document Revision Control Transmittals, and Subcontractor Progress Workflows.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
