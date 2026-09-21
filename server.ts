@@ -1555,6 +1555,18 @@ function initDb() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_attendance_project_site_date ON attendance(project_id, site_id, work_date);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_public_holidays_date ON public_holidays(project_id, site_id, holiday_date);");
 
+  // Performance Optimization (⚡ Bolt): Indexes on high-frequency query columns.
+  // Converts linear O(N) table scans during project scoping, subcontractor access checks,
+  // and per-record authorization evaluations in canAccessProject/canAccessRecord to O(log N) index lookups.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_project_companies_proj_comp ON project_companies(project_id, company_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_record_owners_mod_user ON record_owners(module, user_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_rfis_project_id ON rfis(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_submittals_project_id ON submittals(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_punchlist_project_id ON punchlist(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_work_packages_project_id ON work_packages(project_id);");
+
   // V1.2 Workforce: site/assignment columns on tasks
   try { db.exec("ALTER TABLE tasks ADD COLUMN site_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE tasks ADD COLUMN assigned_worker_id TEXT;"); } catch {}
