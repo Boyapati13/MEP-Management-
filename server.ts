@@ -18,6 +18,7 @@ import { registerProgressRoutes } from "./server/routes/progressRoutes";
 import { getNextSequence } from "./server/services/referenceSequence";
 import { syncProcurementTaskBlocker } from "./server/services/blockerService";
 import { calculateRiskScore } from "./server/services/riskService";
+import { extractContractorDocumentIntelligence, applyContractorIntelligenceAndVerify, normalizeDate } from "./server/services/contractorDocIntelligence";
 
 interface AuthenticatedUser {
   user_id: string;
@@ -4934,6 +4935,114 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       res.status(500).json({ error: err.message || "Project document analysis failed" });
     }
   });
+
+  // Contractor Document Intelligence & Multi-Portal Auto-Update:
+  // Parses uploaded contractor document (PDF, Word, TXT, CSV), auto-populates
+  // Project Master, Company Directory, Work Packages, Schedule Tasks, and Document Store,
+  // and executes an automated multi-portal verification check.
+  const handleContractorDocUpload = async (req: Request, res: Response) => {
+    try {
+      if (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager" && req.user!.role !== "CommercialManager") {
+        res.status(403).json({ error: "Only Admin, Project Manager, or Commercial Manager can process contractor documents" });
+        return;
+      }
+
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: "No contractor document file was uploaded. Supported: PDF, DOCX, CSV, TXT" });
+        return;
+      }
+
+      const targetProjectId = req.params.id || req.body?.project_id || undefined;
+      if (targetProjectId && !hasProjectAccess(req.user!, targetProjectId)) {
+        res.status(403).json({ error: "No access to this project" });
+        return;
+      }
+
+      // Convert buffer to data-url for extractDocumentText
+      const mimeType = file.mimetype || "application/octet-stream";
+      const base64 = file.buffer.toString("base64");
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+
+      const textExtraction = await extractDocumentText(dataUrl, file.originalname);
+      let rawText = "";
+      if (textExtraction.kind === "text") {
+        rawText = textExtraction.text;
+      } else {
+        rawText = file.buffer.toString("utf-8");
+      }
+
+      // Extract intelligence from document text
+      let extracted = extractContractorDocumentIntelligence(rawText, file.originalname);
+
+      // Optional AI enhancement if Gemini is configured
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey && rawText.length > 50) {
+        try {
+          const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
+          const prompt = [
+            "You are an expert MEP construction manager analyzing a contractor agreement / submittal.",
+            "Extract the following metadata accurately from the text below. Return ONLY valid JSON.",
+            "Fields: projectName (string), client (string), mainContractor (string), subcontractor (string), consultant (string),",
+            "budget (number), currency (string, e.g. USD, AED, EUR, GBP), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD),",
+            "location (string), contractType (string), trades (array of strings, e.g. HVAC, Electrical, Plumbing, Fire Fighting, ELV),",
+            "milestones (array of {title: string, trade: string, priority: string}).",
+            "",
+            "--- DOCUMENT EXCERPT ---",
+            rawText.slice(0, 25000)
+          ].join("\n");
+
+          let aiRes: any;
+          try {
+            aiRes = await ai.models.generateContent({ model: "gemini-3.8-flash", contents: prompt });
+          } catch {
+            aiRes = await ai.models.generateContent({ model: "gemini-3.6-flash", contents: prompt });
+          }
+          const rawJson = String(aiRes.text || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+          const parsed = JSON.parse(rawJson);
+          if (parsed.projectName) extracted.projectName = parsed.projectName;
+          if (parsed.client) extracted.client = parsed.client;
+          if (parsed.mainContractor) extracted.mainContractor = parsed.mainContractor;
+          if (parsed.subcontractor) extracted.subcontractor = parsed.subcontractor;
+          if (parsed.consultant) extracted.consultant = parsed.consultant;
+          if (typeof parsed.budget === "number" && parsed.budget > 0) extracted.budget = parsed.budget;
+          if (parsed.currency) extracted.currency = parsed.currency;
+          if (parsed.startDate) extracted.startDate = normalizeDate(parsed.startDate) || extracted.startDate;
+          if (parsed.endDate) extracted.endDate = normalizeDate(parsed.endDate) || extracted.endDate;
+          if (parsed.location) extracted.location = parsed.location;
+          if (Array.isArray(parsed.trades) && parsed.trades.length) extracted.trades = parsed.trades;
+          if (Array.isArray(parsed.milestones) && parsed.milestones.length) extracted.milestones = parsed.milestones;
+        } catch (e: any) {
+          console.warn("AI contractor document extraction fallback to rule-engine:", e?.message);
+        }
+      }
+
+      // Apply to database across all modules and verify automatically
+      const result = applyContractorIntelligenceAndVerify(
+        db,
+        extracted,
+        { name: file.originalname, buffer: file.buffer, mimeType: file.mimetype },
+        targetProjectId,
+        req.user!.user_id
+      );
+
+      res.status(201).json({
+        success: true,
+        project_id: result.projectId,
+        project: result.project,
+        report: result.report,
+        work_packages: result.workPackages,
+        tasks: result.tasks,
+        extracted
+      });
+    } catch (err: any) {
+      console.error("Contractor document processing failed:", err);
+      res.status(500).json({ error: err.message || "Failed to process contractor document" });
+    }
+  };
+
+  app.post("/api/projects/upload-contractor-doc", authRequired, upload.single("file"), handleContractorDocUpload);
+  app.post("/api/projects/:id/upload-contractor-doc", authRequired, upload.single("file"), handleContractorDocUpload);
 
   // ==========================================
   // V1.1 - V1.2 CONSTRUCTION-GRADE MODULE APIS

@@ -32,13 +32,14 @@ export function clearToken() {
 async function request<T>(method: string, path: string, body?: any): Promise<T> {
   const token = getToken();
   const baseUrl = getApiBaseUrl();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const res = await fetch(baseUrl + path, {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -174,6 +175,13 @@ export const projectsApi = {
   portfolio: () => api.get<any[]>('/api/portfolio'),
   members: (id: string) => api.get<any[]>(`/api/projects/${id}/members`),
   companies: (id: string) => api.get<any[]>(`/api/projects/${id}/companies`),
+  uploadContractorDoc: (file: File, projectId?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (projectId) fd.append('project_id', projectId);
+    const endpoint = projectId ? `/api/projects/${projectId}/upload-contractor-doc` : '/api/projects/upload-contractor-doc';
+    return api.post<any>(endpoint, fd);
+  },
 };
 
 // Work Packages

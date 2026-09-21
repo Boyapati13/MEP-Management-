@@ -14,7 +14,7 @@ import {
   ThumbsUp, ThumbsDown, Coffee, Plane, Stethoscope, Star,
   ChevronLeft, Upload, Map, Cpu, Package, HardHat, Grid,
   PieChart, Sun, Moon, ChevronUp, Pin, Image as ImageIcon, CheckSquare, Folder, Trash2,
-  Smartphone
+  Smartphone, Sparkles
 } from 'lucide-react';
 import {
   api, authApi, sitesApi, workersApi, workforceApi, attendanceApi,
@@ -39,6 +39,7 @@ import { ProcurementProgrammeRiskView } from './components/ProcurementProgrammeR
 import { AdminSetupChecklist } from './components/AdminSetupChecklist';
 import { ClientPortalContent } from './components/ClientPortalContent';
 import { MepAssistantDrawer } from './components/MepAssistantDrawer';
+import { ContractorDocUploadModal } from './components/ContractorDocUploadModal';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -2401,6 +2402,7 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [showModal, setShowModal] = useState(false);
+  const [showContractorDocModal, setShowContractorDocModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -2561,12 +2563,46 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
           <h1 className="text-2xl font-bold text-gray-900">Projects Portfolio</h1>
           <p className="text-gray-500 text-sm mt-0.5">Manage all active MEP jobs, contracts, schedules, and site operations</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={loadProjects} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
           {isManager && (
-            <button onClick={handleOpenCreate} className={btnPrimary}><Plus size={14} />New Project</button>
+            <>
+              <button
+                onClick={() => setShowContractorDocModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-200"
+              >
+                <Sparkles size={14} />
+                Upload Contractor Document
+              </button>
+              <button onClick={handleOpenCreate} className={btnPrimary}><Plus size={14} />New Project</button>
+            </>
           )}
         </div>
+      </div>
+
+      {/* Contractor Document Ingestion Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 rounded-3xl p-5 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-blue-800/40">
+        <div className="flex items-start gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center flex-shrink-0">
+            <Sparkles className="text-blue-300" size={22} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-base text-white">Smart Contractor Document Ingestion</h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">Auto-Update Portal</span>
+            </div>
+            <p className="text-xs text-blue-200 mt-1 max-w-2xl">
+              Upload a contractor contract, subcontract agreement, or scope specification. The system automatically parses all project metadata, decomposes trade work packages, schedules execution milestones, links the contractor, and verifies every update automatically.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowContractorDocModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl transition-all shadow-md shadow-blue-500/20 text-xs whitespace-nowrap"
+        >
+          <Upload size={14} />
+          Upload Contractor Document
+        </button>
       </div>
 
       {/* Filters and View Toggles */}
@@ -2684,6 +2720,27 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
       {/* Create / Edit Project Modal */}
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editingProject ? 'Edit Project' : 'Create New Project'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!editingProject && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Sparkles size={16} className="text-blue-600 flex-shrink-0" />
+                <div className="text-xs text-blue-900">
+                  <strong className="block font-bold">Have a contractor document?</strong>
+                  Auto-fill all fields, work packages, and milestones automatically.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  setShowContractorDocModal(true);
+                }}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-sm"
+              >
+                Auto-Fill
+              </button>
+            </div>
+          )}
           <FormField label="Project Name" required>
             <input type="text" required value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Dubai Marina Mall HVAC Replacement" className={inputCls} />
           </FormField>
@@ -2771,6 +2828,18 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
           </div>
         </form>
       </Modal>
+
+      {/* Contractor Document Upload Modal */}
+      <ContractorDocUploadModal
+        open={showContractorDocModal}
+        onClose={() => setShowContractorDocModal(false)}
+        onSuccess={(res) => {
+          reloadGlobalProjects();
+          loadProjects();
+          if (res?.project_id) setSelectedProject(res.project_id);
+          addToast('success', 'Contractor document processed and verified successfully across portal');
+        }}
+      />
     </div>
   );
 }
@@ -2791,6 +2860,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showContractorDocModal, setShowContractorDocModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // New update form state
@@ -2921,6 +2991,13 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         </button>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={loadProjectDetails} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
+          <button
+            onClick={() => setShowContractorDocModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
+          >
+            <Sparkles size={13} />
+            Auto-Update from Contractor Doc
+          </button>
           <button onClick={() => setShowRiskMatrix(true)} className={btnSecondary}><AlertTriangle size={14} className="text-amber-600" /> 5x5 Risk Heat Map</button>
           <button onClick={() => setShowUpdateModal(true)} className={btnPrimary}><Plus size={14} />Post Site Update</button>
           <button onClick={() => setShowTaskModal(true)} className={btnSecondary}><CheckSquare size={14} />Add Task</button>
@@ -3274,6 +3351,18 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         open={showRiskMatrix}
         onClose={() => setShowRiskMatrix(false)}
         projectId={activeProjectId}
+      />
+
+      {/* Modal: Contractor Document Auto-Update */}
+      <ContractorDocUploadModal
+        open={showContractorDocModal}
+        onClose={() => setShowContractorDocModal(false)}
+        projectId={activeProjectId}
+        onSuccess={() => {
+          reloadProjects();
+          loadProjectDetails();
+          addToast('success', 'Project details and work packages successfully synchronized from contractor document');
+        }}
       />
     </div>
   );
