@@ -128,7 +128,7 @@ function startServer(): Promise<void> {
       : [path.join(process.cwd(), 'node_modules/tsx/dist/cli.mjs'), serverEntry];
 
     serverProcess = spawn(cmd, args, {
-      env: { ...process.env, PORT: String(TEST_PORT), NODE_ENV: 'test', DB_PATH: ':memory:' },
+      env: { ...process.env, PORT: String(TEST_PORT), NODE_ENV: 'test', DB_PATH: ':memory:', MEP_DB_PATH: ':memory:' },
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -149,7 +149,7 @@ function startServer(): Promise<void> {
 }
 
 async function seedAdminToken(): Promise<string> {
-  for (const pw of ['admin123', 'password123', 'admin']) {
+  for (const pw of ['ChangeMe123!', 'admin123', 'password123', 'admin']) {
     try {
       const t = await login('admin', pw);
       if (t) return t;
@@ -158,13 +158,23 @@ async function seedAdminToken(): Promise<string> {
   return '';
 }
 
-async function runReadSession(token: string, role: string, projectId: string): Promise<void> {
-  const endpoints = [
-    '/api/health',
-    `/api/projects${projectId ? '?project_id=' + projectId : ''}`,
-    `/api/tasks?project_id=${projectId}`,
-    `/api/work_packages?project_id=${projectId}`,
-  ];
+async function runReadSession(token: string, role: string, projectId: string, workPackageId?: string): Promise<void> {
+  const endpoints: string[] = ['/api/health'];
+
+  if (role === 'Client') {
+    endpoints.push(`/api/projects${projectId ? '?project_id=' + projectId : ''}`, '/api/documents');
+  } else if (role === 'Subcontractor') {
+    if (workPackageId) {
+      endpoints.push(`/api/work_packages/${workPackageId}/command-center`);
+    }
+    endpoints.push(`/api/tasks?project_id=${projectId}`);
+  } else {
+    endpoints.push(
+      `/api/projects${projectId ? '?project_id=' + projectId : ''}`,
+      `/api/tasks?project_id=${projectId}`,
+      `/api/work_packages?project_id=${projectId}`
+    );
+  }
 
   for (const endpoint of endpoints) {
     const res = await req('GET', endpoint, undefined, token);
@@ -230,37 +240,75 @@ async function main() {
   const projectId = projRes.body?.id ?? '';
   console.log(`Test project: ${projectId || 'NONE'}`);
 
-  // Build 50 session tokens: admin tokens used for all personas in simplified mode
-  // In a fully seeded environment, distinct per-role users would be used
-  const roleCounts = {
+  // Create a work package for subcontractor session
+  const wpRes = await req('POST', '/api/work_packages', {
+    project_id: projectId,
+    name: 'HVAC Ducting Load Package',
+    code: 'WP-LOAD-01',
+    status: 'Active'
+  }, adminToken);
+  const wpId = wpRes.body?.id ?? '';
+
+  // Seed real distinct users for each persona
+  const personas = [
+    { username: `pm_load_${Date.now()}`, role: 'ProjectManager', password: 'Password123!' },
+    { username: `se_load_${Date.now()}`, role: 'SiteEngineer', password: 'Password123!' },
+    { username: `cm_load_${Date.now()}`, role: 'CommercialManager', password: 'Password123!' },
+    { username: `sub_load_${Date.now()}`, role: 'Subcontractor', password: 'Password123!', work_package_id: wpId, access_scope: 'work_package' },
+    { username: `client_load_${Date.now()}`, role: 'Client', password: 'Password123!' },
+  ];
+
+  const roleTokens: Record<string, string> = {
+    Admin: adminToken
+  };
+
+  for (const p of personas) {
+    await req('POST', '/api/users', {
+      username: p.username,
+      name: `${p.role} Load User`,
+      password: p.password,
+      role: p.role,
+      project_id: projectId,
+      work_package_id: (p as any).work_package_id,
+      access_scope: (p as any).access_scope
+    }, adminToken);
+
+    const token = await login(p.username, p.password);
+    roleTokens[p.role] = token || adminToken;
+    console.log(`  Seeded persona: ${p.role} -> ${token ? 'authenticated' : 'fallback'}`);
+  }
+
+  // Build 50 distinct sessions distributed across the 6 authentic personas
+  const roleCounts: Record<string, number> = {
     Admin: 10, ProjectManager: 8, SiteEngineer: 8,
     CommercialManager: 6, Subcontractor: 10, Client: 8
   };
 
-  const sessions: Array<{ token: string; role: string }> = [];
+  const sessions: Array<{ token: string; role: string; workPackageId?: string }> = [];
   for (const [role, count] of Object.entries(roleCounts)) {
+    const token = roleTokens[role] || adminToken;
     for (let i = 0; i < count; i++) {
-      sessions.push({ token: adminToken, role });
+      sessions.push({ token, role, workPackageId: wpId });
     }
   }
 
-  console.log(`\nLaunching ${sessions.length} concurrent sessions...`);
+  console.log(`\nLaunching ${sessions.length} concurrent sessions across 6 distinct personas...`);
   const testStart = Date.now();
 
   // Wave 1: All reads concurrent
-  await Promise.all(sessions.map(s => runReadSession(s.token, s.role, projectId)));
+  await Promise.all(sessions.map(s => runReadSession(s.token, s.role, projectId, s.workPackageId)));
   console.log(`Wave 1 (reads) complete: ${readLatencies.length} requests`);
 
   // Wave 2: Mixed reads and writes concurrent
   await Promise.all(sessions.map(s =>
     Math.random() > 0.5
-      ? runReadSession(s.token, s.role, projectId)
+      ? runReadSession(s.token, s.role, projectId, s.workPackageId)
       : runWriteSession(s.token, s.role, projectId)
   ));
   console.log(`Wave 2 (mixed) complete`);
 
   // Wave 3: All reads again to validate no DB lock degradation
-  await Promise.all(sessions.map(s => runReadSession(s.token, s.role, projectId)));
+  await Promise.all(sessions.map(s => runReadSession(s.token, s.role, projectId, s.workPackageId)));
   console.log(`Wave 3 (reads post-writes) complete`);
 
   const totalDurationMs = Date.now() - testStart;

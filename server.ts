@@ -48,9 +48,10 @@ const db = new DatabaseSync(DB_PATH);
 try {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA busy_timeout = 10000;");
+  initDb();
   runMigrations(db);
 } catch (e: any) {
-  console.error("Migration runner warning:", e?.message);
+  console.error("Database initialization / migration runner warning:", e?.message);
 }
 
 // Helper for row mapping
@@ -825,7 +826,10 @@ function initDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, username TEXT UNIQUE, name TEXT,
-      password_hash TEXT, role TEXT
+      password_hash TEXT, role TEXT, email TEXT, phone TEXT,
+      company_id TEXT, company TEXT, trade TEXT, work_package_id TEXT,
+      worker_id TEXT, status TEXT DEFAULT 'Active', access_scope TEXT DEFAULT 'work_package',
+      allowed_work_package_ids TEXT, created_at TEXT, last_login TEXT, must_change_password INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS sessions (
       token TEXT PRIMARY KEY, user_id TEXT, name TEXT, role TEXT, created_at TEXT, expires_at TEXT
@@ -887,7 +891,7 @@ function initDb() {
     );
     CREATE TABLE IF NOT EXISTS purchase_orders (
       id TEXT PRIMARY KEY, project_id TEXT, po_number TEXT, vendor TEXT, trade TEXT,
-      description TEXT, amount REAL, order_date TEXT, expected_delivery TEXT, status TEXT
+      description TEXT, amount REAL, order_date TEXT, expected_delivery TEXT, expected_delivery_date TEXT, actual_delivery_date TEXT, lead_time_days INTEGER, task_id TEXT, status TEXT
     );
     CREATE TABLE IF NOT EXISTS safety_incidents (
       id TEXT PRIMARY KEY, project_id TEXT, date TEXT, trade TEXT, incident_type TEXT,
@@ -921,7 +925,8 @@ function initDb() {
     );
     CREATE TABLE IF NOT EXISTS dependencies (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL, task_id TEXT,
-      predecessor_task_id TEXT, dependency_type TEXT DEFAULT 'Finish-to-Start',
+      predecessor_task_id TEXT, predecessor_id TEXT, successor_id TEXT,
+      dependency_type TEXT DEFAULT 'Finish-to-Start',
       task_owner TEXT, dependent_party TEXT, description TEXT, dependency_owner TEXT,
       required_date TEXT, completed_date TEXT, status TEXT, impact_if_late TEXT,
       programme_impact TEXT, commercial_impact TEXT, next_action TEXT
@@ -943,7 +948,7 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS risks (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL, risk_no TEXT, title TEXT, category TEXT,
       probability TEXT, impact TEXT, risk_score REAL, risk_level TEXT DEFAULT 'Medium', owner TEXT, mitigation TEXT,
-      target_date TEXT, contingency_cost REAL DEFAULT 0, linked_task_id TEXT, status TEXT, created_by TEXT, created_at TEXT
+      target_date TEXT, contingency_cost REAL DEFAULT 0, linked_task_id TEXT, work_package_id TEXT, status TEXT, created_by TEXT, created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS project_actions (
       id TEXT PRIMARY KEY, project_id TEXT NOT NULL, action_no TEXT, title TEXT NOT NULL,
@@ -1078,7 +1083,8 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS progress_reports (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
-      report_number TEXT NOT NULL,
+      report_number TEXT,
+      report_no TEXT,
       title TEXT NOT NULL,
       period_start TEXT,
       period_end TEXT,
@@ -1097,8 +1103,13 @@ function initDb() {
       manpower_peak INTEGER DEFAULT 0,
       lookahead_narrative TEXT,
       key_risks_issues TEXT,
+      revision_no INTEGER DEFAULT 0,
+      supersedes_report_id TEXT,
+      snapshot_schema_version INTEGER DEFAULT 1,
+      snapshot_data TEXT,
       published_at TEXT,
       published_by TEXT,
+      created_by TEXT,
       created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS progress_report_photos (
@@ -1461,11 +1472,21 @@ function initDb() {
       resolved_by TEXT,
       resolved_by_name TEXT,
       resolution_notes TEXT,
+      source_type TEXT,
+      source_id TEXT,
+      resolved INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       resolved_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_task_blockers_task ON task_blockers(task_id, status);
     CREATE INDEX IF NOT EXISTS idx_task_blockers_proj ON task_blockers(project_id, status);
+
+    CREATE TABLE IF NOT EXISTS reference_sequences (
+      project_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      next_val INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (project_id, entity_type)
+    );
   `);
 
   try { db.exec("ALTER TABLE projects ADD COLUMN code TEXT;"); } catch {}
@@ -1518,6 +1539,8 @@ function initDb() {
   try { db.exec("ALTER TABLE work_packages ADD COLUMN wbs_item_id TEXT;"); } catch {}
 
   try { db.exec("ALTER TABLE dependencies ADD COLUMN predecessor_task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE dependencies ADD COLUMN predecessor_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE dependencies ADD COLUMN successor_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE dependencies ADD COLUMN dependency_type TEXT DEFAULT 'Finish-to-Start';"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN work_package_id TEXT;"); } catch {}
   try { db.exec("ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'Approved';"); } catch {}
@@ -1557,7 +1580,21 @@ function initDb() {
   try { db.exec("ALTER TABLE users ADD COLUMN created_at TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN last_login TEXT;"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN access_scope TEXT DEFAULT 'work_package';"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN allowed_work_package_ids TEXT;"); } catch {}
   try { db.exec("ALTER TABLE sessions ADD COLUMN expires_at TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE risks ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE task_blockers ADD COLUMN source_type TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE task_blockers ADD COLUMN source_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE task_blockers ADD COLUMN resolved INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE progress_reports ADD COLUMN report_no TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE progress_reports ADD COLUMN revision_no INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE progress_reports ADD COLUMN supersedes_report_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE progress_reports ADD COLUMN snapshot_schema_version INTEGER DEFAULT 1;"); } catch {}
+  try { db.exec("ALTER TABLE progress_reports ADD COLUMN snapshot_data TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE progress_reports ADD COLUMN created_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN expected_delivery_date TEXT;"); } catch {}
 
   // Publishing/visibility: which records a Client-role user is allowed to
   // see. Defaults to "Internal" (nothing is client-visible until the
@@ -2814,7 +2851,7 @@ async function startServer() {
       res.status(403).json({ error: "Admin access required" });
       return;
     }
-    const { username, name, password, role, email, phone, company_id, company, trade, work_package_id, status, project_ids } = req.body || {};
+    const { username, name, password, role, email, phone, company_id, company, trade, work_package_id, status, project_ids, project_id, access_scope, allowed_work_package_ids } = req.body || {};
     if (!username || !password) {
       res.status(400).json({ error: "Username and password required" });
       return;
@@ -2828,11 +2865,13 @@ async function startServer() {
     const assignedRole = role || "SiteEngineer";
     const userStatus = status || "Active";
     const now = new Date().toISOString();
+    const scope = access_scope || (assignedRole === 'Subcontractor' ? 'work_package' : null);
+    const allowedWpIds = allowed_work_package_ids ? (Array.isArray(allowed_work_package_ids) ? JSON.stringify(allowed_work_package_ids) : String(allowed_work_package_ids)) : null;
 
     try {
       db.prepare(`
-        INSERT INTO users (id, username, name, password_hash, role, email, phone, company_id, company, trade, work_package_id, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, username, name, password_hash, role, email, phone, company_id, company, trade, work_package_id, status, access_scope, allowed_work_package_ids, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id, username.trim(), (name || username).trim(), hashPassword(password), assignedRole,
         email ? String(email).trim() : null,
@@ -2842,22 +2881,30 @@ async function startServer() {
         trade ? String(trade).trim() : "General MEP",
         work_package_id ? String(work_package_id).trim() : null,
         userStatus,
+        scope,
+        allowedWpIds,
         now
       );
 
       // Project assignments
+      const allProjectIds = new Set<string>();
+      if (Array.isArray(project_ids)) {
+        project_ids.forEach(p => p && allProjectIds.add(p));
+      }
+      if (project_id) {
+        allProjectIds.add(project_id);
+      }
+
       if (assignedRole === "Admin" || (Array.isArray(project_ids) && project_ids.includes("ALL"))) {
         const projects = db.prepare("SELECT id FROM projects").all() as { id: string }[];
         const insertMem = db.prepare("INSERT OR IGNORE INTO project_memberships VALUES (?, ?, ?, 1)");
         for (const p of projects) {
           insertMem.run(id, p.id, assignedRole === "Admin" ? "Executive" : assignedRole);
         }
-      } else if (Array.isArray(project_ids) && project_ids.length > 0) {
+      } else if (allProjectIds.size > 0) {
         const insertMem = db.prepare("INSERT OR IGNORE INTO project_memberships VALUES (?, ?, ?, 1)");
-        for (const pid of project_ids) {
-          if (pid) {
-            insertMem.run(id, pid, assignedRole);
-          }
+        for (const pid of allProjectIds) {
+          insertMem.run(id, pid, assignedRole);
         }
       }
 
@@ -8877,6 +8924,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         data.created_at = new Date().toISOString();
       }
       if (actualTable === "risks" && (data.probability !== undefined || data.impact !== undefined)) {
+        if (data.probability !== undefined) {
+          const p = Number(data.probability);
+          if (!isNaN(p) && (p < 1 || p > 5)) {
+            res.status(400).json({ error: "probability must be between 1 and 5" });
+            return;
+          }
+        }
+        if (data.impact !== undefined) {
+          const i = Number(data.impact);
+          if (!isNaN(i) && (i < 1 || i > 5)) {
+            res.status(400).json({ error: "impact must be between 1 and 5" });
+            return;
+          }
+        }
         const evaluated = calculateRiskScore(data.probability, data.impact);
         data.risk_score = evaluated.score;
         data.risk_level = evaluated.level;
@@ -8937,6 +8998,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
 
       if (actualTable === "risks" && (data.probability !== undefined || data.impact !== undefined)) {
+        if (data.probability !== undefined) {
+          const p = Number(data.probability);
+          if (!isNaN(p) && (p < 1 || p > 5)) {
+            res.status(400).json({ error: "probability must be between 1 and 5" });
+            return;
+          }
+        }
+        if (data.impact !== undefined) {
+          const i = Number(data.impact);
+          if (!isNaN(i) && (i < 1 || i > 5)) {
+            res.status(400).json({ error: "impact must be between 1 and 5" });
+            return;
+          }
+        }
         const prob = data.probability !== undefined ? data.probability : existing.probability;
         const imp = data.impact !== undefined ? data.impact : existing.impact;
         const evaluated = calculateRiskScore(prob, imp);

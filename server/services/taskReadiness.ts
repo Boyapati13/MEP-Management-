@@ -67,7 +67,7 @@ export function calculateTaskReadiness(db: DatabaseSync, taskId: string): TaskRe
   const blockersRows = db.prepare(`
     SELECT id, blocker_type, description, impact_days, source_type, source_id
     FROM task_blockers
-    WHERE task_id = ? AND resolved = 0
+    WHERE task_id = ? AND (status = 'Active' OR resolved = 0)
   `).all(taskId) as any[];
 
   const blockers: TaskBlockerSummary[] = blockersRows.map(b => ({
@@ -85,9 +85,9 @@ export function calculateTaskReadiness(db: DatabaseSync, taskId: string): TaskRe
   const uncompletedPredecessors = db.prepare(`
     SELECT t.id, t.title, t.status
     FROM dependencies d
-    JOIN tasks t ON t.id = d.predecessor_id
-    WHERE d.successor_id = ? AND t.status NOT IN ('Completed', 'Closed')
-  `).all(taskId) as any[];
+    JOIN tasks t ON (t.id = d.predecessor_task_id OR t.id = d.predecessor_id)
+    WHERE (d.task_id = ? OR d.successor_id = ?) AND t.status NOT IN ('Completed', 'Closed')
+  `).all(taskId, taskId) as any[];
 
   if (uncompletedPredecessors.length > 0) {
     predStatus = 'failed';
@@ -107,7 +107,7 @@ export function calculateTaskReadiness(db: DatabaseSync, taskId: string): TaskRe
   } else {
     // Check if there are open POs for this task that are not yet delivered
     const openPos = db.prepare(`
-      SELECT id, po_number, item_name, status, expected_delivery_date
+      SELECT id, po_number, description, status
       FROM purchase_orders
       WHERE task_id = ? AND status NOT IN ('Delivered', 'Cancelled')
     `).all(taskId) as any[];
@@ -132,29 +132,34 @@ export function calculateTaskReadiness(db: DatabaseSync, taskId: string): TaskRe
   // 5. Submittal check
   let subStatus: ReadinessStatus = 'passed';
   let subDetails = 'Technical submittals approved';
-  const openSubmittals = db.prepare(`
-    SELECT id, submittal_no, title, status
-    FROM submittals
-    WHERE (task_id = ? OR work_package_id = ?) AND status NOT IN ('Approved', 'Approved as Noted', 'Closed')
-  `).all(taskId, task.work_package_id || '') as any[];
+  if (task.work_package_id) {
+    const openSubmittals = db.prepare(`
+      SELECT id, number, status
+      FROM submittals
+      WHERE work_package_id = ? AND status NOT IN ('Approved', 'Approved as Noted', 'Closed')
+    `).all(task.work_package_id) as any[];
 
-  if (openSubmittals.length > 0) {
-    subStatus = 'pending';
-    subDetails = `${openSubmittals.length} submittal(s) awaiting approval (${openSubmittals[0].submittal_no || 'Pending'})`;
+    if (openSubmittals.length > 0) {
+      subStatus = 'pending';
+      subDetails = `${openSubmittals.length} submittal(s) awaiting approval (${openSubmittals[0].number || 'Pending'})`;
+    }
   }
 
   // 6. RFI check
   let rfiStatus: ReadinessStatus = 'passed';
   let rfiDetails = 'No blocking RFIs';
   const openRfis = db.prepare(`
-    SELECT id, rfi_no, subject, status
+    SELECT id, number, subject, status
     FROM rfis
-    WHERE (task_id = ? OR work_package_id = ?) AND status NOT IN ('Closed', 'Answered')
-  `).all(taskId, task.work_package_id || '') as any[];
+    WHERE project_id = ? AND status NOT IN ('Closed', 'Answered')
+  `).all(task.project_id) as any[];
 
-  if (openRfis.length > 0) {
-    rfiStatus = 'failed';
-    rfiDetails = `${openRfis.length} open technical RFI(s) affecting work (${openRfis[0].rfi_no || 'RFI'})`;
+  if (openRfis.length > 0 && task.trade) {
+    const tradeRfis = openRfis.filter((r: any) => !r.trade || r.trade === task.trade);
+    if (tradeRfis.length > 0) {
+      rfiStatus = 'failed';
+      rfiDetails = `${tradeRfis.length} open technical RFI(s) affecting work (${tradeRfis[0].number || 'RFI'})`;
+    }
   }
 
   // 7. Workforce check

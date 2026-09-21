@@ -3,11 +3,42 @@ import { DatabaseSync } from 'node:sqlite';
 import { publishProgressReport, createReportRevision } from '../services/progressPublication';
 
 export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired: any, hasProjectAccess: any, writeAudit: any) {
-  // Authoritative Single Publish Route
-  app.post('/api/progress_reports/:id/publish', authRequired, (req: Request, res: Response) => {
+  // Authoritative Publish Routes (by URL param or body)
+  app.post(['/api/progress_reports/:id/publish', '/api/progress-reports/:id/publish', '/api/progress-reports/publish', '/api/progress_reports/publish'], authRequired, (req: Request, res: Response) => {
     try {
       const user = req.user!;
-      const existing = db.prepare('SELECT * FROM progress_reports WHERE id=?').get(req.params.id) as any;
+      let reportId = req.params.id || req.body.id || req.body.report_id;
+
+      if (!reportId && req.body.project_id) {
+        // Create initial draft progress report from body
+        const newId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const reportNo = `PR-${Date.now().toString().slice(-4)}`;
+        db.prepare(`
+          INSERT INTO progress_reports (
+            id, project_id, report_no, title, period_start, period_end,
+            executive_summary, status, revision_no, created_by, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Draft', 0, ?, ?)
+        `).run(
+          newId,
+          req.body.project_id,
+          reportNo,
+          req.body.title || `Progress Report ${reportNo}`,
+          req.body.period_start || req.body.period_date || now.slice(0, 10),
+          req.body.period_end || req.body.period_date || now.slice(0, 10),
+          req.body.narrative || req.body.executive_summary || '',
+          user.user_id,
+          now
+        );
+        reportId = newId;
+      }
+
+      if (!reportId) {
+        res.status(400).json({ error: 'Report ID or project_id is required' });
+        return;
+      }
+
+      const existing = db.prepare('SELECT * FROM progress_reports WHERE id=?').get(reportId) as any;
       if (!existing) {
         res.status(404).json({ error: 'Report not found' });
         return;
@@ -23,13 +54,13 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
         return;
       }
 
-      const result = publishProgressReport(db, req.params.id, user);
+      const result = publishProgressReport(db, reportId, user);
       if (!result.success) {
         res.status(400).json({ error: result.error });
         return;
       }
 
-      writeAudit(user.user_id, 'progress_reports', req.params.id, existing.project_id, 'publish', existing, result.report);
+      writeAudit(user.user_id, 'progress_reports', reportId, existing.project_id, 'publish', existing, result.report);
       res.json(result.report);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -37,10 +68,16 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
   });
 
   // Formal Revision Route
-  app.post('/api/progress_reports/:id/revise', authRequired, (req: Request, res: Response) => {
+  app.post(['/api/progress_reports/:id/revise', '/api/progress-reports/:id/revise', '/api/progress-reports/revise', '/api/progress_reports/revise'], authRequired, (req: Request, res: Response) => {
     try {
       const user = req.user!;
-      const existing = db.prepare('SELECT * FROM progress_reports WHERE id=?').get(req.params.id) as any;
+      const reportId = req.params.id || req.body.original_report_id || req.body.report_id;
+      if (!reportId) {
+        res.status(400).json({ error: 'Original report ID is required' });
+        return;
+      }
+
+      const existing = db.prepare('SELECT * FROM progress_reports WHERE id=?').get(reportId) as any;
       if (!existing) {
         res.status(404).json({ error: 'Report not found' });
         return;
@@ -56,7 +93,7 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
         return;
       }
 
-      const result = createReportRevision(db, req.params.id, user);
+      const result = createReportRevision(db, reportId, user);
       if (!result.success) {
         res.status(400).json({ error: result.error });
         return;
@@ -70,7 +107,7 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
   });
 
   // PM Verification Route for Subcontractor Claims
-  app.post('/api/progress_submissions/:id/verify', authRequired, (req: Request, res: Response) => {
+  app.post(['/api/progress_submissions/:id/verify', '/api/progress-submissions/:id/verify', '/api/progress-reports/verify/:id'], authRequired, (req: Request, res: Response) => {
     try {
       const user = req.user!;
       const claim = db.prepare('SELECT * FROM progress_submissions WHERE id=?').get(req.params.id) as any;

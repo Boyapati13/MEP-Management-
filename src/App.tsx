@@ -31,6 +31,12 @@ import { TaskDetailModal } from './components/TaskDetailModal';
 import { ProjectActionsRegister } from './components/ProjectActionsRegister';
 import { ProjectDecisionsRegister } from './components/ProjectDecisionsRegister';
 import { RiskMatrixHeatMapModal } from './components/RiskMatrixHeatMapModal';
+import { InternalLayout } from './layouts/InternalLayout';
+import { SubcontractorLayout } from './layouts/SubcontractorLayout';
+import { ClientPortalLayout } from './layouts/ClientPortalLayout';
+import { NavigationDomain } from './app/routes';
+import { ProcurementProgrammeRiskView } from './components/ProcurementProgrammeRiskView';
+import { AdminSetupChecklist } from './components/AdminSetupChecklist';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -254,28 +260,30 @@ type Page =
   | 'leave' | 'leave-approvals' | 'leave-balances'
   | 'attendance-exceptions' | 'shift-templates'
   | 'payroll' | 'payroll-detail'
-  | 'punch-clock';
+  | 'punch-clock'
+  // V1.4.1 Domains & Consolidations
+  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist';
 
 function AppShell() {
   const { user, logout } = useAuth();
   const { projects, selectedProject, setSelectedProject } = useProject();
   const [page, setPage] = useState<Page>('dashboard');
   const [pageParam, setPageParam] = useState<string>('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [activeDomain, setActiveDomain] = useState<NavigationDomain>('dashboard');
   const { addToast } = useToast();
 
   const navigate = useCallback((p: Page, param?: string) => {
     setPage(p);
     setPageParam(param || '');
-    setMobileSidebar(false);
   }, []);
 
+  const handleInternalNavigate = useCallback((domain: NavigationDomain, routeId: string) => {
+    setActiveDomain(domain);
+    navigate(routeId as Page);
+  }, [navigate]);
+
   const role = user?.role || '';
-  const isWorkforceRole = ['Admin', 'ProjectManager', 'SiteEngineer', 'SiteSupervisor', 'Worker', 'SafetyOfficer'].includes(role);
-  const isPayrollRole = ['Admin', 'CommercialManager', 'ProjectManager'].includes(role);
   const isWorkerOnly = role === 'Worker';
-  const isSupervisor = role === 'SiteSupervisor';
   const [workerMobileMode, setWorkerMobileMode] = useState(isWorkerOnly);
 
   if (isWorkerOnly || workerMobileMode) {
@@ -287,14 +295,14 @@ function AppShell() {
     );
   }
 
-  const selectedProj = projects.find(p => p.id === selectedProject);
-
   function renderPage() {
     switch (page) {
       case 'dashboard': return <ProjectDashboardPage navigate={navigate} />;
-      case 'projects': return <ProjectsPage navigate={navigate} />;
+      case 'projects':
+      case 'work-packages': return <ProjectsPage navigate={navigate} />;
       case 'project-detail': return <ProjectDetailPage projectId={pageParam} navigate={navigate} />;
       case 'tasks': return <TasksPage navigate={navigate} />;
+      case 'procurement-risk': return <div className="space-y-6"><ProcurementProgrammeRiskView projectId={selectedProject} /></div>;
       case 'actions': return <div className="space-y-6"><ProjectActionsRegister projectId={selectedProject} /></div>;
       case 'decisions': return <div className="space-y-6"><ProjectDecisionsRegister projectId={selectedProject} /></div>;
       case 'updates': return <ProjectUpdatesPage navigate={navigate} />;
@@ -316,174 +324,69 @@ function AppShell() {
       case 'payroll': return <PayrollPeriodsPage navigate={navigate} />;
       case 'payroll-detail': return <PayrollPeriodDetailPage periodId={pageParam} navigate={navigate} />;
       case 'punch-clock': return <PunchClockPage />;
+      case 'setup-checklist': return <div className="space-y-6"><AdminSetupChecklist projectId={selectedProject} onNavigate={(r) => navigate(r as Page)} /></div>;
+      case 'site-quality': return <GenericPage page="ncrs" />;
       default: return <GenericPage page={page} />;
     }
   }
 
-  const Sidebar = (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-4 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
-            <HardHat size={18} className="text-white" />
-          </div>
-          {sidebarOpen && <div><p className="font-bold text-gray-900 text-sm leading-tight">MEP Management</p><p className="text-xs text-gray-400">v1.4.1 Enterprise</p></div>}
-        </div>
-      </div>
+  if (role === 'Subcontractor') {
+    return (
+      <SubcontractorLayout
+        user={user}
+        logout={logout}
+        selectedProject={selectedProject}
+        projects={projects}
+        onSelectProject={setSelectedProject}
+        renderContent={(tab) => {
+          switch (tab) {
+            case 'overview': return <ProjectDashboardPage navigate={navigate} />;
+            case 'tasks': return <TasksPage navigate={navigate} />;
+            case 'claims': return <GenericPage page="progress" />;
+            case 'submittals': return <GenericPage page="submittals" />;
+            case 'rfis': return <GenericPage page="rfis" />;
+            case 'clarifications': return <GenericPage page="clarifications" />;
+            default: return renderPage();
+          }
+        }}
+      />
+    );
+  }
 
-      {/* Project selector */}
-      {sidebarOpen && projects.length > 0 && (
-        <div className="px-4 py-3 border-b border-gray-100">
-          <label className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1 block">Project</label>
-          <select className={cn(selectCls, 'text-xs')} value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
-            <option value="">All Projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
-        {!isWorkerOnly && <>
-          <NavItem icon={Home} label="Dashboard" active={page === 'dashboard'} onClick={() => navigate('dashboard')} />
-          <NavItem icon={Briefcase} label="Projects" active={page === 'projects' || page === 'project-detail'} onClick={() => navigate('projects')} />
-          <NavItem icon={TrendingUp} label="Project Updates" active={page === 'updates'} onClick={() => navigate('updates')} />
-          <NavItem icon={Grid} label="Tasks & Schedule" active={page === 'tasks'} onClick={() => navigate('tasks')} />
-          <NavItem icon={AlertCircle} label="Actions Register" active={page === 'actions'} onClick={() => navigate('actions')} />
-          <NavItem icon={Shield} label="Decisions Register" active={page === 'decisions'} onClick={() => navigate('decisions')} />
-        </>}
-
-        {isWorkerOnly && (
-          <NavItem icon={Timer} label="Punch Clock" active={page === 'punch-clock'} onClick={() => navigate('punch-clock')} />
-        )}
-
-        {!isWorkerOnly && !isSupervisor && sidebarOpen && (
-          <NavGroup icon={Layers} label="Project Execution" defaultOpen={false}>
-            <NavItem icon={FileText} label="Documents" active={page === 'documents'} onClick={() => navigate('documents')} />
-            <NavItem icon={BookOpen} label="RFIs" active={page === 'rfis'} onClick={() => navigate('rfis')} />
-            <NavItem icon={ClipboardList} label="Submittals" active={page === 'submittals'} onClick={() => navigate('submittals')} />
-            <NavItem icon={Shield} label="NCRs" active={page === 'ncrs'} onClick={() => navigate('ncrs')} />
-            <NavItem icon={CheckCircle} label="Inspections" active={page === 'inspections'} onClick={() => navigate('inspections')} />
-            <NavItem icon={Cpu} label="Commissioning" active={page === 'commissioning'} onClick={() => navigate('commissioning')} />
-            <NavItem icon={Package} label="Handover" active={page === 'handover'} onClick={() => navigate('handover')} />
-            <NavItem icon={MessageSquare} label="Clarifications" active={page === 'clarifications'} onClick={() => navigate('clarifications')} />
-            <NavItem icon={TrendingUp} label="Progress Claims" active={page === 'progress'} onClick={() => navigate('progress')} />
-          </NavGroup>
-        )}
-
-        {isWorkforceRole && sidebarOpen && (
-          <NavGroup icon={Users} label="Workforce" defaultOpen={true}>
-            {!isWorkerOnly && <NavItem icon={Activity} label="Live Workforce" active={page === 'workforce'} onClick={() => navigate('workforce')} />}
-            {!isWorkerOnly && <NavItem icon={MapPin} label="Sites" active={page === 'sites'} onClick={() => navigate('sites')} />}
-            {!isWorkerOnly && <NavItem icon={Users} label="Workers" active={page === 'workers'} onClick={() => navigate('workers')} />}
-            {(isWorkerOnly || isSupervisor) && <NavItem icon={Timer} label="Punch Clock" active={page === 'punch-clock'} onClick={() => navigate('punch-clock')} />}
-            <NavItem icon={ClipboardList} label="Site Instructions" active={page === 'site-instructions'} onClick={() => navigate('site-instructions')} />
-            <NavItem icon={Calendar} label="Leave" active={page === 'leave'} onClick={() => navigate('leave')} />
-            {!isWorkerOnly && <NavItem icon={UserCheck} label="Leave Approvals" active={page === 'leave-approvals'} onClick={() => navigate('leave-approvals')} />}
-            {!isWorkerOnly && <NavItem icon={AlertTriangle} label="Exceptions" active={page === 'attendance-exceptions'} onClick={() => navigate('attendance-exceptions')} />}
-            {!isWorkerOnly && !isSupervisor && <NavItem icon={Clock} label="Shift Templates" active={page === 'shift-templates'} onClick={() => navigate('shift-templates')} />}
-          </NavGroup>
-        )}
-
-        {isPayrollRole && sidebarOpen && (
-          <NavGroup icon={DollarSign} label="Payroll">
-            <NavItem icon={DollarSign} label="Payroll Periods" active={page === 'payroll'} onClick={() => navigate('payroll')} />
-          </NavGroup>
-        )}
-
-        {!isWorkerOnly && !isSupervisor && sidebarOpen && (
-          <NavGroup icon={Briefcase} label="Commercial">
-            <NavItem icon={BarChart3} label="BOQ" active={page === 'boq'} onClick={() => navigate('boq')} />
-            <NavItem icon={TrendingUp} label="Change Orders" active={page === 'change_orders'} onClick={() => navigate('change_orders')} />
-            <NavItem icon={Package} label="Procurement" active={page === 'procurement'} onClick={() => navigate('procurement')} />
-            <NavItem icon={AlertCircle} label="Risks" active={page === 'risks'} onClick={() => navigate('risks')} />
-          </NavGroup>
-        )}
-
-        {role === 'Admin' && sidebarOpen && (
-          <NavGroup icon={Settings} label="Admin">
-            <NavItem icon={Users} label="Users" active={page === 'users'} onClick={() => navigate('users')} />
-            <NavItem icon={Building2} label="Companies" active={page === 'companies'} onClick={() => navigate('companies')} />
-            <NavItem icon={Shield} label="Audit Log" active={page === 'audit'} onClick={() => navigate('audit')} />
-          </NavGroup>
-        )}
-      </nav>
-
-      {/* User info */}
-      <div className="border-t border-gray-100 p-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-            {user?.name?.[0]?.toUpperCase() || 'U'}
-          </div>
-          {sidebarOpen && <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.role}</p>
-          </div>}
-          <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0" title="Sign out">
-            <LogOut size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  if (role === 'Client') {
+    return (
+      <ClientPortalLayout
+        user={user}
+        logout={logout}
+        selectedProject={selectedProject}
+        projects={projects}
+        onSelectProject={setSelectedProject}
+        renderContent={(tab) => {
+          switch (tab) {
+            case 'overview': return <ProjectDashboardPage navigate={navigate} />;
+            case 'reports': return <ProjectUpdatesPage navigate={navigate} />;
+            case 'approvals': return <GenericPage page="submittals" />;
+            case 'handover': return <GenericPage page="handover" />;
+            default: return renderPage();
+          }
+        }}
+      />
+    );
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Desktop sidebar */}
-      <div className={cn('hidden lg:flex flex-col bg-white border-r border-gray-100 transition-all duration-300 flex-shrink-0', sidebarOpen ? 'w-64' : 'w-16')}>
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="absolute left-0 top-4 ml-1 hidden lg:block z-10">
-        </button>
-        {Sidebar}
-      </div>
-
-      {/* Mobile sidebar overlay */}
-      {mobileSidebar && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebar(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl">{Sidebar}</div>
-        </div>
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-100 px-4 lg:px-6 py-3 flex items-center gap-4 flex-shrink-0">
-          <button onClick={() => setMobileSidebar(true)} className="lg:hidden text-gray-500">
-            <Menu size={22} />
-          </button>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden lg:block text-gray-400 hover:text-gray-600">
-            <Menu size={20} />
-          </button>
-          <div className="flex-1">
-            <h2 className="text-base font-semibold text-gray-800 capitalize">{page.replace(/-/g, ' ')}</h2>
-            {selectedProj && <p className="text-xs text-gray-400">{selectedProj.name}</p>}
-          </div>
-          <div className="flex items-center gap-2">
-            {!isWorkerOnly && (
-              <button
-                onClick={() => setWorkerMobileMode(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm"
-                title="Preview Worker Mobile App"
-              >
-                <Smartphone size={14} />
-                <span className="hidden sm:inline">Worker App</span>
-              </button>
-            )}
-            <button className="text-gray-400 hover:text-blue-600 transition-colors">
-              <Bell size={20} />
-            </button>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 lg:p-6">
-            {renderPage()}
-          </div>
-        </main>
-      </div>
-    </div>
+    <InternalLayout
+      user={user}
+      logout={logout}
+      selectedProject={selectedProject}
+      projects={projects}
+      onSelectProject={setSelectedProject}
+      activeDomain={activeDomain}
+      activeRoute={page}
+      onNavigate={handleInternalNavigate}
+    >
+      {renderPage()}
+    </InternalLayout>
   );
 }
 

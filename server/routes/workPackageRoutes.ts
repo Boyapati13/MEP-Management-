@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { DatabaseSync } from 'node:sqlite';
 import { canAccessWorkPackage } from '../auth/workPackageAccess';
+import { toSubcontractorWorkPackageDto, toSubcontractorProcurementDto } from '../dto/subcontractorDto';
 
 export function registerWorkPackageRoutes(app: any, db: DatabaseSync, authRequired: any, hasProjectAccess: any, rowToDict: any) {
   app.get('/api/work_packages/:id/command-center', authRequired, (req: Request, res: Response) => {
@@ -73,7 +74,7 @@ export function registerWorkPackageRoutes(app: any, db: DatabaseSync, authRequir
         SELECT b.*, t.title as task_title
         FROM task_blockers b
         JOIN tasks t ON t.id = b.task_id
-        WHERE t.work_package_id=? AND b.resolved = 0
+        WHERE t.work_package_id=? AND (b.status = 'Active' OR b.status IS NULL)
         ORDER BY b.created_at DESC
       `).all(req.params.id) as any[];
 
@@ -120,8 +121,10 @@ export function registerWorkPackageRoutes(app: any, db: DatabaseSync, authRequir
         manpowerByTrade[trade].present++;
       });
 
+      const isSubcontractor = user.role === 'Subcontractor';
+
       res.json({
-        work_package: rowToDict(wp),
+        work_package: isSubcontractor ? toSubcontractorWorkPackageDto(wp) : rowToDict(wp),
         metrics: {
           total_tasks: totalTasks,
           completed_tasks: completedTasks,
@@ -129,24 +132,51 @@ export function registerWorkPackageRoutes(app: any, db: DatabaseSync, authRequir
           blocked_tasks: blockedTasks,
           not_started_tasks: notStartedTasks,
           avg_progress: avgProgress,
-          total_claimed_amount: totalClaimedAmount,
-          total_certified_amount: totalCertifiedAmount,
+          total_claimed_amount: isSubcontractor ? 0 : totalClaimedAmount,
+          total_certified_amount: isSubcontractor ? 0 : totalCertifiedAmount,
           active_blockers_count: blockers.length,
-          manpower_count: workers.length,
-          present_today_count: presentRows.length,
+          manpower_count: isSubcontractor ? 0 : workers.length,
+          present_today_count: isSubcontractor ? 0 : presentRows.length,
           open_clarifications_count: clarifications.length
         },
-        manpower_distribution: {
+        manpower_distribution: isSubcontractor ? { by_trade: {}, present_today: 0, total_assigned: 0 } : {
           by_trade: manpowerByTrade,
           present_today: presentRows.length,
           total_assigned: workers.length
         },
-        tasks: tasks.map(rowToDict),
-        claims: claims.map(rowToDict),
+        tasks: isSubcontractor
+          ? tasks.map((t: any) => ({
+              id: t.id,
+              project_id: t.project_id,
+              work_package_id: t.work_package_id,
+              title: t.title,
+              trade: t.trade,
+              status: t.status,
+              progress: t.progress,
+              start: t.start,
+              end: t.end,
+              start_date: t.start_date,
+              end_date: t.end_date,
+              drawing_ref: t.drawing_ref,
+              spec_ref: t.spec_ref
+            }))
+          : tasks.map(rowToDict),
+        claims: isSubcontractor
+          ? claims.map((c: any) => ({
+              id: c.id,
+              submission_no: c.submission_no,
+              period_date: c.period_date,
+              claimed_percentage: c.claimed_percentage,
+              certified_percentage: c.certified_percentage,
+              status: c.status
+            }))
+          : claims.map(rowToDict),
         blockers: blockers.map(rowToDict),
-        workers: workers.map(rowToDict),
+        workers: isSubcontractor ? [] : workers.map(rowToDict),
         clarifications: clarifications.map(rowToDict),
-        purchase_orders: pos.map(rowToDict)
+        purchase_orders: isSubcontractor
+          ? pos.map(toSubcontractorProcurementDto)
+          : pos.map(rowToDict)
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

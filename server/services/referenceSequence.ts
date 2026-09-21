@@ -21,18 +21,15 @@ export function getNextSequence(
 
   const prefix = prefixMap[entityType] || entityType.toUpperCase().slice(0, 3);
 
-  // Initialize or increment sequence atomically
-  db.exec(`
+  // Initialize or increment sequence atomically with RETURNING
+  const row = db.prepare(`
     INSERT INTO reference_sequences (project_id, entity_type, next_val)
-    VALUES ('${projectId}', '${entityType}', 1)
+    VALUES (?, ?, 1)
     ON CONFLICT(project_id, entity_type)
-    DO UPDATE SET next_val = reference_sequences.next_val + 1;
-  `);
+    DO UPDATE SET next_val = reference_sequences.next_val + 1
+    RETURNING next_val
+  `).get(projectId, entityType) as any;
 
-  const row = db.prepare(
-    'SELECT next_val FROM reference_sequences WHERE project_id = ? AND entity_type = ?'
-  ).get(projectId, entityType) as any;
-
-  const currentVal = row ? Number(row.next_val) : 1;
+  const currentVal = row && row.next_val != null ? Number(row.next_val) : 1;
   return `${prefix}-${String(currentVal).padStart(4, '0')}`;
 }

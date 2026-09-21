@@ -28,12 +28,15 @@ let passed = 0;
 let failed = 0;
 const failures: string[] = [];
 
-function assert(condition: boolean, label: string) {
+function assert(condition: boolean, label: string, detail?: any) {
   if (condition) {
     console.log(`  ✓ ${label}`);
     passed++;
   } else {
     console.error(`  ✗ ${label}`);
+    if (detail !== undefined) {
+      console.error('     Detail:', typeof detail === 'string' ? detail.slice(0, 500) : JSON.stringify(detail).slice(0, 500));
+    }
     failed++;
     failures.push(label);
   }
@@ -78,10 +81,15 @@ async function req(
   });
 }
 
-async function login(username: string, password = 'password123'): Promise<string> {
-  const res = await req('POST', '/api/login', { username, password });
-  if (!res.body?.token) throw new Error(`Login failed for ${username}: ${JSON.stringify(res.body)}`);
-  return res.body.token;
+async function login(username: string, password = 'Password123!'): Promise<string> {
+  const tryPasswords = [password, 'ChangeMe123!', 'admin123', 'password123'];
+  for (const pw of tryPasswords) {
+    let res = await req('POST', '/api/login', { username, password: pw });
+    if (res.body?.token) return res.body.token;
+    res = await req('POST', '/api/auth/login', { username, password: pw });
+    if (res.body?.token) return res.body.token;
+  }
+  throw new Error(`Login failed for ${username} across attempted credentials`);
 }
 
 async function sleep(ms: number) {
@@ -100,7 +108,7 @@ function startServer(): Promise<void> {
       : [path.join(process.cwd(), 'node_modules/tsx/dist/cli.mjs'), serverEntry];
 
     serverProcess = spawn(cmd, args, {
-      env: { ...process.env, PORT: String(TEST_PORT), NODE_ENV: 'test', DB_PATH: ':memory:' },
+      env: { ...process.env, PORT: String(TEST_PORT), NODE_ENV: 'test', DB_PATH: ':memory:', MEP_DB_PATH: ':memory:' },
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -178,31 +186,31 @@ async function testSubcontractorScopeIsolation(adminToken: string) {
   assert(Boolean(wp1Id), 'HARD-002: WP1 created');
   assert(Boolean(wp2Id), 'HARD-002: WP2 created');
 
-  // Create a subcontractor user with work_package scope
+  // Create a subcontractor user strictly scoped to WP1
+  const subUsername = `sub_scope_test_${Date.now()}`;
   const subRes = await req('POST', '/api/users', {
     name: 'BOV Subcontractor A',
-    username: `sub_scope_test_${Date.now()}`,
-    password: 'password123',
+    username: subUsername,
+    password: 'Password123!',
     role: 'Subcontractor',
     access_scope: 'work_package',
     work_package_id: wp1Id,
     project_id: projectId
   }, adminToken);
 
-  if (subRes.status === 201 || subRes.status === 200) {
-    const subToken = await login(subRes.body?.username ?? subRes.body?.user?.username ?? `sub_scope_test`);
-    // Attempt to access WP1 (should work)
-    const wp1Access = await req('GET', `/api/work_packages/${wp1Id}/command-center`, undefined, subToken);
-    assert(wp1Access.status !== 403, 'HARD-002: Subcontractor can access their assigned WP');
+  assert(subRes.status === 201, 'HARD-002: Subcontractor user successfully created');
+  const subToken = await login(subUsername, 'Password123!');
+  assert(Boolean(subToken), 'HARD-002: Subcontractor successfully authenticated');
 
-    // Attempt to access WP2 (should return 404 non-disclosure)
-    const wp2Access = await req('GET', `/api/work_packages/${wp2Id}/command-center`, undefined, subToken);
-    assert(wp2Access.status === 404, 'HARD-002: Cross-WP access returns 404 (non-disclosure, not 403)');
-    assert(wp2Access.body?.error !== 'Forbidden' && wp2Access.body?.error !== 'Access denied', 'HARD-002: 404 body does not reveal Forbidden reason');
-  } else {
-    console.warn('  ⚠ Subcontractor user creation skipped (may require DB seed) — scope tests deferred');
-    assert(true, 'HARD-002: Skipped — subcontractor creation endpoint not available');
-  }
+  // Access WP1 (assigned) -> 200 with redacted worker roster
+  const wp1Access = await req('GET', `/api/work_packages/${wp1Id}/command-center`, undefined, subToken);
+  assert(wp1Access.status === 200, 'HARD-002: Subcontractor can access their assigned WP', wp1Access);
+  assert(Array.isArray(wp1Access.body?.workers) && wp1Access.body.workers.length === 0, 'HARD-002: Subcontractor worker roster is redacted', wp1Access.body?.workers);
+  assert(wp1Access.body?.metrics?.total_claimed_amount === 0, 'HARD-002: Total claimed amount is redacted for subcontractor', wp1Access.body?.metrics);
+
+  // Access WP2 (not assigned) -> 404 (non-disclosure)
+  const wp2Access = await req('GET', `/api/work_packages/${wp2Id}/command-center`, undefined, subToken);
+  assert(wp2Access.status === 404, 'HARD-002: Cross-WP access returns 404 (non-disclosure, not 403)');
 }
 
 async function testNonDisclosure404(adminToken: string) {
@@ -219,13 +227,9 @@ async function testNonDisclosure404(adminToken: string) {
 async function testImmutableFieldProtection(adminToken: string) {
   console.log('\n[GROUP-05 / HARD-004] Immutable Field Protection on PUT');
 
-  // Create an action to test
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-  if (!projectId) {
-    assert(true, 'HARD-004: Skipped — no project available');
-    return;
-  }
+  assert(Boolean(projectId), 'HARD-004: Project available', proj);
 
   const actionRes = await req('POST', '/api/project_actions', {
     project_id: projectId,
@@ -236,11 +240,7 @@ async function testImmutableFieldProtection(adminToken: string) {
   }, adminToken);
 
   const actionId = actionRes.body?.id;
-  if (!actionId) {
-    assert(true, 'HARD-004: Skipped — action creation failed');
-    return;
-  }
-
+  assert(Boolean(actionId), 'HARD-004: Action created', actionRes);
   const origProjectId = actionRes.body?.project_id;
 
   // Attempt to mutate project_id (immutable)
@@ -249,7 +249,7 @@ async function testImmutableFieldProtection(adminToken: string) {
     title: 'Updated Title'
   }, adminToken);
 
-  assert(putRes.status === 400, 'HARD-004: PUT with mutated project_id returns 400');
+  assert(putRes.status === 400, 'HARD-004: PUT with mutated project_id returns 400', putRes);
 
   // Verify project_id unchanged
   const getRes = await req('GET', `/api/project_actions/${actionId}`, undefined, adminToken);
@@ -261,10 +261,7 @@ async function testMonotonicSequences(adminToken: string) {
 
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-  if (!projectId) {
-    assert(true, 'HARD-005: Skipped — no project available');
-    return;
-  }
+  assert(Boolean(projectId), 'HARD-005: Project available');
 
   const a1 = await req('POST', '/api/project_actions', {
     project_id: projectId, title: 'Sequence Test Action 1', status: 'Open', priority: 'Low', raised_by: 'sys'
@@ -277,66 +274,108 @@ async function testMonotonicSequences(adminToken: string) {
   const ref1 = a1.body?.action_no ?? a1.body?.reference;
   const ref2 = a2.body?.action_no ?? a2.body?.reference;
 
-  assert(Boolean(ref1), 'HARD-005: First action has reference number');
-  assert(Boolean(ref2), 'HARD-005: Second action has reference number');
-
-  if (ref1 && ref2) {
-    // References should be different and both match ACT-XXXX pattern
-    assert(ref1 !== ref2, 'HARD-005: Consecutive action references are unique');
-    assert(/^ACT-\d{4,}$/i.test(ref1) || /^\d+$/.test(ref1), `HARD-005: Reference 1 matches expected pattern: ${ref1}`);
-  }
+  assert(Boolean(ref1), 'HARD-005: First action has reference number', a1);
+  assert(Boolean(ref2), 'HARD-005: Second action has reference number', a2);
+  assert(ref1 !== ref2, 'HARD-005: Consecutive action references are unique');
+  assert(/^ACT-\d{4,}$/i.test(ref1), `HARD-005: Reference 1 matches ACT-XXXX pattern: ${ref1}`);
+  assert(/^ACT-\d{4,}$/i.test(ref2), `HARD-005: Reference 2 matches ACT-XXXX pattern: ${ref2}`);
 }
 
 async function testProcurementRiskAuthorization(adminToken: string) {
   console.log('\n[GROUP-07 / HARD-006] Procurement Programme Risk Authorization');
 
-  const res = await req('GET', '/api/procurement/programme-impact', undefined, adminToken);
-  assert([200, 400].includes(res.status), 'HARD-006: Admin can access procurement risk endpoint');
+  const proj = await req('GET', '/api/projects', undefined, adminToken);
+  const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
+
+  // Admin access
+  const res = await req('GET', `/api/procurement/programme-impact?project_id=${projectId}`, undefined, adminToken);
+  assert(res.status === 200, 'HARD-006: Admin can access procurement risk endpoint (200)');
 
   // Worker role should be blocked (403)
-  try {
-    const workerLogin = await login('worker_test_user');
-    const workerRes = await req('GET', '/api/procurement/programme-impact', undefined, workerLogin);
-    assert([403, 401].includes(workerRes.status), 'HARD-006: Worker cannot access procurement risk (403)');
-  } catch {
-    assert(true, 'HARD-006: Worker test skipped (no worker user seeded)');
-  }
+  const workerUsername = `worker_auth_test_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: workerUsername,
+    name: 'Worker Auth Test',
+    password: 'Password123!',
+    role: 'Worker',
+    project_id: projectId
+  }, adminToken);
+  const workerLogin = await login(workerUsername, 'Password123!');
+  const workerRes = await req('GET', `/api/procurement/programme-impact?project_id=${projectId}`, undefined, workerLogin);
+  assert(workerRes.status === 403, 'HARD-006: Worker cannot access procurement risk (403)');
 }
 
 async function testRiskMatrixAuthorization(adminToken: string) {
   console.log('\n[GROUP-08 / HARD-007] Risk Matrix Heatmap Authorization');
 
-  const res = await req('GET', '/api/risks/matrix', undefined, adminToken);
-  assert([200, 400].includes(res.status), 'HARD-007: Admin can access risk matrix');
+  const proj = await req('GET', '/api/projects', undefined, adminToken);
+  const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
 
-  // Client should receive filtered/curated view
-  try {
-    const clientLogin = await login('client_test_user');
-    const clientRes = await req('GET', '/api/risks/matrix', undefined, clientLogin);
-    assert([200, 403].includes(clientRes.status), 'HARD-007: Client gets 200 or 403 from risk matrix');
-  } catch {
-    assert(true, 'HARD-007: Client test skipped (no client user seeded)');
-  }
+  // Admin can access
+  const res = await req('GET', `/api/risks/matrix?project_id=${projectId}`, undefined, adminToken);
+  assert(res.status === 200, 'HARD-007: Admin can access risk matrix (200)', { status: res.status, body: res.body, projectId });
+
+  // Client should be blocked (403)
+  const clientUsername = `client_auth_test_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: clientUsername,
+    name: 'Client Auth Test',
+    password: 'Password123!',
+    role: 'Client',
+    project_id: projectId
+  }, adminToken);
+  const clientLogin = await login(clientUsername, 'Password123!');
+  const clientRes = await req('GET', `/api/risks/matrix?project_id=${projectId}`, undefined, clientLogin);
+  assert(clientRes.status === 403, 'HARD-007: Client blocked from internal risk matrix (403)');
 }
 
 async function testTaskReadinessEndpoint(adminToken: string) {
-  console.log('\n[GROUP-09 / HARD-008] Task Readiness Tri-State Endpoint');
+  console.log('\n[GROUP-09 / HARD-008] Task Readiness Tri-State & Scope Authorization');
 
-  const taskRes = await req('GET', '/api/tasks', undefined, adminToken);
-  const firstTask = Array.isArray(taskRes.body) && taskRes.body[0];
+  const proj = await req('GET', '/api/projects', undefined, adminToken);
+  const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
 
-  if (firstTask?.id) {
-    const readinessRes = await req('GET', `/api/tasks/${firstTask.id}/readiness`, undefined, adminToken);
-    assert([200, 404].includes(readinessRes.status), 'HARD-008: Task readiness endpoint responds');
+  // Create WP1 and WP2
+  const wp1Res = await req('POST', '/api/work_packages', {
+    project_id: projectId, name: 'WP Readiness Test 1', code: `WP-RD-1-${Date.now()}`, status: 'Active'
+  }, adminToken);
+  const wp2Res = await req('POST', '/api/work_packages', {
+    project_id: projectId, name: 'WP Readiness Test 2', code: `WP-RD-2-${Date.now()}`, status: 'Active'
+  }, adminToken);
+  const wp1Id = wp1Res.body?.id;
+  const wp2Id = wp2Res.body?.id;
 
-    if (readinessRes.status === 200) {
-      assert(['ready', 'blocked', 'incomplete'].includes(readinessRes.body?.overall ?? ''),
-        'HARD-008: Readiness overall is a valid tri-state');
-      assert(Array.isArray(readinessRes.body?.checks), 'HARD-008: Readiness checks is an array');
-    }
-  } else {
-    assert(true, 'HARD-008: Skipped — no tasks seeded');
-  }
+  // Create tasks in each
+  const t1 = await req('POST', '/api/tasks', {
+    project_id: projectId, work_package_id: wp1Id, title: 'Task in WP1', status: 'Not Started'
+  }, adminToken);
+  const t2 = await req('POST', '/api/tasks', {
+    project_id: projectId, work_package_id: wp2Id, title: 'Task in WP2', status: 'Not Started'
+  }, adminToken);
+
+  const t1Id = t1.body?.id;
+  const t2Id = t2.body?.id;
+
+  // Admin checks readiness
+  const readinessRes = await req('GET', `/api/tasks/${t1Id}/readiness`, undefined, adminToken);
+  assert(readinessRes.status === 200, 'HARD-008: Admin can check task readiness (200)', readinessRes);
+  assert(['Ready', 'Pending', 'Blocked'].includes(readinessRes.body?.status ?? ''), 'HARD-008: Valid tri-state status returned', readinessRes.body);
+
+  // Subcontractor scoped to WP1
+  const subUsername = `sub_readiness_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: subUsername, name: 'Sub Readiness', password: 'Password123!',
+    role: 'Subcontractor', access_scope: 'work_package', work_package_id: wp1Id, project_id: projectId
+  }, adminToken);
+  const subToken = await login(subUsername, 'Password123!');
+
+  // Can check WP1 task
+  const subT1Res = await req('GET', `/api/tasks/${t1Id}/readiness`, undefined, subToken);
+  assert(subT1Res.status === 200, 'HARD-008: Subcontractor can check assigned WP task readiness', subT1Res);
+
+  // Cannot check WP2 task (404 non-disclosure)
+  const subT2Res = await req('GET', `/api/tasks/${t2Id}/readiness`, undefined, subToken);
+  assert(subT2Res.status === 404, 'HARD-008: Subcontractor querying foreign WP task readiness returns 404');
 }
 
 async function testProgressReportPublicationFlow(adminToken: string) {
@@ -344,37 +383,26 @@ async function testProgressReportPublicationFlow(adminToken: string) {
 
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-  if (!projectId) {
-    assert(true, 'HARD-009: Skipped — no project available');
-    return;
-  }
 
-  // Publish
-  const pubRes = await req('POST', '/api/progress-reports/publish', {
+  // Publish report via transactional route
+  const pubRes = await req('POST', '/api/progress_reports/publish', {
     project_id: projectId,
     period_date: new Date().toISOString().split('T')[0],
     overall_progress: 42,
-    narrative: 'Milestone narrative for Q3 cycle',
-    weather_impact: 'None'
+    narrative: 'Milestone narrative for Q3 cycle'
   }, adminToken);
 
-  assert([200, 201].includes(pubRes.status), 'HARD-009: Publish report returns 200/201');
+  assert([200, 201].includes(pubRes.status), 'HARD-009: Publish report returns 200/201', pubRes);
   const reportId = pubRes.body?.id ?? pubRes.body?.report?.id;
-  assert(Boolean(reportId), 'HARD-009: Published report has id');
+  assert(Boolean(reportId), 'HARD-009: Published report has id', pubRes.body);
 
   if (reportId) {
     // Attempt to revise
-    const revRes = await req('POST', '/api/progress-reports/revise', {
-      original_report_id: reportId,
-      narrative: 'Revised narrative with corrected weather note',
-      overall_progress: 44
-    }, adminToken);
-
+    const revRes = await req('POST', `/api/progress_reports/${reportId}/revise`, {}, adminToken);
     assert([200, 201].includes(revRes.status), 'HARD-009: Revise report returns 200/201');
-    const revNo = revRes.body?.revision_no ?? revRes.body?.report?.revision_no;
-    assert(revNo >= 1, 'HARD-009: Revised report has revision_no >= 1');
-    assert(Boolean(revRes.body?.supersedes_report_id ?? revRes.body?.report?.supersedes_report_id),
-      'HARD-009: Revised report carries supersedes_report_id');
+    const revNo = revRes.body?.revision_no;
+    assert(Number(revNo) >= 1, `HARD-009: Revised report has revision_no >= 1 (got: ${revNo})`);
+    assert(Boolean(revRes.body?.supersedes_report_id), 'HARD-009: Revised report carries supersedes_report_id');
   }
 }
 
@@ -383,15 +411,11 @@ async function testBlockerSyncOnProcurement(adminToken: string) {
 
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-  if (!projectId) {
-    assert(true, 'HARD-010: Skipped — no project available');
-    return;
-  }
 
-  // Create a task linked to a package
+  // Create a task
   const taskRes = await req('POST', '/api/tasks', {
     project_id: projectId,
-    title: 'Chiller Installation',
+    title: 'Chiller Installation Testing',
     status: 'Not Started',
     start: new Date().toISOString().split('T')[0]
   }, adminToken);
@@ -399,47 +423,54 @@ async function testBlockerSyncOnProcurement(adminToken: string) {
   const taskId = taskRes.body?.id;
   assert(Boolean(taskId), 'HARD-010: Task created for blocker test');
 
-  if (taskId) {
-    // Create PO with expected delivery past task start (negative buffer)
-    const poDate = new Date();
-    poDate.setDate(poDate.getDate() + 60); // delivery in 60 days
-    const poRes = await req('POST', '/api/procurement', {
-      project_id: projectId,
-      task_id: taskId,
-      description: 'Chiller Unit',
-      expected_delivery_date: poDate.toISOString().split('T')[0],
-      status: 'Ordered'
-    }, adminToken);
+  // Create PO with expected delivery in 60 days (past task start -> negative buffer -> auto blocker)
+  const poDate = new Date();
+  poDate.setDate(poDate.getDate() + 60);
+  const poRes = await req('POST', '/api/purchase_orders', {
+    project_id: projectId,
+    task_id: taskId,
+    po_number: `PO-${Date.now().toString().slice(-4)}`,
+    description: 'Chiller Unit',
+    expected_delivery_date: poDate.toISOString().split('T')[0],
+    status: 'Ordered'
+  }, adminToken);
 
-    assert([200, 201].includes(poRes.status), 'HARD-010: Procurement order created');
+  assert([200, 201].includes(poRes.status), 'HARD-010: Purchase order created');
 
-    // Check if task now has blockers
-    const blockersRes = await req('GET', `/api/task_blockers?task_id=${taskId}`, undefined, adminToken);
-    assert([200, 404].includes(blockersRes.status), 'HARD-010: Task blockers endpoint responds');
-  }
+  // Check that task readiness detects the procurement blocker
+  const readinessRes = await req('GET', `/api/tasks/${taskId}/readiness`, undefined, adminToken);
+  assert(readinessRes.status === 200, 'HARD-010: Task readiness responds');
+  assert(readinessRes.body?.checks?.procurement?.status === 'failed' || readinessRes.body?.checks?.procurement?.status === 'pending',
+    'HARD-010: Procurement check reflects pending/failed delivery');
 }
 
 async function testClientPortalDataLeakage(adminToken: string) {
   console.log('\n[GROUP-12 / HARD-011] Client Portal — Zero Internal Data Leakage');
 
-  try {
-    const clientToken = await login('client_test_user');
+  const proj = await req('GET', '/api/projects', undefined, adminToken);
+  const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
 
-    // Client should NOT see users list
-    const usersRes = await req('GET', '/api/users', undefined, clientToken);
-    assert([403, 401].includes(usersRes.status), 'HARD-011: Client cannot access user directory');
+  const clientUsername = `client_leak_test_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: clientUsername,
+    name: 'Client Leak Test',
+    password: 'Password123!',
+    role: 'Client',
+    project_id: projectId
+  }, adminToken);
+  const clientToken = await login(clientUsername, 'Password123!');
 
-    // Client should NOT see audit trail
-    const auditRes = await req('GET', '/api/audit_logs', undefined, clientToken);
-    assert([403, 401, 404].includes(auditRes.status), 'HARD-011: Client cannot access audit logs');
+  // Client should NOT see users list
+  const usersRes = await req('GET', '/api/users', undefined, clientToken);
+  assert(usersRes.status === 403, 'HARD-011: Client cannot access user directory (403)');
 
-    // Client should NOT access risk matrix
-    const riskRes = await req('GET', '/api/risks/matrix', undefined, clientToken);
-    assert([403, 404].includes(riskRes.status), 'HARD-011: Client cannot access internal risk matrix');
+  // Client should NOT see internal audit trail
+  const auditRes = await req('GET', '/api/audit_logs', undefined, clientToken);
+  assert([403, 404].includes(auditRes.status), 'HARD-011: Client cannot access audit logs (403/404)');
 
-  } catch {
-    assert(true, 'HARD-011: Client leakage test skipped (no client user seeded)');
-  }
+  // Client should NOT access risk matrix
+  const riskRes = await req('GET', `/api/risks/matrix?project_id=${projectId}`, undefined, clientToken);
+  assert(riskRes.status === 403, 'HARD-011: Client cannot access internal risk matrix (403)');
 }
 
 async function testSelfApprovalBlocking(adminToken: string) {
@@ -447,34 +478,45 @@ async function testSelfApprovalBlocking(adminToken: string) {
 
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-  if (!projectId) {
-    assert(true, 'HARD-012: Skipped — no project available');
-    return;
-  }
 
-  // Publish a progress submission
+  // Create a subcontractor company
+  const compId = `comp_${Date.now()}`;
+  const compRes = await req('POST', '/api/companies', {
+    id: compId,
+    name: `Sub Contractor Company ${Date.now()}`,
+    trade: 'Mechanical'
+  }, adminToken);
+  const companyId = compRes.body?.id || compId;
+
+  // Create PM associated with that company (conflict of interest)
+  const pmUsername = `pm_conflict_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: pmUsername,
+    name: 'Conflicted PM',
+    password: 'Password123!',
+    role: 'ProjectManager',
+    company_id: companyId,
+    project_id: projectId
+  }, adminToken);
+  const pmToken = await login(pmUsername, 'Password123!');
+
+  // Submit claim on behalf of that company
   const submRes = await req('POST', '/api/progress_submissions', {
     project_id: projectId,
-    work_package_id: null,
-    period_date: new Date().toISOString().split('T')[0],
-    claimed_percentage: 25,
-    claimed_amount: 50000
+    company_id: companyId,
+    claimed_percentage: 30,
+    claimed_amount: 45000,
+    period_date: new Date().toISOString().split('T')[0]
   }, adminToken);
-
   const submId = submRes.body?.id;
-  if (!submId) {
-    assert(true, 'HARD-012: Skipped — claim submission not available');
-    return;
-  }
+  assert(Boolean(submId), 'HARD-012: Claim submission created');
 
-  // Attempt self-verification (same admin user verifying their own claim)
-  const verifyRes = await req('POST', `/api/progress-reports/verify/${submId}`, {
-    certified_percentage: 25
-  }, adminToken);
-
-  // If same company_id, should be blocked
-  // This may pass if admin has no company_id — that's expected behaviour
-  assert([200, 201, 403].includes(verifyRes.status), 'HARD-012: Self-approval returns 200 (no company_id conflict) or 403');
+  // Verify attempt with conflicted PM -> 403 Forbidden
+  const verifyRes = await req('POST', `/api/progress_submissions/${submId}/verify`, {
+    certified_percentage: 30,
+    certified_amount: 45000
+  }, pmToken);
+  assert(verifyRes.status === 403, 'HARD-012: Same-company verification rejected with 403');
 }
 
 async function testPutImmutableFieldsComprehensive(adminToken: string) {
@@ -482,11 +524,6 @@ async function testPutImmutableFieldsComprehensive(adminToken: string) {
 
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-
-  if (!projectId) {
-    assert(true, 'HARD-013: Skipped — no project');
-    return;
-  }
 
   const decRes = await req('POST', '/api/project_decisions', {
     project_id: projectId,
@@ -497,11 +534,7 @@ async function testPutImmutableFieldsComprehensive(adminToken: string) {
 
   const decId = decRes.body?.id;
   const origCreatedAt = decRes.body?.created_at;
-
-  if (!decId) {
-    assert(true, 'HARD-013: Skipped — decision creation failed');
-    return;
-  }
+  assert(Boolean(decId), 'HARD-013: Decision created');
 
   // Attempt to mutate created_at
   const putRes = await req('PUT', `/api/project_decisions/${decId}`, {
@@ -517,76 +550,91 @@ async function testPutImmutableFieldsComprehensive(adminToken: string) {
 }
 
 async function testBovMqabbaIsolationScenario(adminToken: string) {
-  console.log('\n[GROUP-15 / HARD-014] BOV Mqabba Subcontractor Isolation Scenario');
+  console.log('\n[GROUP-15 / HARD-014] BOV Mqabba Dual Subcontractor Isolation Scenario');
 
-  // This tests the canonical scenario: two subcontractors on the same project
-  // must not see each other's work packages, progress claims, or RFIs.
   const proj = await req('POST', '/api/projects', {
     name: 'BOV Mqabba Industrial MEP',
     code: `BOV-MQA-${Date.now()}`,
     status: 'Active'
   }, adminToken);
-
   const projectId = proj.body?.id;
-  if (!projectId) {
-    assert(true, 'HARD-014: Skipped — project creation failed');
-    return;
-  }
+  assert(Boolean(projectId), 'HARD-014: BOV Mqabba project created');
 
-  const wp1Res = await req('POST', '/api/work_packages', {
-    project_id: projectId, name: 'Electrical LV Distribution', code: 'WP-ELEC-01', status: 'Active'
+  // Subcontractor 1 package (Electrical)
+  const wp1 = await req('POST', '/api/work_packages', {
+    project_id: projectId, name: 'Electrical Works', code: `WP-E-${Date.now().toString().slice(-4)}`, status: 'Active'
   }, adminToken);
+  const wp1Id = wp1.body?.id;
 
-  const wp2Res = await req('POST', '/api/work_packages', {
-    project_id: projectId, name: 'Fire Suppression System', code: 'WP-FIRE-01', status: 'Active'
+  // Subcontractor 2 package (Fire Protection)
+  const wp2 = await req('POST', '/api/work_packages', {
+    project_id: projectId, name: 'Fire Protection', code: `WP-F-${Date.now().toString().slice(-4)}`, status: 'Active'
   }, adminToken);
+  const wp2Id = wp2.body?.id;
 
-  const wp1Id = wp1Res.body?.id;
-  const wp2Id = wp2Res.body?.id;
+  assert(Boolean(wp1Id && wp2Id), 'HARD-014: Both packages created');
 
-  assert(Boolean(wp1Id && wp2Id), 'HARD-014: Two work packages created for BOV Mqabba scenario');
+  // User 1: Electrical Subcontractor
+  const user1 = `sub_elec_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: user1, name: 'Elec Sub', password: 'Password123!',
+    role: 'Subcontractor', access_scope: 'work_package', work_package_id: wp1Id, project_id: projectId
+  }, adminToken);
+  const token1 = await login(user1, 'Password123!');
 
-  // Verify both exist
-  const list = await req('GET', `/api/work_packages?project_id=${projectId}`, undefined, adminToken);
-  assert(Array.isArray(list.body) && list.body.length >= 2, 'HARD-014: Project has 2+ work packages');
+  // User 2: Fire Subcontractor
+  const user2 = `sub_fire_${Date.now()}`;
+  await req('POST', '/api/users', {
+    username: user2, name: 'Fire Sub', password: 'Password123!',
+    role: 'Subcontractor', access_scope: 'work_package', work_package_id: wp2Id, project_id: projectId
+  }, adminToken);
+  const token2 = await login(user2, 'Password123!');
+
+  // Sub 1 queries WP1 -> 200; queries WP2 -> 404
+  const sub1Wp1 = await req('GET', `/api/work_packages/${wp1Id}/command-center`, undefined, token1);
+  assert(sub1Wp1.status === 200, 'HARD-014: Sub 1 accesses their assigned WP1 (200)');
+  const sub1Wp2 = await req('GET', `/api/work_packages/${wp2Id}/command-center`, undefined, token1);
+  assert(sub1Wp2.status === 404, 'HARD-014: Sub 1 blocked from WP2 with 404');
+
+  // Sub 2 queries WP2 -> 200; queries WP1 -> 404
+  const sub2Wp2 = await req('GET', `/api/work_packages/${wp2Id}/command-center`, undefined, token2);
+  assert(sub2Wp2.status === 200, 'HARD-014: Sub 2 accesses their assigned WP2 (200)');
+  const sub2Wp1 = await req('GET', `/api/work_packages/${wp1Id}/command-center`, undefined, token2);
+  assert(sub2Wp1.status === 404, 'HARD-014: Sub 2 blocked from WP1 with 404');
 }
 
 async function testRiskScoreNormalization(adminToken: string) {
-  console.log('\n[GROUP-16 / HARD-015] Risk Score Normalization Consistency');
+  console.log('\n[GROUP-16 / HARD-015] Risk Score Normalization & Validation');
 
   const proj = await req('GET', '/api/projects', undefined, adminToken);
   const projectId = Array.isArray(proj.body) && proj.body[0]?.id;
-  if (!projectId) {
-    assert(true, 'HARD-015: Skipped — no project');
-    return;
-  }
 
+  // 1. Validation test: probability 99 should return 400
+  const badRes = await req('POST', '/api/project_risks', {
+    project_id: projectId,
+    title: 'Out of Range Risk',
+    probability: 99,
+    impact: 2
+  }, adminToken);
+  assert(badRes.status === 400, 'HARD-015: Out-of-range risk rejected with 400');
+
+  // 2. Critical calculation: P5 x I5 = 25
   const risk1 = await req('POST', '/api/project_risks', {
     project_id: projectId,
-    title: 'Critical Path Delay Risk',
+    title: 'Critical Delay Risk',
     probability: 5,
     impact: 5
   }, adminToken);
+  assert([200, 201].includes(risk1.status), 'HARD-015: High risk created');
+  assert(risk1.body?.risk_score === 25, `HARD-015: Risk score calculated as 25 (got: ${risk1.body?.risk_score})`);
+  assert(risk1.body?.risk_level === 'Critical', `HARD-015: Rated Critical (got: ${risk1.body?.risk_level})`);
 
-  assert([200, 201].includes(risk1.status), 'HARD-015: High risk created successfully');
-  const score = risk1.body?.risk_score ?? risk1.body?.score;
-  if (score != null) {
-    assert(score >= 1 && score <= 25, `HARD-015: Risk score ${score} is within 1-25 scale`);
-    assert(risk1.body?.risk_level === 'Critical', `HARD-015: P5×I5 rated Critical (got: ${risk1.body?.risk_level})`);
-  }
-
-  const risk2 = await req('POST', '/api/project_risks', {
-    project_id: projectId,
-    title: 'Low Impact Risk',
-    probability: 1,
-    impact: 1
-  }, adminToken);
-
-  assert([200, 201].includes(risk2.status), 'HARD-015: Low risk created successfully');
-  const lowScore = risk2.body?.risk_score ?? risk2.body?.score;
-  if (lowScore != null) {
-    assert(lowScore === 1, `HARD-015: P1×I1 = score 1 (got: ${lowScore})`);
-    assert(['Low', 'low'].includes(risk2.body?.risk_level ?? ''), 'HARD-015: P1×I1 rated Low');
+  // 3. PUT validation test: update with probability 0 should return 400
+  if (risk1.body?.id) {
+    const putBadRes = await req('PUT', `/api/project_risks/${risk1.body.id}`, {
+      probability: 0
+    }, adminToken);
+    assert(putBadRes.status === 400, 'HARD-015: Out-of-range PUT rejected with 400');
   }
 }
 
