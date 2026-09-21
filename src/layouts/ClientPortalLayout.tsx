@@ -5,15 +5,13 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard,
-  FileCheck2,
   FileText,
   FileSpreadsheet,
-  CheckCircle2,
+  CalendarDays,
+  MessageSquare,
   LogOut,
   Building2,
   ChevronRight,
-  Download,
-  Eye,
   ShieldCheck
 } from 'lucide-react';
 
@@ -34,13 +32,14 @@ export const ClientPortalLayout: React.FC<ClientPortalLayoutProps> = ({
   onSelectProject,
   renderContent
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'approvals' | 'handover'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'programme' | 'progress' | 'documents' | 'clarifications'>('overview');
 
   const navItems = [
-    { id: 'overview', label: 'Executive Dashboard', icon: LayoutDashboard },
-    { id: 'reports', label: 'Published Progress Reports', icon: FileSpreadsheet },
-    { id: 'approvals', label: 'Client Approvals & Submittals', icon: FileCheck2 },
-    { id: 'handover', label: 'Commissioning & Handover', icon: CheckCircle2 }
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'programme', label: 'Programme', icon: CalendarDays },
+    { id: 'progress', label: 'Progress', icon: FileSpreadsheet },
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'clarifications', label: 'Clarifications', icon: MessageSquare }
   ] as const;
 
   const currentProject = projects.find(p => p.id === selectedProject);
@@ -57,7 +56,7 @@ export const ClientPortalLayout: React.FC<ClientPortalLayoutProps> = ({
           <div>
             <h1 className="font-bold text-sm text-white leading-tight">Client Portal</h1>
             <span className="text-[10px] font-semibold text-blue-400 bg-blue-900/50 px-1.5 py-0.5 rounded border border-blue-700/50">
-              Executive Oversight
+              Project Portal
             </span>
           </div>
         </div>
@@ -128,7 +127,7 @@ export const ClientPortalLayout: React.FC<ClientPortalLayoutProps> = ({
 
           <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
             <ShieldCheck size={14} className="text-blue-600" />
-            <span>Audited & Curated Client Release</span>
+            <span>Published client information</span>
           </div>
         </header>
 

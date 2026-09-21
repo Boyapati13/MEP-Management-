@@ -12,7 +12,8 @@ import {
   Bell,
   Search,
   SlidersHorizontal,
-  FolderOpen
+  FolderOpen,
+  Sparkles
 } from 'lucide-react';
 import { DOMAINS, ROUTE_ITEMS, NavigationDomain, RouteItem } from '../app/routes';
 import { canShowDomain, canShowRoute, UserSession } from '../app/permissions';
@@ -26,6 +27,7 @@ interface InternalLayoutProps {
   activeDomain: NavigationDomain;
   activeRoute: string;
   onNavigate: (domain: NavigationDomain, routeId: string) => void;
+  onOpenAssistant?: () => void;
   children: React.ReactNode;
 }
 
@@ -38,6 +40,7 @@ export const InternalLayout: React.FC<InternalLayoutProps> = ({
   activeDomain,
   activeRoute,
   onNavigate,
+  onOpenAssistant,
   children
 }) => {
   const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({
@@ -193,7 +196,16 @@ export const InternalLayout: React.FC<InternalLayoutProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {onOpenAssistant && (
+              <button
+                onClick={onOpenAssistant}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+              >
+                <Sparkles size={14} />
+                MEP Assistant
+              </button>
+            )}
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-600">
               Role: {user.role}
             </span>

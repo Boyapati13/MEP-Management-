@@ -37,6 +37,8 @@ import { ClientPortalLayout } from './layouts/ClientPortalLayout';
 import { NavigationDomain } from './app/routes';
 import { ProcurementProgrammeRiskView } from './components/ProcurementProgrammeRiskView';
 import { AdminSetupChecklist } from './components/AdminSetupChecklist';
+import { ClientPortalContent } from './components/ClientPortalContent';
+import { MepAssistantDrawer } from './components/MepAssistantDrawer';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -270,6 +272,7 @@ function AppShell() {
   const [page, setPage] = useState<Page>('dashboard');
   const [pageParam, setPageParam] = useState<string>('');
   const [activeDomain, setActiveDomain] = useState<NavigationDomain>('dashboard');
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const { addToast } = useToast();
 
   const navigate = useCallback((p: Page, param?: string) => {
@@ -339,15 +342,24 @@ function AppShell() {
         projects={projects}
         onSelectProject={setSelectedProject}
         renderContent={(tab) => {
-          switch (tab) {
-            case 'overview': return <ProjectDashboardPage navigate={navigate} />;
-            case 'tasks': return <TasksPage navigate={navigate} />;
-            case 'claims': return <GenericPage page="progress" />;
-            case 'submittals': return <GenericPage page="submittals" />;
-            case 'rfis': return <GenericPage page="rfis" />;
-            case 'clarifications': return <GenericPage page="clarifications" />;
-            default: return renderPage();
+          if (tab === 'home') {
+            return (
+              <div className="space-y-5">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">My Project</h1>
+                  <p className="text-sm text-gray-500 mt-1">Assigned work packages, current tasks and delivery obligations.</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                  <p className="font-semibold text-blue-900">Work-package scoped workspace</p>
+                  <p className="text-sm text-blue-700 mt-1">Choose your assigned package above, then open the Work Package view for current tasks, blockers and progress.</p>
+                </div>
+              </div>
+            );
           }
+          if (tab === 'work') return <TasksPage navigate={navigate} />;
+          if (tab === 'technical') return <GenericPage page="RFIs, submittals and drawings" />;
+          if (tab === 'progress') return <ProjectUpdatesPage navigate={navigate} />;
+          return <GenericPage page="My claims and variations" />;
         }}
       />
     );
@@ -361,32 +373,38 @@ function AppShell() {
         selectedProject={selectedProject}
         projects={projects}
         onSelectProject={setSelectedProject}
-        renderContent={(tab) => {
-          switch (tab) {
-            case 'overview': return <ProjectDashboardPage navigate={navigate} />;
-            case 'reports': return <ProjectUpdatesPage navigate={navigate} />;
-            case 'approvals': return <GenericPage page="submittals" />;
-            case 'handover': return <GenericPage page="handover" />;
-            default: return renderPage();
-          }
-        }}
+        renderContent={(tab) => (
+          <ClientPortalContent
+            tab={tab as 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications'}
+            projectId={selectedProject}
+          />
+        )}
       />
     );
   }
 
   return (
-    <InternalLayout
-      user={user}
-      logout={logout}
-      selectedProject={selectedProject}
-      projects={projects}
-      onSelectProject={setSelectedProject}
-      activeDomain={activeDomain}
-      activeRoute={page}
-      onNavigate={handleInternalNavigate}
-    >
-      {renderPage()}
-    </InternalLayout>
+    <>
+      <InternalLayout
+        user={user}
+        logout={logout}
+        selectedProject={selectedProject}
+        projects={projects}
+        onSelectProject={setSelectedProject}
+        activeDomain={activeDomain}
+        activeRoute={page}
+        onNavigate={handleInternalNavigate}
+        onOpenAssistant={() => setAssistantOpen(true)}
+      >
+        {renderPage()}
+      </InternalLayout>
+
+      <MepAssistantDrawer
+        open={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
+        projectId={selectedProject || undefined}
+      />
+    </>
   );
 }
 

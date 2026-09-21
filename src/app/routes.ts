@@ -1,6 +1,6 @@
 /**
- * MEP Management Platform — V1.4.1 Consolidated Domain Routes
- * 6 Primary Operational Domains + Settings
+ * MEP Management Platform — V1.4.1 Professional Navigation
+ * Primary navigation describes construction work, not implementation technology.
  */
 import {
   LayoutDashboard,
@@ -12,25 +12,22 @@ import {
   Settings as SettingsIcon,
   Layers,
   CalendarCheck,
-  AlertOctagon,
   Users,
-  MapPin,
-  Clock,
   ShieldCheck,
   FileText,
   HelpCircle,
   FolderKanban,
   FileSpreadsheet,
-  Coins,
   Package,
-  FileCheck,
   ListTodo,
-  CheckCircle2,
+  CheckSquare,
   Flame,
   Building,
   UserCog,
   History,
-  CheckSquare
+  MapPinned,
+  ClipboardList,
+  TrendingUp
 } from 'lucide-react';
 
 export type NavigationDomain =
@@ -49,8 +46,6 @@ export interface RouteItem {
   domain: NavigationDomain;
   badgeKey?: string;
   allowedRoles?: string[];
-  subcontractorVisible?: boolean;
-  clientVisible?: boolean;
 }
 
 export interface DomainConfig {
@@ -67,95 +62,87 @@ export const DOMAINS: DomainConfig[] = [
     id: 'dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    description: 'Executive Control Tower, health KPIs and immediate attention items',
+    description: 'Project health, attention items, lookahead and workforce',
     defaultRoute: 'dashboard'
   },
   {
     id: 'delivery',
     label: 'Delivery',
     icon: Truck,
-    description: 'Work packages, baseline schedule, task readiness and procurement buffer',
-    defaultRoute: 'work-packages'
+    description: 'Programme, work packages and progress',
+    defaultRoute: 'tasks'
   },
   {
     id: 'site',
     label: 'Site',
     icon: HardHat,
-    description: 'Live field feed, workforce operations, instructions and site quality',
-    defaultRoute: 'updates'
+    description: 'Workforce, quality, site records and logistics',
+    defaultRoute: 'workforce'
   },
   {
     id: 'technical',
     label: 'Technical',
     icon: FileCheck2,
-    description: 'Technical coordination, engineering submittals, RFIs and commissioning',
-    defaultRoute: 'documents'
+    description: 'RFIs, submittals and controlled documents',
+    defaultRoute: 'rfis'
   },
   {
     id: 'commercial',
     label: 'Commercial',
     icon: Receipt,
-    description: 'Payment claims, variations, procurement commitments and BOQ',
-    defaultRoute: 'progress'
+    description: 'BOQ, procurement and commercial changes',
+    defaultRoute: 'boq'
   },
   {
     id: 'controls',
     label: 'Controls',
     icon: Sliders,
-    description: 'Formal actions, decisions registers and 5x5 risk management',
-    defaultRoute: 'actions'
+    description: 'Risks, actions and decisions',
+    defaultRoute: 'risks'
   },
   {
     id: 'settings',
     label: 'Settings',
     icon: SettingsIcon,
-    description: 'Tenant configuration, user access, enterprise audit and checklists',
-    defaultRoute: 'users',
+    description: 'Project setup, access and audit',
+    defaultRoute: 'setup-checklist',
     allowedRoles: ['Admin', 'ProjectManager']
   }
 ];
 
 export const ROUTE_ITEMS: RouteItem[] = [
   // Dashboard
-  { id: 'dashboard', label: 'Executive Overview', icon: LayoutDashboard, domain: 'dashboard' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, domain: 'dashboard' },
 
-  // Delivery Domain
-  { id: 'work-packages', label: 'Work Packages', icon: Layers, domain: 'delivery' },
-  { id: 'tasks', label: 'Tasks & Schedule', icon: CalendarCheck, domain: 'delivery' },
-  { id: 'procurement-risk', label: 'Procurement Risk', icon: AlertOctagon, domain: 'delivery', allowedRoles: ['Admin', 'ProjectManager', 'SiteEngineer', 'CommercialManager'] },
+  // Delivery
+  { id: 'tasks', label: 'Programme & Tasks', icon: CalendarCheck, domain: 'delivery' },
+  { id: 'project-detail', label: 'Work Packages', icon: Layers, domain: 'delivery' },
+  { id: 'progress', label: 'Progress', icon: TrendingUp, domain: 'delivery' },
 
-  // Site Domain
-  { id: 'updates', label: 'Live Site Feed', icon: HardHat, domain: 'site' },
-  { id: 'workforce', label: 'Workforce Hub', icon: Users, domain: 'site' },
-  { id: 'sites', label: 'Project Sites & Geofences', icon: MapPin, domain: 'site' },
-  { id: 'workers', label: 'Field Workers', icon: Users, domain: 'site' },
-  { id: 'site-instructions', label: 'Site Instructions', icon: FileText, domain: 'site' },
-  { id: 'timesheets', label: 'Timesheets & Attendance', icon: Clock, domain: 'site' },
-  { id: 'punch-clock', label: 'Punch Clock', icon: Clock, domain: 'site' },
-  { id: 'site-quality', label: 'Quality & Safety (NCR / Punch)', icon: ShieldCheck, domain: 'site' },
+  // Site
+  { id: 'workforce', label: 'Workforce', icon: Users, domain: 'site' },
+  { id: 'inspections', label: 'Quality & Safety', icon: ShieldCheck, domain: 'site' },
+  { id: 'updates', label: 'Site Records', icon: ClipboardList, domain: 'site' },
+  { id: 'sites', label: 'Logistics & Maps', icon: MapPinned, domain: 'site' },
 
-  // Technical Domain
+  // Technical
+  { id: 'rfis', label: 'RFIs & Clarifications', icon: HelpCircle, domain: 'technical' },
+  { id: 'submittals', label: 'Submittals', icon: FileCheck2, domain: 'technical' },
   { id: 'documents', label: 'Documents & Drawings', icon: FolderKanban, domain: 'technical' },
-  { id: 'submittals', label: 'Technical Submittals', icon: FileCheck, domain: 'technical' },
-  { id: 'rfis', label: 'Requests for Information (RFIs)', icon: HelpCircle, domain: 'technical' },
-  { id: 'clarifications', label: 'Technical Clarifications', icon: HelpCircle, domain: 'technical' },
-  { id: 'commissioning', label: 'Commissioning & Handover', icon: CheckCircle2, domain: 'technical' },
 
-  // Commercial Domain
-  { id: 'progress', label: 'Progress Claims (IPC)', icon: Coins, domain: 'commercial' },
-  { id: 'change_orders', label: 'Change Orders & Variations', icon: FileSpreadsheet, domain: 'commercial' },
-  { id: 'boq', label: 'Bill of Quantities (BOQ)', icon: FileSpreadsheet, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
-  { id: 'procurement', label: 'Procurement & Orders', icon: Package, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
-  { id: 'payroll', label: 'Labour Cost & Payroll', icon: Coins, domain: 'commercial', allowedRoles: ['Admin', 'CommercialManager'] },
+  // Commercial
+  { id: 'boq', label: 'BOQ', icon: FileSpreadsheet, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
+  { id: 'procurement', label: 'Procurement', icon: Package, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager', 'SiteEngineer'] },
+  { id: 'change_orders', label: 'Changes & Claims', icon: Receipt, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
 
-  // Controls Domain
-  { id: 'actions', label: 'Project Actions Register', icon: ListTodo, domain: 'controls' },
-  { id: 'decisions', label: 'Project Decisions Register', icon: CheckSquare, domain: 'controls' },
-  { id: 'risks', label: 'Risk Register & Heatmap', icon: Flame, domain: 'controls' },
+  // Controls
+  { id: 'risks', label: 'Risks & Blockers', icon: Flame, domain: 'controls' },
+  { id: 'actions', label: 'Actions', icon: ListTodo, domain: 'controls' },
+  { id: 'decisions', label: 'Decisions', icon: CheckSquare, domain: 'controls' },
 
-  // Settings Domain
-  { id: 'companies', label: 'Companies & Subcontractors', icon: Building, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
-  { id: 'users', label: 'User Directory & Roles', icon: UserCog, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
-  { id: 'audit', label: 'Enterprise Audit Trail', icon: History, domain: 'settings', allowedRoles: ['Admin'] },
-  { id: 'setup-checklist', label: 'Project Setup Checklist', icon: CheckSquare, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] }
+  // Settings
+  { id: 'setup-checklist', label: 'Project Setup', icon: CheckSquare, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
+  { id: 'companies', label: 'Companies', icon: Building, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
+  { id: 'users', label: 'Users & Roles', icon: UserCog, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
+  { id: 'audit', label: 'Audit Trail', icon: History, domain: 'settings', allowedRoles: ['Admin'] }
 ];

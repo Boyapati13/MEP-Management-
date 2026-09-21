@@ -38,7 +38,7 @@ export const SubcontractorLayout: React.FC<SubcontractorLayoutProps> = ({
   onSelectProject,
   renderContent
 }) => {
-  const [activeTab, setActiveTab] = useState<'packages' | 'tasks' | 'submittals' | 'rfis' | 'claims'>('packages');
+  const [activeTab, setActiveTab] = useState<'home' | 'work' | 'technical' | 'progress' | 'commercial'>('home');
   const [myPackages, setMyPackages] = useState<any[]>([]);
   const [selectedWpId, setSelectedWpId] = useState<string>('');
   const [loadingPackages, setLoadingPackages] = useState(true);
@@ -65,11 +65,11 @@ export const SubcontractorLayout: React.FC<SubcontractorLayoutProps> = ({
   }, [selectedProject]);
 
   const navItems = [
-    { id: 'packages', label: 'My Work Packages', icon: Layers },
-    { id: 'tasks', label: 'My Tasks & Schedule', icon: CalendarCheck },
-    { id: 'submittals', label: 'My Technical Submittals', icon: FileCheck },
-    { id: 'rfis', label: 'RFIs & Clarifications', icon: HelpCircle },
-    { id: 'claims', label: 'Progress Claims', icon: Coins }
+    { id: 'home', label: 'Home', icon: HardHat },
+    { id: 'work', label: 'My Work', icon: CalendarCheck },
+    { id: 'technical', label: 'Technical', icon: FileCheck },
+    { id: 'progress', label: 'Progress', icon: Layers },
+    { id: 'commercial', label: 'Commercial', icon: Coins }
   ] as const;
 
   const currentProject = projects.find(p => p.id === selectedProject);
@@ -154,7 +154,7 @@ export const SubcontractorLayout: React.FC<SubcontractorLayoutProps> = ({
             <p className="text-xs font-bold text-gray-900 truncate">{user.name || 'Subcontractor'}</p>
             <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
             <span className="inline-block mt-0.5 text-[9px] font-mono text-gray-400 bg-gray-200/60 px-1 rounded">
-              Scope: {user.access_scope || 'company'}
+              Scope: {user.access_scope || 'work_package'}
             </span>
           </div>
           <button
@@ -183,7 +183,7 @@ export const SubcontractorLayout: React.FC<SubcontractorLayoutProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
             >
               <ExternalLink size={13} />
-              Open Package Command Center
+              Open Work Package
             </button>
           )}
         </header>

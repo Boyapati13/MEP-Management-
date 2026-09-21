@@ -133,32 +133,48 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
         return;
       }
 
-      const { certified_percentage, certified_amount, notes, status } = req.body;
-      const certPct = Number(certified_percentage ?? claim.claimed_percentage ?? 0);
-      const certAmt = Number(certified_amount ?? claim.claimed_amount ?? 0);
-      const nextStatus = status || 'Approved';
+      const data = req.body || {};
+      const rawAdj = data.verified_percent !== undefined ? data.verified_percent : (data.verified_percentage !== undefined ? data.verified_percentage : (data.certified_percentage !== undefined ? data.certified_percentage : data.adjusted_percent));
+      const certPct = rawAdj !== undefined ? Number(rawAdj) : Number(claim.claimed_percent ?? claim.claimed_percentage ?? 0);
+      const reviewComments = data.verification_notes || data.review_comments || data.notes || null;
+      const nextStatus = data.status || 'Approved with Adjustments';
       const now = new Date().toISOString();
 
       db.prepare(`
         UPDATE progress_submissions
-        SET certified_percentage = ?,
-            certified_amount = ?,
+        SET adjusted_percent = ?,
             status = ?,
-            verified_by = ?,
-            verified_at = ?,
-            verification_notes = ?
+            reviewed_by = ?,
+            review_comments = ?,
+            approved_at = ?
         WHERE id = ?
-      `).run(certPct, certAmt, nextStatus, user.name, now, notes || null, req.params.id);
+      `).run(certPct, nextStatus, user.name, reviewComments, now, req.params.id);
+
+      if (claim.work_package_id) {
+        try {
+          db.prepare(`
+            UPDATE tasks
+            SET progress = MAX(progress, ?)
+            WHERE work_package_id = ? AND status != 'Completed'
+          `).run(certPct, claim.work_package_id);
+        } catch {}
+      }
 
       writeAudit(user.user_id, 'progress_submissions', req.params.id, claim.project_id, 'verify', claim, {
+        adjusted_percent: certPct,
+        verified_percent: certPct,
         certified_percentage: certPct,
-        certified_amount: certAmt,
         status: nextStatus,
-        verified_by: user.name
+        reviewed_by: user.name
       });
 
-      const updated = db.prepare('SELECT * FROM progress_submissions WHERE id=?').get(req.params.id);
-      res.json(updated);
+      const updated = db.prepare('SELECT * FROM progress_submissions WHERE id=?').get(req.params.id) as any;
+      res.json({
+        ...updated,
+        verified_percent: updated.adjusted_percent ?? certPct,
+        certified_percentage: updated.adjusted_percent ?? certPct,
+        status: updated.status
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

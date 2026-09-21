@@ -66,9 +66,11 @@ export function publishProgressReport(
     WHERE project_id = ?
   `).all(projectId);
 
-  // Calculate overall weighted project completion percentage
-  let overallProgress = 0;
-  if (tasks.length > 0) {
+  // Calculate overall weighted project completion percentage, preserving PM input if present
+  let overallProgress = (report.overall_progress_percent !== null && report.overall_progress_percent !== undefined)
+    ? Number(report.overall_progress_percent)
+    : 0;
+  if (tasks.length > 0 && (report.overall_progress_percent === null || report.overall_progress_percent === undefined)) {
     const sum = tasks.reduce((acc: number, t: any) => acc + Number(t.progress || 0), 0);
     overallProgress = Math.round(sum / tasks.length);
   }
