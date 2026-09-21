@@ -23,6 +23,8 @@
     "test": "npm run test:all",
     "backup": "tsx scripts/backup_sqlite.ts",
     "backup:verify": "tsx scripts/backup_sqlite.ts --verify",
+    "db:clean": "tsx scripts/reset_clean_db.ts",
+    "db:reset": "tsx scripts/reset_clean_db.ts",
     "mobile:sync": "cap sync",
     "mobile:android": "cap open android",
     "mobile:build:android": "node scripts/build_android.cjs",
