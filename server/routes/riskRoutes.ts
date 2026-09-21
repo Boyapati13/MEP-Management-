@@ -30,7 +30,7 @@ export function registerRiskRoutes(app: any, db: DatabaseSync, authRequired: any
           params.push(user.work_package_id, user.work_package_id);
         } else {
           // Subcontractor without work package assigned sees no internal project risks
-          res.json({ project_id: projectId, grid: {}, summary: { total: 0, critical: 0, high: 0, medium: 0, low: 0 } });
+          res.json({ project_id: projectId, grid: {}, matrix_grid: {}, total_risks: 0, summary: { total: 0, total_risks: 0, critical: 0, high: 0, medium: 0, low: 0 } });
           return;
         }
       }
@@ -73,8 +73,11 @@ export function registerRiskRoutes(app: any, db: DatabaseSync, authRequired: any
       res.json({
         project_id: projectId,
         grid,
+        matrix_grid: grid,
+        total_risks: risks.length,
         summary: {
           total: risks.length,
+          total_risks: risks.length,
           critical: critCount,
           high: highCount,
           medium: medCount,
