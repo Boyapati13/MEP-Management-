@@ -3882,6 +3882,83 @@ async function startServer() {
     res.json(rows.map(rowToDict));
   });
 
+  // Task completion with photo evidence
+  app.post("/api/tasks/:id/complete-with-evidence", authRequired, (req, res) => {
+    if (!canEdit(req.user!, "tasks")) {
+      res.status(403).json({ error: "No edit access to tasks" });
+      return;
+    }
+    const task = db.prepare("SELECT * FROM tasks WHERE id=?").get(req.params.id) as any;
+    if (!task) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+    if (!hasProjectAccess(req.user!, task.project_id)) {
+      res.status(403).json({ error: "No access to this project" });
+      return;
+    }
+
+    const { evidence_url, evidence_notes, actual_end_date } = req.body || {};
+    const today = new Date().toISOString().slice(0, 10);
+    const finishDate = actual_end_date || today;
+
+    db.prepare(`
+      UPDATE tasks 
+      SET status='Completed', 
+          progress=100, 
+          actual_end_date=?, 
+          evidence_url=COALESCE(?, evidence_url), 
+          evidence_notes=COALESCE(?, evidence_notes) 
+      WHERE id=?
+    `).run(finishDate, evidence_url || null, evidence_notes || null, task.id);
+
+    // Record status history
+    if (task.status !== 'Completed') {
+      db.prepare("INSERT INTO task_status_history VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+        crypto.randomUUID(), task.project_id, task.id, req.user!.name,
+        task.status || 'In Progress', 'Completed', new Date().toISOString(), evidence_notes || 'Task marked completed with evidence photo'
+      );
+    }
+
+    // Auto-archive evidence photo into documents repository as Site Photo
+    const finalPhoto = evidence_url || task.evidence_url;
+    if (finalPhoto) {
+      try {
+        const existingDoc = db.prepare("SELECT id FROM documents WHERE project_id=? AND name LIKE ?").get(task.project_id, `%${task.title}%Evidence%`) as any;
+        const docName = `${task.title} - Completion Evidence Photo`;
+        if (!existingDoc) {
+          db.prepare(`
+            INSERT INTO documents (id, project_id, name, category, work_package_id, revision, status, date_added, attachment_name, attachment_data, uploaded_by, visibility)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            crypto.randomUUID(),
+            task.project_id,
+            docName,
+            'Site Photo',
+            task.work_package_id || null,
+            'Rev 0',
+            'Approved',
+            finishDate,
+            `${(task.wbs_code || 'TASK')}_evidence.jpg`,
+            finalPhoto,
+            req.user!.name,
+            'Internal'
+          );
+        } else {
+          db.prepare(`
+            UPDATE documents SET attachment_data=?, date_added=? WHERE id=?
+          `).run(finalPhoto, finishDate, existingDoc.id);
+        }
+      } catch (docErr) {
+        console.error("Auto-archiving task evidence photo error:", docErr);
+      }
+    }
+
+    writeAudit(req.user!.user_id, "tasks", task.id, task.project_id, "complete_with_evidence", task, { status: "Completed", progress: 100, evidence_url: !!finalPhoto });
+    const updated = db.prepare("SELECT * FROM tasks WHERE id=?").get(task.id) as any;
+    res.json(rowToDict(updated));
+  });
+
   app.post("/api/:table/:id/transition", authRequired, (req, res) => {
     const table = req.params.table;
     const recordId = req.params.id;
@@ -9283,6 +9360,39 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
             status: updated.status
           });
         } catch {}
+      }
+
+      if (actualTable === "tasks" && updated.evidence_url) {
+        try {
+          const existingDoc = db.prepare("SELECT id FROM documents WHERE project_id=? AND name LIKE ?").get(updated.project_id, `%${updated.title}%Evidence%`) as any;
+          const today = new Date().toISOString().slice(0, 10);
+          const docName = `${updated.title} - Completion Evidence Photo`;
+          if (!existingDoc) {
+            db.prepare(`
+              INSERT INTO documents (id, project_id, name, category, work_package_id, revision, status, date_added, attachment_name, attachment_data, uploaded_by, visibility)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              crypto.randomUUID(),
+              updated.project_id,
+              docName,
+              'Site Photo',
+              updated.work_package_id || null,
+              'Rev 0',
+              'Approved',
+              today,
+              `${(updated.wbs_code || 'TASK')}_evidence.jpg`,
+              updated.evidence_url,
+              req.user!.name,
+              'Internal'
+            );
+          } else {
+            db.prepare(`
+              UPDATE documents SET attachment_data=?, date_added=? WHERE id=?
+            `).run(updated.evidence_url, today, existingDoc.id);
+          }
+        } catch (docErr) {
+          console.error("Auto-archiving task evidence photo error:", docErr);
+        }
       }
 
       if ("status" in data && "status" in existing && data.status !== existing.status) {

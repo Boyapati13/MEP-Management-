@@ -223,6 +223,8 @@ export const tasksApi = {
   update: (id: string, data: any) => api.put<any>(`/api/tasks/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/tasks/${id}`),
   history: (id: string) => api.get<any[]>(`/api/tasks/${id}/history`),
+  completeWithEvidence: (id: string, data: { evidence_url?: string; evidence_notes?: string; actual_end_date?: string }) =>
+    api.post<any>(`/api/tasks/${id}/complete-with-evidence`, data),
 };
 
 // Project Updates & Site Progress

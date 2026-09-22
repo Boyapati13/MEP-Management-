@@ -2,7 +2,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import {
   X, Layers, MapPin, Briefcase, Users, Calendar, FileText,
   DollarSign, ShoppingCart, ShieldCheck, Check, AlertCircle, Zap,
-  CheckCircle2, XCircle, Clock, RefreshCw
+  CheckCircle2, XCircle, Clock, RefreshCw, Camera, UploadCloud, Eye, Trash2, Image
 } from 'lucide-react';
 import { sitesApi, workPackagesApi, workersApi, tasksApi, api } from '../api';
 
@@ -20,6 +20,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
   // Fixtures
   const [sites, setSites] = useState<any[]>([]);
@@ -55,8 +56,20 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
     procurement_item_id: '',
     evidence_required: 0,
     evidence_type: 'Photo',
+    evidence_url: '',
     evidence_notes: ''
   });
+
+  const handleEvidenceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setFormData(d => ({ ...d, evidence_url: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +101,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
         procurement_item_id: task.procurement_item_id || '',
         evidence_required: task.evidence_required ? 1 : 0,
         evidence_type: task.evidence_type || 'Photo',
+        evidence_url: task.evidence_url || '',
         evidence_notes: task.evidence_notes || ''
       });
     } else {
@@ -118,6 +132,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
         procurement_item_id: '',
         evidence_required: 1,
         evidence_type: 'Photo',
+        evidence_url: '',
         evidence_notes: ''
       });
     }
@@ -186,6 +201,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
         procurement_item_id: formData.procurement_item_id || null,
         evidence_required: formData.evidence_required ? 1 : 0,
         evidence_type: formData.evidence_type || 'None',
+        evidence_url: formData.evidence_url || null,
         evidence_notes: formData.evidence_notes || null
       };
 
@@ -651,6 +667,63 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
                       className={inputCls}
                     />
                   </div>
+
+                  {/* Photo Evidence Upload & Camera Section */}
+                  <div className="pt-2">
+                    <label className={labelCls}>Attached Evidence Photo</label>
+                    {formData.evidence_url ? (
+                      <div className="relative group rounded-2xl overflow-hidden border-2 border-emerald-300 bg-slate-900 shadow-md">
+                        <img
+                          src={formData.evidence_url}
+                          alt="Task Completion Evidence"
+                          className="w-full h-48 object-cover cursor-pointer hover:opacity-95 transition-opacity"
+                          onClick={() => setViewingPhoto(formData.evidence_url)}
+                        />
+                        <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-sm p-1.5 rounded-xl border border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => setViewingPhoto(formData.evidence_url)}
+                            className="p-1.5 text-white hover:text-blue-300 rounded-lg hover:bg-white/10 transition-colors"
+                            title="Expand Photo"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, evidence_url: '' }))}
+                            className="p-1.5 text-red-300 hover:text-red-400 rounded-lg hover:bg-white/10 transition-colors"
+                            title="Remove Photo"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                        <div className="absolute bottom-2 left-2 right-2 bg-slate-900/85 backdrop-blur-sm px-3 py-1.5 rounded-xl text-[11px] text-emerald-400 flex items-center justify-between font-mono">
+                          <span className="flex items-center gap-1"><ShieldCheck size={13} /> Verified Photographic Record</span>
+                          <span className="text-gray-400">Click to enlarge</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors rounded-2xl p-6 text-center bg-gray-50/50 hover:bg-blue-50/20">
+                        <input
+                          type="file"
+                          id="evidence_photo_input"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleEvidenceFileChange}
+                          className="hidden"
+                        />
+                        <label htmlFor="evidence_photo_input" className="cursor-pointer flex flex-col items-center justify-center space-y-2">
+                          <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <Camera size={22} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-blue-700 hover:underline">Take Photo or Upload Evidence</span>
+                            <p className="text-[11px] text-gray-500 mt-0.5">Supports Camera capture on mobile / tablet or image upload (JPG, PNG, WebP)</p>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -777,6 +850,36 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
           </div>
         </form>
       </div>
+
+      {/* Full Resolution Photo Lightbox */}
+      {viewingPhoto && (
+        <div className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setViewingPhoto(null)}>
+          <div className="relative max-w-4xl max-h-[92vh] bg-slate-900 rounded-3xl overflow-hidden border border-slate-700 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 text-white">
+              <div className="flex items-center gap-2.5">
+                <Camera size={18} className="text-emerald-400" />
+                <span className="text-xs font-bold font-mono tracking-wide">TASK COMPLETION EVIDENCE PHOTO • {formData.wbs_code || 'MEP'}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingPhoto(null)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-black/50 overflow-auto">
+              <img src={viewingPhoto} alt="Evidence Full" className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg" />
+            </div>
+            {formData.evidence_notes && (
+              <div className="px-5 py-3 bg-slate-950/90 border-t border-slate-800 text-xs text-gray-300">
+                <strong className="text-emerald-400">Notes / Signoff: </strong>
+                {formData.evidence_notes}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

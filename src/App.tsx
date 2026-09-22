@@ -40,6 +40,7 @@ import { AdminSetupChecklist } from './components/AdminSetupChecklist';
 import { ClientPortalContent } from './components/ClientPortalContent';
 import { MepAssistantDrawer } from './components/MepAssistantDrawer';
 import { ContractorDocUploadModal } from './components/ContractorDocUploadModal';
+import { CompleteTaskModal } from './components/CompleteTaskModal';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -3687,6 +3688,8 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [completingTask, setCompletingTask] = useState<any | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; title: string; wbs?: string; notes?: string } | null>(null);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -3739,9 +3742,17 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
   };
 
   const handleQuickStatus = async (task: any, newStatus: string) => {
+    if (newStatus === 'Completed' && !task.evidence_url) {
+      setCompletingTask(task);
+      return;
+    }
     try {
       const prog = newStatus === 'Completed' ? 100 : newStatus === 'In Progress' ? Math.max(task.progress || 25, 25) : 0;
-      await tasksApi.update(task.id, { status: newStatus, progress: prog });
+      await tasksApi.update(task.id, {
+        status: newStatus,
+        progress: prog,
+        actual_end_date: newStatus === 'Completed' ? (task.actual_end_date || new Date().toISOString().slice(0, 10)) : task.actual_end_date
+      });
       addToast('success', `Task status updated to ${newStatus}`);
       loadTasks();
     } catch (err: any) {
@@ -3885,11 +3896,37 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
                   {t.end && <><span>•</span><span>Due: {fmtDate(t.end)}</span></>}
                   {t.assignee && !t.worker_name && <><span>•</span><span className="text-gray-600 font-medium">Assigned: {t.assignee}</span></>}
                 </div>
+
+                {/* Evidence Photo Preview Thumbnail */}
+                {t.evidence_url && (
+                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+                    <div
+                      onClick={() => setLightboxPhoto({ url: t.evidence_url, title: t.title, wbs: t.wbs_code, notes: t.evidence_notes })}
+                      className="relative group cursor-pointer rounded-xl overflow-hidden border-2 border-emerald-300 w-24 h-16 bg-slate-900 flex-shrink-0 shadow-sm hover:ring-2 hover:ring-emerald-400 transition-all"
+                      title="Click to view full photo evidence"
+                    >
+                      <img src={t.evidence_url} alt="Evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                        <Camera size={18} className="text-white drop-shadow" />
+                      </div>
+                    </div>
+                    <div className="text-xs">
+                      <span className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                        <CheckCircle size={13} className="text-emerald-600" /> Photo Evidence Attached
+                      </span>
+                      {t.evidence_notes ? (
+                        <p className="text-[11px] text-gray-600 mt-1 line-clamp-1 italic">"{t.evidence_notes}"</p>
+                      ) : (
+                        <p className="text-[11px] text-gray-400 mt-0.5">Click photo thumbnail to enlarge</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Progress & Quick Status */}
-              <div className="flex items-center gap-4 flex-shrink-0">
-                <div className="w-32">
+              <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+                <div className="w-28 sm:w-32">
                   <div className="flex items-center justify-between text-xs font-semibold mb-1">
                     <span className="text-gray-500">Progress</span>
                     <span className="text-gray-900">{t.progress || 0}%</span>
@@ -3912,6 +3949,29 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
                   <option value="Completed">Completed</option>
                   <option value="Blocked">Blocked</option>
                 </select>
+
+                {t.status !== 'Completed' ? (
+                  <button
+                    onClick={() => setCompletingTask(t)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer whitespace-nowrap"
+                    title="Mark Task as Done and attach Evidence Photo"
+                  >
+                    <Camera size={13} />
+                    <span>Done &amp; Photo</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setCompletingTask(t)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap",
+                      t.evidence_url ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                    )}
+                    title={t.evidence_url ? "Update evidence photo" : "Attach evidence photo"}
+                  >
+                    <Camera size={13} />
+                    <span>{t.evidence_url ? "Photo OK" : "+ Photo"}</span>
+                  </button>
+                )}
 
                 <div className="flex items-center gap-1">
                   <button onClick={() => handleOpenEdit(t)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Task">
@@ -3938,6 +3998,45 @@ function TasksPage({ navigate }: { navigate: (page: Page, param?: string) => voi
         task={editingTask}
         projectId={selectedProject || (projects[0]?.id ?? '')}
       />
+
+      {/* Modal: Complete Task & Attach Evidence Photo */}
+      <CompleteTaskModal
+        open={!!completingTask}
+        task={completingTask}
+        onClose={() => setCompletingTask(null)}
+        onCompleted={loadTasks}
+        onToast={addToast}
+      />
+
+      {/* Full Resolution Photo Lightbox */}
+      {lightboxPhoto && (
+        <div className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setLightboxPhoto(null)}>
+          <div className="relative max-w-4xl max-h-[92vh] bg-slate-900 rounded-3xl overflow-hidden border border-slate-700 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 text-white">
+              <div className="flex items-center gap-2.5">
+                <Camera size={18} className="text-emerald-400" />
+                <span className="text-xs font-bold font-mono tracking-wide">TASK COMPLETION EVIDENCE PHOTO • {lightboxPhoto.wbs || 'MEP'}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxPhoto(null)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-black/50 overflow-auto">
+              <img src={lightboxPhoto.url} alt="Evidence Full" className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg" />
+            </div>
+            {lightboxPhoto.notes && (
+              <div className="px-5 py-3 bg-slate-950/90 border-t border-slate-800 text-xs text-gray-300">
+                <strong className="text-emerald-400">Notes / Signoff: </strong>
+                {lightboxPhoto.notes}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
