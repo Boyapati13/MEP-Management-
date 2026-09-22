@@ -33,6 +33,7 @@ interface AuthenticatedUser {
   worker_id?: string;
   access_scope?: 'company' | 'work_package' | 'explicit_packages';
   allowed_work_package_ids?: string[] | string;
+  _projectAccessCache?: Map<string, boolean>;
 }
 
 declare global {
@@ -1741,28 +1742,50 @@ function seedLeaveTypes() {
   }
 }
 
-// Permissions & Scope Helpers
+// Lazy-initialized prepared statements for fast authorization checks
+let stmtMemberAccess: any = null;
+let stmtCompStatus: any = null;
+let stmtCompProjAccess: any = null;
+
+// Performance Optimization: Memoizes project authorization checks per request to avoid
+// redundant database query execution during batch record filtering on list endpoints.
 function canAccessProject(user: AuthenticatedUser, projectId?: string): boolean {
   if (!projectId) return false;
   if (user.role === "Admin") return true;
 
-  // Active individual user membership is required
-  const memberRow = db.prepare(
-    "SELECT 1 FROM project_memberships WHERE user_id=? AND project_id=? AND active=1"
-  ).get(user.user_id, projectId);
-  if (!memberRow) return false;
-
-  // If user belongs to a company, that company must be Active AND participate in the project
-  if (user.company_id) {
-    const comp = db.prepare("SELECT status FROM companies WHERE id=?").get(user.company_id) as any;
-    if (!comp || comp.status === "Inactive") return false;
-
-    const compRow = db.prepare(
-      "SELECT 1 FROM project_companies WHERE project_id=? AND company_id=?"
-    ).get(projectId, user.company_id);
-    if (!compRow) return false;
+  if (!user._projectAccessCache) {
+    user._projectAccessCache = new Map<string, boolean>();
   }
-  return true;
+  if (user._projectAccessCache.has(projectId)) {
+    return user._projectAccessCache.get(projectId)!;
+  }
+
+  if (!stmtMemberAccess) {
+    stmtMemberAccess = db.prepare("SELECT 1 FROM project_memberships WHERE user_id=? AND project_id=? AND active=1");
+    stmtCompStatus = db.prepare("SELECT status FROM companies WHERE id=?");
+    stmtCompProjAccess = db.prepare("SELECT 1 FROM project_companies WHERE project_id=? AND company_id=?");
+  }
+
+  let allowed = false;
+  // Active individual user membership is required
+  const memberRow = stmtMemberAccess.get(user.user_id, projectId);
+  if (memberRow) {
+    // If user belongs to a company, that company must be Active AND participate in the project
+    if (user.company_id) {
+      const comp = stmtCompStatus.get(user.company_id) as any;
+      if (comp && comp.status !== "Inactive") {
+        const compRow = stmtCompProjAccess.get(projectId, user.company_id);
+        if (compRow) {
+          allowed = true;
+        }
+      }
+    } else {
+      allowed = true;
+    }
+  }
+
+  user._projectAccessCache.set(projectId, allowed);
+  return allowed;
 }
 
 const hasProjectAccess = canAccessProject;

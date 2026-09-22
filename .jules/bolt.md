@@ -1,0 +1,3 @@
+## 2026-09-22 - Per-Request Authorization Query Amplification
+**Learning:** `canAccessProject` and `canAccessRecord` are invoked on every row when filtering list endpoints (e.g. `rows.filter(r => canAccessRecord(...))`). Re-evaluating authorization and compiling SQLite statements (`db.prepare()`) per row created an O(N) query amplification bottleneck (hundreds of synchronous SQLite queries per request), inflating p99 latency to ~920ms under concurrency.
+**Action:** Memoize authorization checks on the per-request `user` object (`user._projectAccessCache`) and use module-scoped prepared statements to reduce query count to O(1) per unique project per request.
