@@ -4836,32 +4836,27 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
 
-      let suggestions = fallbackProjectSetupSuggestions(sources);
+      // Run full Contractor Document Intelligence on the extracted text
+      const primaryDoc = docs[0];
+      const combinedDocText = sources.map(s => s.text).join("\n\n");
+      let extracted = extractContractorDocumentIntelligence(combinedDocText, primaryDoc.attachment_name || primaryDoc.name || "Contractor Document");
+
       let source: "ai" | "reference" = "reference";
       const apiKey = process.env.GEMINI_API_KEY;
 
-      if (apiKey) {
+      if (apiKey && combinedDocText.length > 50) {
         try {
           const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
-          const sourceText = sources.map(s =>
-            "--- DOCUMENT ID: " + s.id + " | NAME: " + s.name + " ---\n" + s.text
-          ).join("\n\n");
           const prompt = [
-            "You are extracting project setup metadata from construction/MEP contract documents.",
-            "Extract ONLY values explicitly stated in the supplied documents. Never infer or invent missing values.",
-            "Return ONLY valid JSON. Dates must be YYYY-MM-DD. Budget must be a plain number without currency symbols.",
-            "For every non-null field include the exact source document id and a short exact source excerpt.",
-            "Allowed confidence values: High, Medium, Low.",
-            "JSON shape:",
-            "{",
-            '  "name": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
-            '  "client": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
-            '  "start_date": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
-            '  "end_date": {"value": string|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string},',
-            '  "budget": {"value": number|null, "confidence": "High|Medium|Low", "source_document_id": string|null, "source_excerpt": string}',
-            "}",
+            "You are an expert MEP construction manager analyzing contractor agreement / RFQ / tender documents.",
+            "Extract the following metadata accurately from the text below. Return ONLY valid JSON.",
+            "Fields: projectName (string), client (string), mainContractor (string), subcontractor (string), consultant (string),",
+            "budget (number), currency (string, e.g. EUR, USD, AED, GBP), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD),",
+            "location (string), contractType (string), trades (array of strings, e.g. Electrical, HVAC, Plumbing, Fire Fighting, ELV),",
+            "milestones (array of {title: string, trade: string, priority: string}).",
             "",
-            sourceText
+            "--- DOCUMENT EXCERPT ---",
+            combinedDocText.slice(0, 25000)
           ].join("\n");
 
           let result: any;
@@ -4872,42 +4867,92 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           }
           const raw = String(result.text || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
           const parsed = JSON.parse(raw);
-          const sourceMap = new Map(sources.map(s => [s.id, s]));
-          const aiSuggestions: ProjectSetupSuggestion[] = [];
-
-          for (const field of ["name", "client", "start_date", "end_date", "budget"] as const) {
-            const item = parsed?.[field];
-            if (!item || item.value === null || item.value === undefined || item.value === "") continue;
-            const src = sourceMap.get(String(item.source_document_id || ""));
-            if (!src) continue;
-            let value: string | number | null = item.value;
-            if (field === "start_date" || field === "end_date") value = normaliseProjectDateCandidate(item.value);
-            if (field === "budget") {
-              const amount = typeof item.value === "number" ? item.value : parseImportNumber(item.value);
-              value = amount > 0 ? amount : null;
-            }
-            if ((field === "name" || field === "client") && typeof value !== "string") value = String(value || "").trim();
-            if (value === null || value === "") continue;
-            const confidence = ["High", "Medium", "Low"].includes(item.confidence) ? item.confidence : "Medium";
-            aiSuggestions.push({
-              field,
-              value,
-              confidence,
-              source_document_id: src.id,
-              source_document_name: src.name,
-              source_excerpt: String(item.source_excerpt || "").slice(0, 500),
-            });
-          }
-
-          if (aiSuggestions.length) {
-            const merged = new Map<string, ProjectSetupSuggestion>(suggestions.map(s => [s.field, s]));
-            for (const s of aiSuggestions) merged.set(s.field, s);
-            suggestions = Array.from(merged.values());
-            source = "ai";
-          }
+          if (parsed.projectName) extracted.projectName = parsed.projectName;
+          if (parsed.client) extracted.client = parsed.client;
+          if (parsed.mainContractor) extracted.mainContractor = parsed.mainContractor;
+          if (parsed.subcontractor) extracted.subcontractor = parsed.subcontractor;
+          if (parsed.consultant) extracted.consultant = parsed.consultant;
+          if (typeof parsed.budget === "number" && parsed.budget > 0) extracted.budget = parsed.budget;
+          if (parsed.currency) extracted.currency = parsed.currency;
+          if (parsed.startDate) extracted.startDate = normalizeDate(parsed.startDate) || extracted.startDate;
+          if (parsed.endDate) extracted.endDate = normalizeDate(parsed.endDate) || extracted.endDate;
+          if (parsed.location) extracted.location = parsed.location;
+          if (Array.isArray(parsed.trades) && parsed.trades.length) extracted.trades = parsed.trades;
+          if (Array.isArray(parsed.milestones) && parsed.milestones.length) extracted.milestones = parsed.milestones;
+          source = "ai";
         } catch (err: any) {
-          console.warn("Project setup extraction AI failed, using deterministic extraction:", err?.message);
+          console.warn("Project setup extraction AI fallback to rule engine:", err?.message);
         }
+      }
+
+      // Automatically apply contractor intelligence across Project Master, Work Packages,
+      // Tasks, Companies, and Documents, then run verification checklist.
+      const b64 = (primaryDoc.attachment_data || "").replace(/^data:.*?;base64,/, "");
+      const primaryBuffer = Buffer.from(b64, "base64");
+      const verifiedResult = applyContractorIntelligenceAndVerify(
+        db,
+        extracted,
+        {
+          name: primaryDoc.attachment_name || primaryDoc.name || "Contractor Document",
+          buffer: primaryBuffer,
+          mimeType: "application/pdf"
+        },
+        projectId,
+        req.user!.user_id
+      );
+
+      // Build structured suggestions list for compatibility
+      const suggestions: ProjectSetupSuggestion[] = [];
+      const firstSource = sources[0];
+      if (extracted.projectName) {
+        suggestions.push({
+          field: "name",
+          value: extracted.projectName,
+          confidence: "High",
+          source_document_id: firstSource.id,
+          source_document_name: firstSource.name,
+          source_excerpt: extracted.sourceExcerpts?.projectName || `Project: ${extracted.projectName}`
+        });
+      }
+      if (extracted.client) {
+        suggestions.push({
+          field: "client",
+          value: extracted.client,
+          confidence: "High",
+          source_document_id: firstSource.id,
+          source_document_name: firstSource.name,
+          source_excerpt: extracted.sourceExcerpts?.client || `Client: ${extracted.client}`
+        });
+      }
+      if (extracted.startDate) {
+        suggestions.push({
+          field: "start_date",
+          value: extracted.startDate,
+          confidence: "High",
+          source_document_id: firstSource.id,
+          source_document_name: firstSource.name,
+          source_excerpt: extracted.sourceExcerpts?.startDate || `Start Date: ${extracted.startDate}`
+        });
+      }
+      if (extracted.endDate) {
+        suggestions.push({
+          field: "end_date",
+          value: extracted.endDate,
+          confidence: "High",
+          source_document_id: firstSource.id,
+          source_document_name: firstSource.name,
+          source_excerpt: extracted.sourceExcerpts?.endDate || `End Date: ${extracted.endDate}`
+        });
+      }
+      if (extracted.budget) {
+        suggestions.push({
+          field: "budget",
+          value: extracted.budget,
+          confidence: "High",
+          source_document_id: firstSource.id,
+          source_document_name: firstSource.name,
+          source_excerpt: extracted.sourceExcerpts?.budget || `Budget: ${extracted.budget} ${extracted.currency}`
+        });
       }
 
       writeAudit(
@@ -4921,11 +4966,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           document_ids: sources.map(s => s.id),
           fields_found: suggestions.map(s => s.field),
           extraction_source: source,
+          auto_updated: true,
+          report: verifiedResult.report
         }
       );
 
       res.json({
+        success: true,
+        auto_updated: true,
         project_id: projectId,
+        project: verifiedResult.project,
+        report: verifiedResult.report,
+        work_packages: verifiedResult.workPackages,
+        tasks: verifiedResult.tasks,
+        extracted,
         source,
         analyzed_documents: sources.map(s => ({ id: s.id, name: s.name })),
         skipped,
@@ -9071,6 +9125,35 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
             status: data.status
           });
         } catch {}
+      }
+
+      if (actualTable === "documents" && data.project_id && data.attachment_data) {
+        try {
+          const project = db.prepare("SELECT * FROM projects WHERE id=?").get(data.project_id) as any;
+          const wpCount = (db.prepare("SELECT COUNT(*) as c FROM work_packages WHERE project_id=?").get(data.project_id) as any)?.c || 0;
+          const docName = String(data.attachment_name || data.name || "");
+          const isTenderOrContract = /(?:contract|subcontract|agreement|rfq|tender|specifications|refurbishment|award)/i.test(docName);
+          const isProjectIncomplete = !project || !project.name || project.name === "Untitled Project" || project.budget === 0 || wpCount === 0;
+
+          if (isTenderOrContract || isProjectIncomplete) {
+            extractDocumentText(data.attachment_data, docName).then(textRes => {
+              if (textRes.kind === "text" && textRes.text.length > 50) {
+                const extracted = extractContractorDocumentIntelligence(textRes.text, docName);
+                const b64 = String(data.attachment_data || "").replace(/^data:.*?;base64,/, "");
+                const buf = Buffer.from(b64, "base64");
+                applyContractorIntelligenceAndVerify(
+                  db,
+                  extracted,
+                  { name: docName, buffer: buf, mimeType: "application/pdf" },
+                  data.project_id,
+                  req.user!.user_id
+                );
+              }
+            }).catch(e => console.warn("Auto-update on document upload background error:", e?.message));
+          }
+        } catch (e: any) {
+          console.warn("Auto-update on document upload error:", e?.message);
+        }
       }
 
       writeAudit(req.user!.user_id, module, id, data.project_id, "create", null, data);

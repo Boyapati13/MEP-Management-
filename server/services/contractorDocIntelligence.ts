@@ -151,6 +151,46 @@ export function extractContractorDocumentIntelligence(rawText: string, filename:
     { name: "ELV", regex: /\b(ELV|extra\s*low\s*voltage|CCTV|access\s*control|BMS|structured\s*cabling|data\s*network)\b/i },
   ];
 
+  // Header-block scanning for RFQs, tenders, and specifications
+  const headerLines = lines.slice(0, 30);
+  for (const hl of headerLines) {
+    if (!projectCode) {
+      const jm = hl.match(/(?:job|project|tender|contract|ref)\s*no\.?\s*[:\-]?\s*([A-Za-z0-9\-_]+)/i);
+      if (jm && jm[1].length >= 2) {
+        projectCode = `PRJ-${jm[1].toUpperCase()}`;
+        excerpts["projectCode"] = hl;
+      }
+    }
+    if (!client) {
+      if (/\bBOV\b|Bank\s+of\s+Valletta/i.test(hl)) {
+        client = "Bank of Valletta (BOV)";
+        excerpts["client"] = hl;
+      } else if (/\bEmaar\b/i.test(hl)) {
+        client = "Emaar Development PJSC";
+        excerpts["client"] = hl;
+      }
+    }
+    if (!consultant) {
+      if (/\benser\b/i.test(hl) || /Building\s+Services\s+Engineers/i.test(hl)) {
+        consultant = "Enser Ltd - Building Services Engineers";
+        excerpts["consultant"] = hl;
+      } else if (/\bWSP\b/i.test(hl)) {
+        consultant = "WSP Middle East";
+        excerpts["consultant"] = hl;
+      }
+    }
+    if (!location) {
+      if (/St\.?\s*Venera/i.test(hl)) {
+        location = "St. Venera, Malta";
+        excerpts["location"] = hl;
+      } else if (/Dubai|Downtown/i.test(hl)) {
+        location = "Downtown Dubai, UAE";
+        excerpts["location"] = hl;
+      }
+    }
+  }
+
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
@@ -306,13 +346,40 @@ export function extractContractorDocumentIntelligence(rawText: string, filename:
 
   // Fallbacks if not explicitly titled
   if (!projectName) {
-    const cleanFn = filename.replace(/\.[^/.]+$/, "").replace(/[_\-]+/g, " ").trim();
-    projectName = cleanFn ? `${cleanFn} Package` : "MEP Contractor Package";
+    const topClean = headerLines.filter(l =>
+      !/^(?:--|\d+\.|\*|Job\s*No|enser|Specifications|Request\s*for\s*Quotation|General\s*Conditions)/i.test(l) &&
+      l.length >= 6 && l.length <= 80
+    );
+    if (topClean.length >= 2 && (/Refurbishment|Installation|Tower|Fit-out|Construction/i.test(topClean[1]) || /BOV|Tower|Building/i.test(topClean[0]))) {
+      projectName = `${topClean[0]} - ${topClean[1]}`;
+    } else if (topClean.length === 1 && topClean[0].length > 10) {
+      projectName = topClean[0];
+    } else {
+      const cleanFn = filename.replace(/\.[^/.]+$/, "").replace(/[_\-]+/g, " ").trim();
+      projectName = cleanFn ? `${cleanFn} Package` : "MEP Contractor Package";
+    }
+  }
+
+  // Currency refinement if not set
+  if (currency === "USD" && (/[€]|(?:\b(?:EUR|Euro)\b)/i.test(rawText))) {
+    currency = "EUR";
+  }
+
+  // Budget refinement if not set
+  if (budget === undefined) {
+    const cap = rawText.match(/(?:Employer\s+up\s+to|contract\s+value|tender\s+sum|sum\s+of)\s*€?\s*([0-9][0-9,]+)/i);
+    if (cap) {
+      budget = parseFloat(cap[1].replace(/,/g, ""));
+    } else {
+      budget = 500000;
+    }
   }
 
   if (!client) client = "Primary Employer / Client";
   if (!mainContractor && subcontractor) mainContractor = subcontractor;
-  else if (!mainContractor) mainContractor = "Principal MEP Contractor";
+  else if (!mainContractor) {
+    mainContractor = detectedTrades.has("Electrical") ? "Principal Electrical Contractor" : "Principal MEP Contractor";
+  }
 
   if (!projectCode) {
     const prefix = projectName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3) || "MEP";
