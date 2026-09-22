@@ -77,11 +77,15 @@ async function runMigrationSuite() {
 
     const freshServer = spawn(process.execPath, [path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, MEP_DB_PATH: freshDbPath, PORT: String(TEST_PORT) },
+      env: { ...process.env, MEP_DB_PATH: freshDbPath, PORT: String(TEST_PORT), NODE_ENV: 'test' },
       stdio: 'pipe'
     });
+    let freshServerLogs = '';
+    freshServer.stdout?.on('data', d => freshServerLogs += d.toString());
+    freshServer.stderr?.on('data', d => freshServerLogs += d.toString());
 
     const isHealthy = await waitForHealth(TEST_PORT);
+    if (!isHealthy) console.error('Fresh server failed to become healthy. Logs:\n', freshServerLogs);
     assert(isHealthy, 'Server successfully booted with fresh ephemeral database and responded 200 to /api/health');
     assert(fs.existsSync(freshDbPath), 'SQLite database file was generated automatically by initDb()');
 
@@ -115,11 +119,15 @@ async function runMigrationSuite() {
 
     const freshServerRestart = spawn(process.execPath, [path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, MEP_DB_PATH: freshDbPath, PORT: String(TEST_PORT) },
+      env: { ...process.env, MEP_DB_PATH: freshDbPath, PORT: String(TEST_PORT), NODE_ENV: 'test' },
       stdio: 'pipe'
     });
+    let restartLogs = '';
+    freshServerRestart.stdout?.on('data', d => restartLogs += d.toString());
+    freshServerRestart.stderr?.on('data', d => restartLogs += d.toString());
 
     const isHealthy2 = await waitForHealth(TEST_PORT);
+    if (!isHealthy2) console.error('Restarted server failed to become healthy. Logs:\n', restartLogs);
     assert(isHealthy2, 'Server restarted cleanly without schema or initialization errors');
 
     const db2 = new DatabaseSync(freshDbPath);
@@ -139,14 +147,14 @@ async function runMigrationSuite() {
     legacyDb.exec(`
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
-        username TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL
+        username TEXT UNIQUE,
+        password_hash TEXT,
+        name TEXT,
+        role TEXT
       );
       CREATE TABLE projects (
         id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
+        name TEXT,
         client TEXT,
         status TEXT,
         start_date TEXT,
@@ -182,11 +190,11 @@ async function runMigrationSuite() {
 
     // Insert legacy pre-existing data
     legacyDb.exec(`
-      INSERT INTO users (id, username, name, password_hash, role)
-      VALUES ('legacy-pm-01', 'legacy_pm', 'Legacy Project Manager', 'hash123', 'ProjectManager');
+      INSERT INTO users (id, username, password_hash, name, role)
+      VALUES ('legacy-pm-01', 'legacy_pm', 'hash123', 'Legacy Project Manager', 'ProjectManager');
 
       INSERT INTO projects (id, name, client, status, start_date, end_date, budget)
-      VALUES ('legacy-proj-01', 'Legacy Office Refurb', 'Old Client Corp', 'Active', '2025-01-01', '2025-12-31', 500000);
+      VALUES ('legacy-proj-01', 'Legacy Office Fitout', 'Legacy Client Ltd', 'Active', '2025-01-01', '2025-12-31', 250000);
 
       INSERT INTO documents (id, project_id, name, category, revision, date_added)
       VALUES ('legacy-doc-01', 'legacy-proj-01', 'Legacy Specification.pdf', 'Specification', 'Rev 0', '2025-01-15');
@@ -198,11 +206,15 @@ async function runMigrationSuite() {
     // Boot server pointing to legacy database
     const upgradeServer = spawn(process.execPath, [path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, MEP_DB_PATH: upgradeDbPath, PORT: String(TEST_PORT) },
+      env: { ...process.env, MEP_DB_PATH: upgradeDbPath, PORT: String(TEST_PORT), NODE_ENV: 'test' },
       stdio: 'pipe'
     });
+    let upgradeLogs = '';
+    upgradeServer.stdout?.on('data', d => upgradeLogs += d.toString());
+    upgradeServer.stderr?.on('data', d => upgradeLogs += d.toString());
 
     const isUpgradeHealthy = await waitForHealth(TEST_PORT);
+    if (!isUpgradeHealthy) console.error('Upgrade server failed to become healthy. Logs:\n', upgradeLogs);
     assert(isUpgradeHealthy, 'Server successfully migrated legacy database and booted cleanly');
 
     const upgradedDb = new DatabaseSync(upgradeDbPath);

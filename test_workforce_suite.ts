@@ -138,7 +138,7 @@ async function runWorkforceSuite() {
   try {
     serverProc = spawn(process.execPath, [path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, MEP_DB_PATH: testDbPath, PORT: String(TEST_PORT) },
+      env: { ...process.env, MEP_DB_PATH: testDbPath, PORT: String(TEST_PORT), NODE_ENV: 'test' },
       stdio: 'pipe'
     });
 

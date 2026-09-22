@@ -359,7 +359,7 @@ function AppShell() {
               </div>
             );
           }
-          if (tab === 'work') return <TasksPage navigate={navigate} />;
+          if (tab === 'work') return <TasksBoardPage navigate={navigate} projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} addToast={addToast} user={user} />;
           if (tab === 'technical') return <GenericPage page="RFIs, submittals and drawings" />;
           if (tab === 'progress') return <ProjectUpdatesPage navigate={navigate} />;
           return <GenericPage page="My claims and variations" />;
