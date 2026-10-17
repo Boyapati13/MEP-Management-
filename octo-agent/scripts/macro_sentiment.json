@@ -1,0 +1,23 @@
+{
+    "generated_at": "2026-06-01T07:08:54.023754+00:00",
+    "geopolitical_risk": "CRITICAL",
+    "geopolitics_raw_score": 15.0,
+    "fed_raw_score": -6.9,
+    "energy_raw_score": 7.5,
+    "macro_bias": {
+        "XAUUSD+": "BULLISH",
+        "NAS100": "BEARISH",
+        "EURUSD+": "BEARISH",
+        "GBPUSD+": "BEARISH"
+    },
+    "recent_headlines": [
+        "Everything you need to know about the Middle East escalation - Latest news from Azerbaijan",
+        "Daily: US-Iran escalation adds to geopolitical risks - UBS",
+        "How the stock market typically reacts to geopolitical conflicts - CNBC",
+        "The Geopolitical Pivot: Why Gold is Reacting to Middle East Tensions - U.S. Gold Bureau",
+        "Capital flees Tehran stocks as geopolitical tensions deepen - ایران اینترنشنال",
+        "What’s next for Iran? Five scenarios for geopolitics and oil - Rystad Energy",
+        "What the Iran War Means for Investors - finews.asia",
+        "How the Iran War Is Destabilizing the Global Economy - Modern Diplomacy"
+    ]
+}

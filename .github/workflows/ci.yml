@@ -35,6 +35,9 @@ jobs:
       - name: Run Database Migration Suite
         run: npm run test:migration
 
+      - name: Run Octo integration and durable queue checks
+        run: npm run test:octo
+
       - name: Start isolated production server
         env:
           NODE_ENV: production

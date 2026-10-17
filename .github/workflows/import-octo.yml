@@ -1,0 +1,41 @@
+name: Assemble combined MEP and Octo application
+on:
+  push:
+    branches: [feat/octo-whatsapp-inbox]
+permissions:
+  contents: write
+jobs:
+  assemble:
+    if: github.repository == 'Boyapati13/MEP-Management-'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/octo-whatsapp-inbox
+      - name: Import pinned Octo snapshot once, preserving integration files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f octo-agent/README.md ]; then
+            echo 'Octo source is already present.'
+            exit 0
+          fi
+          overlay_dir=$(mktemp -d)
+          source_dir=$(mktemp -d)
+          cp -a octo-agent/. "$overlay_dir/"
+          git clone --no-checkout https://github.com/Boyapati13/octo.git "$source_dir"
+          git -C "$source_dir" archive d25f49f345376fb46e114d3411718d109541a4a6 | tar -x -C octo-agent
+          cp -a "$overlay_dir/." octo-agent/
+          git add -f -- octo-agent
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Import complete pinned Octo source into combined application'
+          git push origin HEAD:feat/octo-whatsapp-inbox
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:octo
+      - run: npm run lint
+      - run: npm run build

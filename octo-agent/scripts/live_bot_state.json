@@ -1,0 +1,23 @@
+{
+    "last_tuning_time": "2026-06-01T06:24:59.106286+00:00",
+    "198762167": {
+        "symbol": "BTCUSD",
+        "entry_price": 73820.51,
+        "initial_sl": 0.0,
+        "initial_tp": 0.0,
+        "initial_lot": 0.01,
+        "partial_taken": false,
+        "sl_to_50pct": false,
+        "sl_to_be": false
+    },
+    "198747621": {
+        "symbol": "XAUUSD+",
+        "entry_price": 4513.45,
+        "initial_sl": 0.0,
+        "initial_tp": 0.0,
+        "initial_lot": 0.01,
+        "partial_taken": false,
+        "sl_to_50pct": false,
+        "sl_to_be": false
+    }
+}

@@ -22,3 +22,12 @@ android/local.properties
 ios/DerivedData/
 ios/Pods/
 ios/.build/
+
+# Octo runtime data and generated files
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.octo/
+octo-agent/config/api_keys.json
+octo-agent/config/gateway.json

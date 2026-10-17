@@ -1,0 +1,67 @@
+
+# OCTO-Pro — DeerFlow configuration
+# Generated automatically. Edit tokens here to enable IM channels.
+config_version: 1
+log_level: info
+
+# ── Sandbox (code execution) ─────────────────────────────────────────────────
+sandbox:
+  use: deerflow.sandbox.local:LocalSandboxProvider
+  allow_host_bash: true
+
+# ── Database (thread / run persistence) ──────────────────────────────────────
+database:
+  backend: sqlite
+  sqlite_dir: .deer-flow/data
+
+# ── Models (routed through the OCTO model proxy on :8082) ────────────────────
+models:
+  - name: gemini-2.5-flash
+    display_name: "Gemini 2.5 Flash"
+    use: deerflow.models.patched_openai:PatchedChatOpenAI
+    model: gemini-2.5-flash
+    api_key: $GEMINI_API_KEY
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    max_tokens: 8192
+    supports_vision: true
+
+  - name: gemini-2.5-pro
+    display_name: "Gemini 2.5 Pro (Thinking)"
+    use: deerflow.models.patched_openai:PatchedChatOpenAI
+    model: gemini-2.5-pro
+    api_key: $GEMINI_API_KEY
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    max_tokens: 16384
+    supports_thinking: true
+    supports_vision: true
+
+# ── IM Channels (set enabled: true + fill token to activate) ─────────────────
+  - name: ollama/llama3
+    display_name: "Ollama Llama 3"
+    use: deerflow.models.patched_openai:PatchedChatOpenAI
+    model: llama3
+    api_key: ollama
+    base_url: http://localhost:11434/v1
+    max_tokens: 4096
+
+  - name: ollama/gemma3
+    display_name: "Ollama Gemma 3"
+    use: deerflow.models.patched_openai:PatchedChatOpenAI
+    model: gemma3
+    api_key: ollama
+    base_url: http://localhost:11434/v1
+    max_tokens: 4096
+
+channels:
+  telegram:
+    enabled: false
+    bot_token: ""          # e.g. "8697148543:AAF..."
+
+  discord:
+    enabled: false
+    bot_token: ""          # Discord bot token
+
+  slack:
+    enabled: false
+    bot_token: ""          # xoxb-...
+    app_token: ""          # xapp-...

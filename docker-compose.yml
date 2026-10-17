@@ -8,9 +8,25 @@ services:
       - PORT=3000
       - MEP_DB_PATH=/data/mep_pm.db
       - NODE_ENV=production
+      - OCTO_INGEST_TOKEN=${OCTO_INGEST_TOKEN:-}
     volumes:
       - mep-data:/data
     restart: unless-stopped
 
+  octo-whatsapp:
+    build: ./octo-agent/scripts/whatsapp-bridge
+    profiles: [whatsapp]
+    environment:
+      MEP_INGEST_URL: http://mep-platform:3000/api/integrations/octo/messages
+      OCTO_INGEST_TOKEN: ${OCTO_INGEST_TOKEN:-}
+      WHATSAPP_GROUP_IDS: ${WHATSAPP_GROUP_IDS:-}
+      MEP_ALLOW_PRIVATE_HTTP: "true"
+    volumes:
+      - octo-session:/session
+    depends_on:
+      - mep-platform
+    restart: unless-stopped
+
 volumes:
+  octo-session:
   mep-data:

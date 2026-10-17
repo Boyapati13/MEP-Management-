@@ -1,0 +1,94 @@
+# ══════════════════════════════════════════════════════════════════
+# OCTO-Pro Monolith — Unified Requirements
+# Install: pip install -r requirements.txt
+# ══════════════════════════════════════════════════════════════════
+
+# ── Core voice / AI ──────────────────────────────────────────────
+sounddevice
+google-genai>=0.8
+google-generativeai
+requests
+httpx
+aiohttp
+sse-starlette
+
+# ── UI ───────────────────────────────────────────────────────────
+PyQt6
+
+# ── Web automation (Mark-XXXIX vision layer) ─────────────────────
+playwright
+pyautogui
+pygetwindow
+Pillow
+pytesseract
+
+# ── OS control ───────────────────────────────────────────────────
+pyperclip
+pynput
+psutil
+pywin32; sys_platform == "win32"
+
+# ── File processing ───────────────────────────────────────────────
+pymupdf
+python-docx
+openpyxl
+pandas
+mutagen
+ffmpeg-python
+
+# ── Web / search ─────────────────────────────────────────────────
+beautifulsoup4
+lxml
+duckduckgo-search
+yt-dlp
+
+# ── Scheduling ───────────────────────────────────────────────────
+schedule
+apscheduler
+
+# ── ══════════════════════════════════════════════════════════════
+# Proxy layer (free-claude-code — octo/proxy/)
+# ══════════════════════════════════════════════════════════════════
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.0
+pydantic-settings>=2.0
+python-dotenv
+loguru
+starlette
+
+# ── ══════════════════════════════════════════════════════════════
+# DeerFlow orchestration layer (octo/deerflow/ + octo/gateway/)
+# ══════════════════════════════════════════════════════════════════
+langgraph>=0.4
+langgraph-sdk>=0.1
+langchain-core>=0.3
+langchain>=0.3
+sqlalchemy>=2.0
+alembic
+aiosqlite
+PyJWT
+bcrypt
+python-multipart
+
+# ── ══════════════════════════════════════════════════════════════
+# Hermes context engine (octo/agent/*_hermes.py)
+# ══════════════════════════════════════════════════════════════════
+tiktoken
+anthropic
+openai
+
+# ── ══════════════════════════════════════════════════════════════
+# Multi-channel messaging gateway
+# ══════════════════════════════════════════════════════════════════
+python-telegram-bot>=21
+discord.py>=2.4
+slack-sdk
+twilio
+
+# ── MCP tools ────────────────────────────────────────────────────
+mcp
+
+# ── Dev / testing ─────────────────────────────────────────────────
+pytest
+pytest-asyncio
