@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/__pycache__
+**/.venv
+**/.env
+**/.env.local
+*.db*
+dist
+android
+ios
+release

@@ -28,5 +28,10 @@
       "react",
       "react-dom"
     ]
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "octo-agent"
+  ]
 }

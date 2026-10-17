@@ -529,6 +529,7 @@
       <div class="nav-item active" data-view="dashboard">Dashboard</div>
       <div class="nav-item" data-view="client_dashboard">Client Portal</div>
       <div class="nav-item" data-view="progress_reports">Progress Reports</div>
+      <div class="nav-item" data-view="octo_inbox">WhatsApp Inbox</div>
       <div class="nav-item" data-view="site_today">Today on Site</div>
       <div class="nav-item" data-view="calendar">Week Calendar</div>
       <div class="nav-item" data-view="attendance">Worker Attendance</div>
@@ -867,7 +868,7 @@ function buildNav(){
   document.querySelectorAll('.nav-item').forEach(el=>{
     const v = el.dataset.view;
     const isAiOrCloud = ['gemini_chat', 'maps_logistics', 'my_cloud_notes', 'workspace_gmail', 'workspace_calendar', 'workspace_drive'].includes(v);
-    el.style.display = (isAiOrCloud || perms.view.includes(MODULE_PERMS[v] || v)) ? '' : 'none';
+    el.style.display = (v === 'octo_inbox' ? ['Admin','ProjectManager'].includes(ME.role) : (isAiOrCloud || perms.view.includes(MODULE_PERMS[v] || v))) ? '' : 'none';
     el.onclick = ()=>{
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       el.classList.add('active');
@@ -960,6 +961,7 @@ async function render(){
   content.innerHTML = '<div class="empty">Loading...</div>';
   const fns = {
     dashboard: renderDashboard, client_dashboard: renderClientDashboard, site_today: renderSiteToday, calendar: renderCalendar, attendance: renderAttendance, tasks: ()=>renderCrud('tasks','Task',[['title','Task'],['trade','Trade'],['assignee','Assignee'],['start','Start'],['end','End'],['progress','Progress'],['status','Status']]),
+    octo_inbox: renderOctoInbox,
     gantt: renderGantt,
     progress_reports: renderProgressReports,
     work_packages: renderWorkPackages,
@@ -1017,6 +1019,67 @@ document.getElementById('searchBtn').onclick = async ()=>{
   }catch(err){ alert(err.message||'Search failed'); }
 };
 document.getElementById('globalSearch').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('searchBtn').click(); });
+
+let octoStatus = 'Pending';
+async function renderOctoInbox(){
+  const host = document.getElementById('viewContent');
+  const projectId = currentProjectId;
+  if(!['Admin','ProjectManager'].includes(ME.role)){ host.textContent='Project manager access required.'; return; }
+  if(!projectId || projectId==='ALL'){ host.textContent='Select one project to view its WhatsApp inbox.'; return; }
+  const [rows, groups] = await Promise.all([
+    apiFetch('/api/octo/inbox?project_id='+encodeURIComponent(projectId)+'&status='+octoStatus), apiFetch('/api/octo/groups')
+  ]);
+  if(currentProjectId!==projectId || currentView!=='octo_inbox') return;
+  host.innerHTML = `<div class="panel"><h3>WhatsApp project inbox</h3>
+    <p style="margin:12px 0;color:var(--muted)">Review site messages before creating project records. Categories are keyword suggestions. Latest 200 messages.</p>
+    <p id="octoError" role="alert" style="color:var(--danger)"></p>
+    <div id="octoGroups"></div><div id="octoMap"></div>
+    <label>Status <select id="octoFilter">${['Pending','Approved','Rejected','All'].map(s=>`<option ${s===octoStatus?'selected':''}>${s}</option>`).join('')}</select></label>
+    <button class="btn" id="octoRefresh">Refresh</button><div id="octoMessages"></div><div id="octoReview"></div></div>`;
+  const fail = e => { document.getElementById('octoError').textContent=e.message; };
+  const mutate = async (path, body, method='POST') => { await apiFetch(path,{method,body:JSON.stringify(body)}); await renderOctoInbox(); };
+  const mapped = groups.filter(g=>g.project_id===projectId);
+  const groupHost=document.getElementById('octoGroups');
+  groupHost.textContent=mapped.length ? '' : 'No groups mapped yet. Pair Octo, then map a group to this project.';
+  mapped.forEach(g=>{
+    const p=document.createElement('p'); p.style.margin='12px 0';
+    const label=document.createElement('span'); label.textContent=g.name+' · '+g.group_id+' · '+(g.active?'Enabled':'Paused'); p.append(label);
+    if(ME.role==='Admin'){
+      const btn=document.createElement('button'); btn.className='btn'; btn.textContent=g.active?'Pause':'Enable';
+      btn.onclick=async()=>{ btn.disabled=true; try{await mutate('/api/octo/groups',{...g,active:!g.active},'PUT');}catch(e){fail(e);btn.disabled=false;} };p.append(btn);
+    } groupHost.append(p);
+  });
+  if(ME.role==='Admin'){
+    document.getElementById('octoMap').innerHTML=`<form id="octoMapForm" style="margin:16px 0;display:flex;gap:8px;flex-wrap:wrap"><label>Group name <input name="name" required maxlength="200"></label><label>Group ID <input name="group" placeholder="120…@g.us" required maxlength="100"></label><button class="btn" type="submit">Map group</button></form>`;
+    document.getElementById('octoMapForm').onsubmit=async e=>{
+      e.preventDefault();const form=e.currentTarget; const btn=form.querySelector('button');btn.disabled=true;
+      try{await mutate('/api/octo/groups',{project_id:projectId,group_id:form.elements.group.value,name:form.elements.name.value,active:true},'PUT');}catch(err){fail(err);btn.disabled=false;}
+    };
+  }
+  document.getElementById('octoFilter').onchange=e=>{octoStatus=e.target.value;renderOctoInbox().catch(fail);};
+  document.getElementById('octoRefresh').onclick=()=>renderOctoInbox().catch(fail);
+  const list=document.getElementById('octoMessages');
+  if(!rows.length){const p=document.createElement('p');p.style.margin='20px 0';p.textContent='No messages in this view. New text messages appear after Octo is linked and the group is enabled in both applications.';list.append(p);}
+  rows.forEach(row=>{
+    const article=document.createElement('article');article.className='panel';article.style.marginTop='16px';
+    const meta=document.createElement('p');meta.style.color='var(--muted)';meta.textContent=[row.group_name,row.sender,new Date(row.sent_at).toLocaleString(),row.category,row.status].join(' · ');
+    const body=document.createElement('p');body.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0';body.textContent=row.body;article.append(meta,body);
+    if(row.record_id){const p=document.createElement('p');p.textContent='Created '+row.record_type+' · '+row.record_id;article.append(p);}
+    if(row.status==='Pending'){
+      const review=document.createElement('button');review.className='btn';review.textContent='Review';
+      review.onclick=()=>{
+        const editor=document.getElementById('octoReview');editor.innerHTML=`<form id="octoReviewForm" class="panel" style="margin-top:16px"><h3>Approve project record</h3><p id="octoSource" style="white-space:pre-wrap;margin:12px 0"></p><label>Create <select name="kind"><option value="dailylog">Site log</option><option value="task">Task</option></select></label><label style="display:block;margin:12px 0">Reviewed text<textarea name="text" required maxlength="10000" rows="4" style="width:100%"></textarea></label><p>Task titles must be 300 characters or fewer.</p><button class="btn" type="submit">Approve and create</button><button class="btn" type="button" id="octoCancel">Cancel</button></form>`;
+        document.getElementById('octoSource').textContent='Source: '+row.body;
+        const form=document.getElementById('octoReviewForm');form.elements.text.value=row.body;
+        document.getElementById('octoCancel').onclick=()=>{editor.innerHTML='';};
+        form.onsubmit=async e=>{e.preventDefault();const btn=form.querySelector('button[type=submit]');btn.disabled=true;try{await mutate('/api/octo/inbox/'+row.id+'/review',{action:'approve',record_type:form.elements.kind.value,text:form.elements.text.value});}catch(err){fail(err);btn.disabled=false;}};
+        editor.scrollIntoView({behavior:'smooth',block:'nearest'});
+      };
+      const reject=document.createElement('button');reject.className='btn';reject.textContent='Dismiss';reject.onclick=async()=>{reject.disabled=true;try{await mutate('/api/octo/inbox/'+row.id+'/review',{action:'reject'});}catch(e){fail(e);reject.disabled=false;}};
+      article.append(review,reject);
+    }list.append(article);
+  });
+}
 
 async function renderBOQ(){
   const rows = await apiFetch(`/api/boq_items?project_id=${currentProjectId}`);

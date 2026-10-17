@@ -13,6 +13,7 @@ import { runMigrations } from "./server/db/migrations";
 import { registerWorkPackageRoutes } from "./server/routes/workPackageRoutes";
 import { registerProcurementRoutes } from "./server/routes/procurementRoutes";
 import { registerRiskRoutes } from "./server/routes/riskRoutes";
+import { registerOctoRoutes } from "./server/routes/octoRoutes";
 import { registerTaskRoutes } from "./server/routes/taskRoutes";
 import { registerProgressRoutes } from "./server/routes/progressRoutes";
 import { getNextSequence } from "./server/services/referenceSequence";
@@ -5521,6 +5522,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   registerProcurementRoutes(app, db, authRequired, hasProjectAccess);
   registerRiskRoutes(app, db, authRequired, hasProjectAccess);
   registerTaskRoutes(app, db, authRequired, hasProjectAccess);
+  registerOctoRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
 
   // --- CLARIFICATIONS HUB (CLIENT <-> MAIN CONTRACTOR <-> SUBCONTRACTOR) ---
   app.get("/api/clarifications", authRequired, (req, res) => {

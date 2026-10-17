@@ -125,6 +125,8 @@ export const ROUTE_ITEMS: RouteItem[] = [
   { id: 'updates', label: 'Site Records', icon: ClipboardList, domain: 'site' },
   { id: 'sites', label: 'Logistics & Maps', icon: MapPinned, domain: 'site' },
 
+  { id: 'octo-inbox', label: 'WhatsApp Inbox', icon: ClipboardList, domain: 'site', allowedRoles: ['Admin', 'ProjectManager'] },
+
   // Technical
   { id: 'rfis', label: 'RFIs & Clarifications', icon: HelpCircle, domain: 'technical' },
   { id: 'submittals', label: 'Submittals', icon: FileCheck2, domain: 'technical' },
