@@ -1,0 +1,35 @@
+{
+  "identity": {
+    "name": {
+      "value": "Boyapati",
+      "updated": "2026-05-29"
+    },
+    "creator": {
+      "value": "Siva Boyapati",
+      "updated": "2026-06-01"
+    }
+  },
+  "preferences": {
+    "rice_preference": {
+      "value": "One serving is sufficient",
+      "updated": "2026-05-30"
+    },
+    "interest": {
+      "value": "Jeevana",
+      "updated": "2026-05-30"
+    }
+  },
+  "projects": {},
+  "relationships": {
+    "siva_phone": {
+      "value": "+39 338 159 9401",
+      "updated": "2026-05-27"
+    },
+    "friend_name": {
+      "value": "Siva Boyapati",
+      "updated": "2026-05-30"
+    }
+  },
+  "wishes": {},
+  "notes": {}
+}

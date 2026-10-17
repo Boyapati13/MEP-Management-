@@ -1,0 +1,14 @@
+{
+  "gate_mode": "SOFT",
+  "min_confidence": 0.65,
+  "max_signal_age_seconds": 600,
+  "tf_map": {
+    "EURUSD+": "H1",
+    "GBPUSD+": "H1",
+    "NAS100": "H1",
+    "XAUUSD+": "H1",
+    "XAUEUR+": "H1",
+    "BTCUSD": "H1",
+    "CL-OIL": "H1"
+  }
+}

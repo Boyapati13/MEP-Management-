@@ -1,0 +1,584 @@
+{
+  "generated_at": "2026-06-01T07:11:11.850223+00:00",
+  "refresh_interval_secs": 30,
+  "symbols": {
+    "NAS100": {
+      "symbol": "NAS100",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.852175+00:00",
+      "bars_used": 200,
+      "current_price": 30561.05,
+      "poc": 30277.4495,
+      "vah": 30556.7714,
+      "val": 30167.4136,
+      "poc_distance_pts": 283.6005,
+      "value_area_position_pct": 101.1,
+      "bias": "ABOVE_VAH (bullish auction \u2014 price seeking higher value)",
+      "hvn_levels": [
+        30260.5209,
+        30277.4495
+      ],
+      "lvn_levels": [
+        30463.6641,
+        30480.5927,
+        30497.5213,
+        30514.4499,
+        30565.2357
+      ],
+      "fvg_recent": [
+        {
+          "type": "BULLISH",
+          "top": 30535.45,
+          "bottom": 30532.2,
+          "midpoint": 30533.825,
+          "time": "2026-06-01T05:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 30535.45,
+          "bottom": 30531.7,
+          "midpoint": 30533.575,
+          "time": "2026-06-01T05:45:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 30548.95,
+          "bottom": 30546.7,
+          "midpoint": 30547.825,
+          "time": "2026-06-01T07:45:00+00:00"
+        }
+      ],
+      "pdh": 30499.6,
+      "pdl": 30175.5,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.0468,
+        "volatility_ratio_vr": 0.81,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 1540.0,
+        "avg_10bar": 1434.0,
+        "ratio_vs_avg": 1.07,
+        "high_volume_spike": false
+      }
+    },
+    "XAUUSD+": {
+      "symbol": "XAUUSD+",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.854657+00:00",
+      "bars_used": 200,
+      "current_price": 4508.49,
+      "poc": 4515.177,
+      "vah": 4572.372,
+      "val": 4471.7088,
+      "poc_distance_pts": 6.687,
+      "value_area_position_pct": 36.5,
+      "bias": "INSIDE_VA_BELOW_POC (sellers in control within accepted value)",
+      "hvn_levels": [
+        4501.4502,
+        4506.0258,
+        4510.6014,
+        4515.177,
+        4524.3282
+      ],
+      "lvn_levels": [
+        4574.6598,
+        4579.2354,
+        4583.811,
+        4588.3866,
+        4592.9622
+      ],
+      "fvg_recent": [
+        {
+          "type": "BULLISH",
+          "top": 4517.6,
+          "bottom": 4515.11,
+          "midpoint": 4516.355,
+          "time": "2026-06-01T08:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 4517.13,
+          "bottom": 4515.89,
+          "midpoint": 4516.51,
+          "time": "2026-06-01T09:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 4504.99,
+          "bottom": 4504.92,
+          "midpoint": 4504.955,
+          "time": "2026-06-01T09:45:00+00:00"
+        }
+      ],
+      "pdh": 4595.25,
+      "pdl": 4489.11,
+      "near_pdh": false,
+      "near_pdl": true,
+      "whale": {
+        "dynamic_alpha": 0.0976,
+        "volatility_ratio_vr": 1.169,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 4702.0,
+        "avg_10bar": 4967.0,
+        "ratio_vs_avg": 0.95,
+        "high_volume_spike": false
+      }
+    },
+    "XAUEUR+": {
+      "symbol": "XAUEUR+",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.856650+00:00",
+      "bars_used": 200,
+      "current_price": 3866.7,
+      "poc": 3893.4375,
+      "vah": 3918.591,
+      "val": 3838.0998,
+      "poc_distance_pts": 26.7375,
+      "value_area_position_pct": 35.5,
+      "bias": "INSIDE_VA_BELOW_POC (sellers in control within accepted value)",
+      "hvn_levels": [
+        3866.6071,
+        3876.6685,
+        3880.0223,
+        3890.0837,
+        3893.4375
+      ],
+      "lvn_levels": [
+        3920.2679,
+        3923.6217,
+        3926.9755,
+        3930.3293,
+        3933.6831
+      ],
+      "fvg_recent": [
+        {
+          "type": "BULLISH",
+          "top": 3877.14,
+          "bottom": 3876.73,
+          "midpoint": 3876.935,
+          "time": "2026-06-01T08:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 3876.77,
+          "bottom": 3874.55,
+          "midpoint": 3875.66,
+          "time": "2026-06-01T09:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 3865.84,
+          "bottom": 3865.16,
+          "midpoint": 3865.5,
+          "time": "2026-06-01T09:45:00+00:00"
+        }
+      ],
+      "pdh": 3935.36,
+      "pdl": 3852.69,
+      "near_pdh": false,
+      "near_pdl": true,
+      "whale": {
+        "dynamic_alpha": 0.1386,
+        "volatility_ratio_vr": 1.393,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 2344.0,
+        "avg_10bar": 2247.0,
+        "ratio_vs_avg": 1.04,
+        "high_volume_spike": false
+      }
+    },
+    "EURUSD+": {
+      "symbol": "EURUSD+",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.860254+00:00",
+      "bars_used": 200,
+      "current_price": 1.16592,
+      "poc": 1.16485,
+      "vah": 1.16647,
+      "val": 1.16322,
+      "poc_distance_pts": 0.00107,
+      "value_area_position_pct": 83.0,
+      "bias": "INSIDE_VA_ABOVE_POC (buyers in control within accepted value)",
+      "hvn_levels": [
+        1.16446,
+        1.16466,
+        1.16485,
+        1.16504,
+        1.16542
+      ],
+      "lvn_levels": [
+        1.16772,
+        1.16791,
+        1.1681,
+        1.16829,
+        1.16848
+      ],
+      "fvg_recent": [
+        {
+          "type": "BULLISH",
+          "top": 1.16465,
+          "bottom": 1.16459,
+          "midpoint": 1.16462,
+          "time": "2026-06-01T07:30:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 1.16513,
+          "bottom": 1.16483,
+          "midpoint": 1.16498,
+          "time": "2026-06-01T08:15:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 1.1656,
+          "bottom": 1.16541,
+          "midpoint": 1.16551,
+          "time": "2026-06-01T10:00:00+00:00"
+        }
+      ],
+      "pdh": 1.16858,
+      "pdl": 1.1625,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.2975,
+        "volatility_ratio_vr": 2.041,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 951.0,
+        "avg_10bar": 722.0,
+        "ratio_vs_avg": 1.32,
+        "high_volume_spike": false
+      }
+    },
+    "GBPUSD+": {
+      "symbol": "GBPUSD+",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.863119+00:00",
+      "bars_used": 200,
+      "current_price": 1.34637,
+      "poc": 1.34415,
+      "vah": 1.34726,
+      "val": 1.34189,
+      "poc_distance_pts": 0.00222,
+      "value_area_position_pct": 83.4,
+      "bias": "INSIDE_VA_ABOVE_POC (buyers in control within accepted value)",
+      "hvn_levels": [
+        1.34393,
+        1.34415,
+        1.34436
+      ],
+      "lvn_levels": [
+        1.34758,
+        1.3478,
+        1.34801,
+        1.34823,
+        1.34844
+      ],
+      "fvg_recent": [
+        {
+          "type": "BULLISH",
+          "top": 1.34526,
+          "bottom": 1.34517,
+          "midpoint": 1.34522,
+          "time": "2026-06-01T07:15:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 1.34552,
+          "bottom": 1.34532,
+          "midpoint": 1.34542,
+          "time": "2026-06-01T07:30:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 1.34616,
+          "bottom": 1.34572,
+          "midpoint": 1.34594,
+          "time": "2026-06-01T08:15:00+00:00"
+        }
+      ],
+      "pdh": 1.34855,
+      "pdl": 1.34084,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.1923,
+        "volatility_ratio_vr": 1.641,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 1258.0,
+        "avg_10bar": 974.0,
+        "ratio_vs_avg": 1.29,
+        "high_volume_spike": false
+      }
+    },
+    "USDJPY+": {
+      "symbol": "USDJPY+",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.865839+00:00",
+      "bars_used": 200,
+      "current_price": 159.443,
+      "poc": 159.27586,
+      "vah": 159.40492,
+      "val": 159.15636,
+      "poc_distance_pts": 0.16714,
+      "value_area_position_pct": 115.3,
+      "bias": "ABOVE_VAH (bullish auction \u2014 price seeking higher value)",
+      "hvn_levels": [
+        159.25674,
+        159.2663,
+        159.27586,
+        159.28542
+      ],
+      "lvn_levels": [
+        159.53398,
+        159.54354,
+        159.5531,
+        159.56266,
+        159.57222
+      ],
+      "fvg_recent": [
+        {
+          "type": "BEARISH",
+          "top": 159.459,
+          "bottom": 159.448,
+          "midpoint": 159.4535,
+          "time": "2026-06-01T08:15:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 159.455,
+          "bottom": 159.448,
+          "midpoint": 159.4515,
+          "time": "2026-06-01T08:45:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 159.475,
+          "bottom": 159.467,
+          "midpoint": 159.471,
+          "time": "2026-06-01T10:00:00+00:00"
+        }
+      ],
+      "pdh": 159.378,
+      "pdl": 159.099,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.2205,
+        "volatility_ratio_vr": 1.757,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 904.0,
+        "avg_10bar": 732.0,
+        "ratio_vs_avg": 1.24,
+        "high_volume_spike": false
+      }
+    },
+    "AUDUSD+": {
+      "symbol": "AUDUSD+",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.868114+00:00",
+      "bars_used": 200,
+      "current_price": 0.71821,
+      "poc": 0.71864,
+      "vah": 0.71968,
+      "val": 0.71532,
+      "poc_distance_pts": 0.00043,
+      "value_area_position_pct": 66.3,
+      "bias": "INSIDE_VA_BELOW_POC (sellers in control within accepted value)",
+      "hvn_levels": [
+        0.71617,
+        0.71636,
+        0.71826,
+        0.71845,
+        0.71864
+      ],
+      "lvn_levels": [
+        0.71769,
+        0.7194,
+        0.71959,
+        0.71978,
+        0.71997
+      ],
+      "fvg_recent": [
+        {
+          "type": "BULLISH",
+          "top": 0.71841,
+          "bottom": 0.71837,
+          "midpoint": 0.71839,
+          "time": "2026-06-01T07:30:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 0.71861,
+          "bottom": 0.71857,
+          "midpoint": 0.71859,
+          "time": "2026-06-01T08:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 0.71857,
+          "bottom": 0.7182,
+          "midpoint": 0.71839,
+          "time": "2026-06-01T09:30:00+00:00"
+        }
+      ],
+      "pdh": 0.72006,
+      "pdl": 0.71491,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.1056,
+        "volatility_ratio_vr": 1.216,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 780.0,
+        "avg_10bar": 698.0,
+        "ratio_vs_avg": 1.12,
+        "high_volume_spike": false
+      }
+    },
+    "BTCUSD": {
+      "symbol": "BTCUSD",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.870467+00:00",
+      "bars_used": 200,
+      "current_price": 73177.57,
+      "poc": 73963.8067,
+      "vah": 74055.9064,
+      "val": 73555.9366,
+      "poc_distance_pts": 786.2367,
+      "value_area_position_pct": -75.7,
+      "bias": "BELOW_VAL (bearish auction \u2014 price seeking lower value)",
+      "hvn_levels": [
+        73884.8641,
+        73911.1783,
+        73937.4925,
+        73963.8067
+      ],
+      "lvn_levels": [
+        73384.8943,
+        73411.2085,
+        74200.6345,
+        74226.9487,
+        74253.2629
+      ],
+      "fvg_recent": [
+        {
+          "type": "BEARISH",
+          "top": 73442.23,
+          "bottom": 73420.06,
+          "midpoint": 73431.145,
+          "time": "2026-06-01T08:30:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 73326.48,
+          "bottom": 73318.82,
+          "midpoint": 73322.65,
+          "time": "2026-06-01T09:15:00+00:00"
+        },
+        {
+          "type": "BEARISH",
+          "top": 73229.47,
+          "bottom": 73226.62,
+          "midpoint": 73228.045,
+          "time": "2026-06-01T09:30:00+00:00"
+        }
+      ],
+      "pdh": 74266.42,
+      "pdl": 73390.22,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.0553,
+        "volatility_ratio_vr": 0.88,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 1141.0,
+        "avg_10bar": 1514.0,
+        "ratio_vs_avg": 0.75,
+        "high_volume_spike": false
+      }
+    },
+    "CL-OIL": {
+      "symbol": "CL-OIL",
+      "timeframe": "M15",
+      "updated_at": "2026-06-01T07:11:11.872581+00:00",
+      "bars_used": 200,
+      "current_price": 90.143,
+      "poc": 87.6037,
+      "vah": 90.01,
+      "val": 86.925,
+      "poc_distance_pts": 2.5393,
+      "value_area_position_pct": 104.3,
+      "bias": "ABOVE_VAH (bullish auction \u2014 price seeking higher value)",
+      "hvn_levels": [
+        87.4803,
+        87.6037,
+        87.7271,
+        87.8505
+      ],
+      "lvn_levels": [
+        91.9227,
+        92.0461,
+        92.1695,
+        92.2929,
+        92.4163
+      ],
+      "fvg_recent": [
+        {
+          "type": "BEARISH",
+          "top": 89.663,
+          "bottom": 89.633,
+          "midpoint": 89.648,
+          "time": "2026-06-01T07:45:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 89.948,
+          "bottom": 89.923,
+          "midpoint": 89.9355,
+          "time": "2026-06-01T09:15:00+00:00"
+        },
+        {
+          "type": "BULLISH",
+          "top": 90.093,
+          "bottom": 90.078,
+          "midpoint": 90.0855,
+          "time": "2026-06-01T09:45:00+00:00"
+        }
+      ],
+      "pdh": 88.983,
+      "pdl": 86.308,
+      "near_pdh": false,
+      "near_pdl": false,
+      "whale": {
+        "dynamic_alpha": 0.0467,
+        "volatility_ratio_vr": 0.809,
+        "state": "LOW \u2014 consolidation / noise filtering"
+      },
+      "volume": {
+        "last_bar": 574.0,
+        "avg_10bar": 421.0,
+        "ratio_vs_avg": 1.36,
+        "high_volume_spike": false
+      }
+    }
+  },
+  "errors": []
+}

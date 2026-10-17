@@ -1,0 +1,10 @@
+{
+    "last_updated": "2026-06-01T06:24:58.774975+00:00",
+    "symbol": "XAUUSD+",
+    "window": 20,
+    "threshold": 0.0015,
+    "hedge_threshold": 0.1,
+    "win_rate": 8.823529411764707,
+    "pf": 0.34615384615384615,
+    "net_profit_pct": 4.875
+}

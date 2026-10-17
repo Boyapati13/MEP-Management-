@@ -1,0 +1,132 @@
+{
+  "servers": [
+    {
+      "name": "tradingview",
+      "label": "TradingView MCP",
+      "description": "78 tools for reading & controlling a live TradingView Desktop chart via Chrome DevTools Protocol \u2014 charts, Pine Script, indicators, alerts, replay, screenshots",
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "C:\\Users\\Tenders\\tradingview-mcp\\src\\server.js"
+      ],
+      "cwd": "C:\\Users\\Tenders\\tradingview-mcp",
+      "auto_start": true,
+      "enabled": true,
+      "icon": "\ud83d\udcc8"
+    },
+    {
+      "name": "metatrader5",
+      "label": "MetaTrader 5 MCP",
+      "description": "14 tools for live MT5 trading \u2014 account, positions, orders, OHLCV candles, market orders, SL/TP, close trades, Gemini AI trading suggestions",
+      "transport": "stdio",
+      "command": "py",
+      "args": [
+        "-u",
+        "C:\\Users\\Tenders\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075\\MQL5\\Scripts\\mt5_mcp_server.py"
+      ],
+      "auto_start": true,
+      "enabled": true,
+      "icon": "\ud83d\udcb9"
+    },
+    {
+      "name": "octo-pro",
+      "label": "OCTO-Pro Autonomous Server",
+      "description": "OCTO's native tools: autonomous coding (dev_agent), sub-agent orchestration (deerflow), and deep web research.",
+      "transport": "stdio",
+      "command": "py",
+      "args": [
+        "-u",
+        "C:\\Users\\Tenders\\octo\\octo\\octo_mcp_server.py"
+      ],
+      "cwd": "C:\\Users\\Tenders\\octo\\octo",
+      "enabled": true,
+      "icon": "\ud83d\udc19"
+    },
+    {
+      "name": "ruflo-swarm",
+      "label": "Ruflo Orchestrator",
+      "description": "Local Ruflo v3 framework providing 313 tools for swarm intelligence, AgentDB, vector memory, and self-learning.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "ruflo@latest",
+        "mcp",
+        "start"
+      ],
+      "auto_start": false,
+      "enabled": true,
+      "icon": "\ud83d\udc1d"
+    },
+    {
+      "name": "firecrawl",
+      "label": "Firecrawl MCP",
+      "description": "Firecrawl MCP server for web scraping and data extraction.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ],
+      "auto_start": false,
+      "enabled": true,
+      "icon": "\ud83d\udd25"
+    },
+    {
+      "name": "playwright",
+      "label": "Playwright MCP",
+      "description": "Playwright MCP server for browser automation.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "auto_start": false,
+      "enabled": true,
+      "icon": "\ud83c\udfad"
+    },
+    {
+      "name": "glifxyz",
+      "label": "Glif MCP",
+      "description": "Glif MCP server for multimedia AI workflows.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@glifxyz/glif-mcp-server@latest"
+      ],
+      "auto_start": false,
+      "enabled": true,
+      "icon": "\ud83e\ude84"
+    },
+    {
+      "name": "perplexity",
+      "label": "Perplexity AI MCP",
+      "description": "Perplexity AI MCP server for deep web research.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@perplexity-ai/mcp-server"
+      ],
+      "auto_start": false,
+      "enabled": true,
+      "icon": "\ud83e\udde0"
+    },
+    {
+      "name": "chromedevtools",
+      "label": "Chrome DevTools MCP",
+      "description": "Puppeteer MCP server for Chrome DevTools protocol.",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-puppeteer"
+      ],
+      "auto_start": false,
+      "enabled": true,
+      "icon": "\ud83c\udf10"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+    "last_updated": "2026-06-01T06:23:02.172165+00:00",
+    "symbol": "GBPUSD+",
+    "window": 10,
+    "threshold": 0.003,
+    "hedge_threshold": 0.1,
+    "win_rate": 26.08695652173913,
+    "pf": 0.6923076923076923,
+    "net_profit_pct": -1.9990000000000148
+}
