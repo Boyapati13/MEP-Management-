@@ -139,7 +139,9 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
           <div>
             <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Schedule Variance</span>
             <div className="flex items-center gap-1.5 mt-0.5">
-              {variance === null ? (\n                <span className="text-xs font-semibold text-slate-300">Not calculated</span>\n              ) : variance === 0 ? (
+              {variance === null ? (
+                <span className="text-xs font-semibold text-slate-300">Not calculated</span>
+              ) : variance === 0 ? (
                 <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
                   <CheckCircle2 size={13} /> On Target (0d)
                 </span>
