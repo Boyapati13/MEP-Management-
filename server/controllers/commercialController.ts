@@ -349,19 +349,11 @@ export function registerCommercialController(app: Express): void {
         data.wbs_item_id || null
       );
       if (data.company_id) {
-        try {
-          db.prepare(`INSERT OR IGNORE INTO project_companies (id, project_id, company_id, role_in_project, created_at) VALUES (?, ?, ?, 'Subcontractor', ?)`).run(
-            crypto.randomUUID(), data.project_id, data.company_id, now
-          );
-          const companyUsers = db.prepare(`SELECT id FROM users WHERE company_id=?`).all(data.company_id) as any[];
-          for (const cu of companyUsers) {
-            db.prepare(`
-              INSERT INTO project_memberships (user_id, project_id, access_role, active)
-              VALUES (?, ?, 'Subcontractor', 1)
-              ON CONFLICT(user_id, project_id) DO UPDATE SET active=1
-            `).run(cu.id, data.project_id);
-          }
-        } catch {}
+        // Link the company to the project, but never grant access to every employee.
+        // Individual project memberships must be assigned explicitly by an authorized administrator.
+        db.prepare(`INSERT OR IGNORE INTO project_companies (id, project_id, company_id, role_in_project, created_at) VALUES (?, ?, ?, 'Subcontractor', ?)`).run(
+          crypto.randomUUID(), data.project_id, data.company_id, now
+        );
       }
       writeAudit(req.user!.user_id, "work_packages", id, data.project_id, "create", null, data);
       res.status(201).json({ id, ...data, created_at: now });
