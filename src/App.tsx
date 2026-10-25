@@ -178,9 +178,12 @@ function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
+    if (loading) return;
+    setLoginError('');
     setLoading(true);
     try {
       const res: any = await authApi.login(username, password); const token = res.token; const user = res.user || res;
@@ -188,7 +191,7 @@ function LoginPage() {
       setUser(user);
       addToast('success', `Welcome back, ${user.name}!`);
     } catch (err: any) {
-      addToast('error', err.message || 'Login failed');
+      setLoginError('Unable to sign in. Check your credentials and try again.');
     } finally {
       setLoading(false);
     }
@@ -197,7 +200,7 @@ function LoginPage() {
   return (
     <main className="min-h-screen bg-[#071526] text-white flex flex-col lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(420px,0.85fr)]">
       {/* Desktop / Laptop Hero Showcase (Hidden on small mobile screens, compact on tablet, full on laptop) */}
-      <section className="relative isolate hidden md:flex flex-col overflow-hidden px-6 py-8 sm:px-10 lg:min-h-screen lg:px-14 lg:py-12 border-b lg:border-b-0 lg:border-r border-slate-800">
+      <section aria-label="MEP FieldHub platform overview" className="relative isolate hidden md:flex flex-col overflow-hidden px-6 py-8 sm:px-10 lg:min-h-screen lg:px-14 lg:py-12 border-b lg:border-b-0 lg:border-r border-slate-800">
         <div className="absolute inset-0 -z-20 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85')] bg-cover bg-center opacity-60" />
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#061426]/95 via-[#071b32]/90 to-[#08192a]/80" />
         <div className="absolute inset-0 -z-10 opacity-20 [background-image:linear-gradient(rgba(110,183,255,.15)_1px,transparent_1px),linear-gradient(90deg,rgba(110,183,255,.15)_1px,transparent_1px)] [background-size:42px_42px]" />
@@ -243,7 +246,7 @@ function LoginPage() {
       </section>
 
       {/* Login Card Section (Mobile, Tablet & Laptop Friendly) */}
-      <section className="flex flex-1 items-center justify-center bg-[#f7f9fc] px-4 py-8 sm:px-8 sm:py-12 text-slate-900 lg:min-h-screen lg:px-12">
+      <section aria-label="Secure sign in" className="flex flex-1 items-center justify-center bg-[#f7f9fc] px-4 py-8 sm:px-8 sm:py-12 text-slate-900 lg:min-h-screen lg:px-12">
         <div className="w-full max-w-md mx-auto">
           {/* Mobile Top Brand Header */}
           <div className="mb-6 flex md:hidden items-center justify-between">
@@ -287,7 +290,8 @@ function LoginPage() {
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
+          <form onSubmit={handleLogin} aria-busy={loading} className="space-y-4 sm:space-y-5">
+            {loginError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loginError}</div>}
             <div>
               <label htmlFor="mep-login-username" className="mb-1.5 block text-xs sm:text-sm font-semibold text-slate-700">
                 Username
@@ -296,10 +300,11 @@ function LoginPage() {
                 id="mep-login-username"
                 autoComplete="username"
                 className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 sm:px-4 sm:py-3.5 text-sm text-slate-900 shadow-xs outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 touch-manipulation"
-                placeholder="Enter your username (e.g. admin)"
+                placeholder="Your assigned username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div>
