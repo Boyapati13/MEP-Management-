@@ -137,7 +137,7 @@ export function registerCommercialController(app: Express): void {
       `).run(
         id,
         data.name || "New Company",
-        data.type || "Subcontractor",
+        data.type || data.company_type || "Subcontractor",
         data.trade || "",
         data.contact_person || "",
         data.email || "",
@@ -148,9 +148,32 @@ export function registerCommercialController(app: Express): void {
         now
       );
       writeAudit(req.user!.user_id, "companies", id, "SYSTEM", "create", null, data);
-      res.status(201).json({ id, ...data, created_at: now });
+      res.status(201).json({ id, type: data.type || data.company_type || "Subcontractor", ...data, created_at: now });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/companies/:id", authRequired, (req, res) => {
+    try {
+      if (req.user!.role === "Client") {
+        res.status(403).json({ error: "Access denied: company directory is confidential" });
+        return;
+      }
+      const existing = db.prepare(`
+        SELECT c.*,
+          (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id OR u.company = c.name) as user_count,
+          (SELECT COUNT(*) FROM work_packages wp WHERE wp.company_id = c.id) as package_count
+        FROM companies c
+        WHERE c.id = ?
+      `).get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Company not found" });
+        return;
+      }
+      res.json(rowToDict(existing));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -172,7 +195,7 @@ export function registerCommercialController(app: Express): void {
         WHERE id=?
       `).run(
         data.name ?? existing.name,
-        data.type ?? existing.type,
+        data.type ?? data.company_type ?? existing.type,
         data.trade ?? existing.trade,
         data.contact_person ?? existing.contact_person,
         data.email ?? existing.email,
@@ -310,6 +333,44 @@ export function registerCommercialController(app: Express): void {
         }
       }
       res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/work_packages/:id", authRequired, (req, res) => {
+    try {
+      if (req.user!.role === "Client" || !canView(req.user!, "work_packages")) {
+        res.status(403).json({ error: "No access to work packages" });
+        return;
+      }
+      const row = db.prepare(`
+        SELECT wp.*,
+          c.name as company_name,
+          c.trade as company_trade,
+          (SELECT COUNT(*) FROM tasks t WHERE t.work_package_id = wp.id) as task_count,
+          (SELECT AVG(progress) FROM tasks t WHERE t.work_package_id = wp.id) as task_avg_progress,
+          (SELECT COUNT(*) FROM clarifications cl WHERE cl.work_package_id = wp.id AND cl.status != 'Closed') as open_clarifications_count,
+          (SELECT COUNT(*) FROM progress_submissions ps WHERE ps.work_package_id = wp.id AND ps.status = 'Submitted') as pending_submissions_count
+        FROM work_packages wp
+        LEFT JOIN companies c ON c.id = wp.company_id
+        WHERE wp.id = ?
+      `).get(req.params.id) as any;
+      if (!row) {
+        res.status(404).json({ error: "Work package not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, row.project_id)) {
+        res.status(403).json({ error: "No access to project" });
+        return;
+      }
+      if (req.user!.role === "Subcontractor") {
+        if (row.id !== req.user!.work_package_id && row.company_id !== req.user!.company_id) {
+          res.status(403).json({ error: "No access to this work package" });
+          return;
+        }
+      }
+      res.json(rowToDict(row));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -684,6 +745,27 @@ export function registerCommercialController(app: Express): void {
       writeAudit(req.user!.user_id, "clarifications", req.params.id, existing.project_id, "update", existing, data);
       const updated = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
       res.json(rowToDict(updated));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/clarifications/:id", authRequired, (req, res) => {
+    try {
+      const existing = db.prepare("SELECT * FROM clarifications WHERE id=?").get(req.params.id) as any;
+      if (!existing) {
+        res.status(404).json({ error: "Clarification not found" });
+        return;
+      }
+      if (!hasProjectAccess(req.user!, existing.project_id) || (req.user!.role !== "Admin" && req.user!.role !== "ProjectManager")) {
+        res.status(403).json({ error: "Permission denied" });
+        return;
+      }
+      db.prepare("DELETE FROM clarification_comments WHERE clarification_id=?").run(req.params.id);
+      db.prepare("DELETE FROM clarifications WHERE id=?").run(req.params.id);
+      db.prepare("DELETE FROM record_owners WHERE module='clarifications' AND record_id=?").run(req.params.id);
+      writeAudit(req.user!.user_id, "clarifications", req.params.id, existing.project_id, "delete", existing, null);
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1871,7 +1953,7 @@ export function registerCommercialController(app: Express): void {
     const tasks = db.prepare('SELECT * FROM tasks WHERE project_id=? ORDER BY wbs_code ASC, start ASC').all(projectId) as any[];
     const workPackages = db.prepare('SELECT * FROM work_packages WHERE project_id=?').all(projectId) as any[];
     const members = db.prepare('SELECT u.id, u.name, u.role, u.email, pm.access_role FROM project_memberships pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id=?').all(projectId) as any[];
-    const companies = db.prepare('SELECT c.*, pc.relationship FROM project_companies pc JOIN companies c ON c.id = pc.company_id WHERE pc.project_id=?').all(projectId) as any[];
+    const companies = db.prepare('SELECT c.*, pc.role_in_project as relationship, pc.role_in_project FROM project_companies pc JOIN companies c ON c.id = pc.company_id WHERE pc.project_id=?').all(projectId) as any[];
     const recentUpdates = db.prepare('SELECT * FROM project_updates WHERE project_id=? ORDER BY created_at DESC LIMIT 6').all(projectId) as any[];
     const rfis = db.prepare('SELECT status FROM rfis WHERE project_id=?').all(projectId) as any[];
     const snags = db.prepare('SELECT status FROM punchlist WHERE project_id=?').all(projectId) as any[];
@@ -1888,6 +1970,12 @@ export function registerCommercialController(app: Express): void {
     let health = (openNcrs > 2 || openSnags > 10) ? 'RED' : (openSnags > 0 || openRfis > 3) ? 'AMBER' : 'GREEN';
 
     res.json({
+      ...rowToDict(project),
+      calculated_progress: avgProgress,
+      health,
+      open_snags: openSnags,
+      open_rfis: openRfis,
+      open_ncrs: openNcrs,
       project: {
         ...project,
         calculated_progress: avgProgress,

@@ -90,6 +90,8 @@ function resolveActualTable(table: string): string {
   if (table === "actions") return "project_actions";
   if (table === "decisions") return "project_decisions";
   if (table === "project_risks") return "risks";
+  if (table === "commissioning") return "commissioning_tests";
+  if (table === "handover") return "handover_items";
   return table;
 }
 
@@ -465,10 +467,31 @@ export function registerCrudController(app: Express): void {
         if (!data.crew) data.crew = String(data.workers_count || 12);
       } else if (table === "submittals") {
         if (!data.item && data.title) data.item = data.title;
+        if (!data.title && data.item) data.title = data.item;
+        if (!data.trade && data.discipline) data.trade = data.discipline;
         if (!data.date_submitted) data.date_submitted = new Date().toISOString().slice(0, 10);
         if (!data.due_date) data.due_date = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-      } else if (table === "drawings") {
-        if (!data.category) data.category = "Drawing";
+      } else if (table === "change_orders") {
+        if (data.cost_impact === undefined && data.amount !== undefined) data.cost_impact = Number(data.amount);
+        if (!data.trade && data.discipline) data.trade = data.discipline;
+        if (!data.reason && data.description) data.reason = data.description;
+        if (!data.date_raised) data.date_raised = new Date().toISOString().slice(0, 10);
+      } else if (table === "purchase_orders") {
+        if (!data.expected_delivery && (data.delivery_date || data.expected_delivery_date)) {
+          data.expected_delivery = data.delivery_date || data.expected_delivery_date;
+        }
+        if (!data.expected_delivery_date && (data.delivery_date || data.expected_delivery)) {
+          data.expected_delivery_date = data.delivery_date || data.expected_delivery;
+        }
+        if (!data.order_date) data.order_date = new Date().toISOString().slice(0, 10);
+      } else if (table === "ncrs") {
+        if (!data.description && data.title) data.description = data.title;
+        if (!data.raised_date) data.raised_date = new Date().toISOString().slice(0, 10);
+        if (!data.status) data.status = "Open";
+      } else if (table === "documents" || table === "drawings") {
+        if (table === "drawings" && !data.category) data.category = "Drawing";
+        if (!data.revision && data.version) data.revision = String(data.version);
+        if (!data.date_added) data.date_added = new Date().toISOString().slice(0, 10);
       } else if (table === "wbs_items" || table === "wbs") {
         if (data.active === undefined) data.active = 1;
       } else if (table === "plan_task_checklist") {
@@ -520,6 +543,7 @@ export function registerCrudController(app: Express): void {
       } else if (table === "rfis") {
         data.subject = data.subject || data.title || data.question || "RFI Clarification";
         data.question = data.question || data.subject || data.title || "";
+        data.trade = data.trade || data.discipline || "General";
         data.status = data.status || "Open";
         if (data.drawing_id && !data.drawing_ref) {
           const doc = db.prepare("SELECT name FROM documents WHERE id = ?").get(data.drawing_id) as any;
@@ -528,6 +552,7 @@ export function registerCrudController(app: Express): void {
       } else if (table === "inspections") {
         data.type = data.type || data.title || "QA/QC Site Inspection";
         data.title = data.title || data.type;
+        data.trade = data.trade || data.discipline || "General";
         data.status = data.status || data.result || "Scheduled";
         data.result = data.result || (["approved", "pass", "passed"].includes(String(data.status).toLowerCase()) ? "Pass" : data.status);
         data.inspector = data.inspector || req.user!.name;
@@ -555,6 +580,10 @@ export function registerCrudController(app: Express): void {
         }
       }
       const actualTable = resolveActualTable(table);
+
+      if (actualTable === "risks" && !data.mitigation && data.mitigation_plan) {
+        data.mitigation = data.mitigation_plan;
+      }
 
       if (actualTable === "project_actions") {
         if (!data.action_no) {
@@ -706,6 +735,10 @@ export function registerCrudController(app: Express): void {
         }
       }
 
+      if (actualTable === "documents" && data.visibility === undefined && data.client_visible !== undefined) {
+        data.visibility = Number(data.client_visible) === 1 || data.client_visible === true ? "Client" : "Internal";
+      }
+
       // Publishing (making a record Client-visible) is a separate authority
       // from ordinary edit access - a Site Engineer or QA/QC user can edit a
       // document's content, but that shouldn't let them decide what a client
@@ -751,6 +784,17 @@ export function registerCrudController(app: Express): void {
         if (data.unit_rate !== undefined && data.tender_rate === undefined) data.tender_rate = Number(data.unit_rate);
         if (data.completed_qty !== undefined && data.installed_quantity === undefined) data.installed_quantity = Number(data.completed_qty);
         if (data.spec !== undefined && data.specification === undefined) data.specification = data.spec;
+      }
+      if (actualTable === "change_orders") {
+        if (data.cost_impact === undefined && data.amount !== undefined) data.cost_impact = Number(data.amount);
+        if (data.trade === undefined && data.discipline !== undefined) data.trade = data.discipline;
+      }
+      if (actualTable === "purchase_orders") {
+        if (data.delivery_date !== undefined && data.expected_delivery === undefined) data.expected_delivery = data.delivery_date;
+        if (data.delivery_date !== undefined && data.expected_delivery_date === undefined) data.expected_delivery_date = data.delivery_date;
+      }
+      if (actualTable === "risks") {
+        if (data.mitigation === undefined && data.mitigation_plan !== undefined) data.mitigation = data.mitigation_plan;
       }
 
       const editableCols = cols.filter(c => c !== "id" && c !== "project_id");

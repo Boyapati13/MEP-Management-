@@ -814,7 +814,8 @@ export function registerWorkforceController(app: Express): void {
 
   app.post('/api/site_instructions', authRequired, (req, res) => {
     if (!['Admin','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'Only Admin or ProjectManager can issue official site instructions' }); return; }
-    const { project_id, site_id, work_package_id, instruction_type, title, description, priority, assigned_worker_id, assigned_supervisor_id, due_date, location, related_document_id, related_rfi_id, related_ncr_id, related_boq_item_id } = req.body;
+    const { project_id, site_id, work_package_id, title, description, priority, assigned_worker_id, assigned_supervisor_id, due_date, location, related_document_id, related_rfi_id, related_ncr_id, related_boq_item_id } = req.body;
+    const instruction_type = req.body.instruction_type || req.body.type || 'General';
     if (!project_id || !instruction_type || !title) { res.status(400).json({ error: 'project_id, instruction_type, title required' }); return; }
     if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
     if (site_id) {
@@ -1015,23 +1016,35 @@ export function registerWorkforceController(app: Express): void {
 
   app.post('/api/leave_requests', authRequired, (req, res) => {
     if (!canEdit(req.user!, 'leave_requests')) { res.status(403).json({ error: 'No edit access' }); return; }
-    const { project_id, leave_type_id, start_date, end_date, reason } = req.body;
+    const { start_date, end_date, reason, worker_id } = req.body;
+    let workerRow = getWorkerPrincipal(req.user!.user_id);
+    if (!workerRow && worker_id && ['Admin', 'ProjectManager', 'SiteSupervisor'].includes(req.user!.role)) {
+      workerRow = db.prepare('SELECT * FROM workers WHERE id=?').get(worker_id) as any;
+    }
+    const project_id = req.body.project_id || workerRow?.project_id;
+    let leave_type_id = req.body.leave_type_id;
+    if (!leave_type_id && req.body.leave_type) {
+      const lt = db.prepare('SELECT id FROM leave_types WHERE LOWER(name)=LOWER(?) OR LOWER(code)=LOWER(?) LIMIT 1').get(req.body.leave_type, req.body.leave_type) as any;
+      if (lt) leave_type_id = lt.id;
+    }
     if (!project_id || !leave_type_id || !start_date || !end_date) { res.status(400).json({ error: 'project_id, leave_type_id, start_date, end_date required' }); return; }
     if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
     if (end_date < start_date) { res.status(422).json({ error: 'end_date cannot precede start_date' }); return; }
-    const workerRow = getWorkerPrincipal(req.user!.user_id);
     if (!workerRow) { res.status(403).json({ error: 'Worker profile required for leave request' }); return; }
     const assignment = db.prepare("SELECT 1 FROM worker_assignments WHERE worker_id=? AND project_id=? AND status='Active' LIMIT 1").get(workerRow.id, project_id);
-    if (!assignment) { res.status(403).json({ error: 'Active project assignment required for leave request' }); return; }
+    if (!assignment && !['Admin', 'ProjectManager'].includes(req.user!.role)) {
+      res.status(403).json({ error: 'Active project assignment required for leave request' }); return;
+    }
     const days = chargeableLeaveDays(workerRow.id, project_id, start_date, end_date);
     if (days <= 0) { res.status(422).json({ error: 'Requested range contains no chargeable working days' }); return; }
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
+    const targetUserId = workerRow.user_id || req.user!.user_id;
     db.prepare('INSERT INTO leave_requests (id,project_id,worker_id,user_id,leave_type_id,start_date,end_date,days_requested,reason,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-      .run(id, project_id, workerRow.id, req.user!.user_id, leave_type_id, start_date, end_date, days, reason||null, 'Pending', now);
+      .run(id, project_id, workerRow.id, targetUserId, leave_type_id, start_date, end_date, days, reason||null, 'Pending', now);
     const yr = new Date(start_date + 'T12:00:00Z').getUTCFullYear();
     db.prepare('INSERT INTO leave_balances (id,worker_id,user_id,leave_type_id,year,pending_days,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id,leave_type_id,year) DO UPDATE SET pending_days=pending_days+?, updated_at=?')
-      .run(crypto.randomUUID(), workerRow.id, req.user!.user_id, leave_type_id, yr, days, now, days, now);
+      .run(crypto.randomUUID(), workerRow.id, targetUserId, leave_type_id, yr, days, now, days, now);
     writeAudit(req.user!.user_id, 'leave_requests', id, project_id, 'submit', null, { ...req.body, chargeable_days: days });
     res.status(201).json(db.prepare('SELECT lr.*, lt.name as leave_type_name FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.id=?').get(id));
   });
@@ -1182,7 +1195,10 @@ export function registerWorkforceController(app: Express): void {
 
   app.post('/api/payroll_periods', authRequired, (req, res) => {
     if (!['Admin','CommercialManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
-    const { project_id, period_name, period_start, period_end } = req.body;
+    const { project_id } = req.body;
+    const period_name = req.body.period_name || req.body.name;
+    const period_start = req.body.period_start || req.body.start_date;
+    const period_end = req.body.period_end || req.body.end_date;
     if (!project_id || !period_name || !period_start || !period_end) { res.status(400).json({ error: 'project_id, period_name, period_start, period_end required' }); return; }
     if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
     const id = crypto.randomUUID();
@@ -1374,11 +1390,13 @@ export function registerWorkforceController(app: Express): void {
 
   app.get('/api/reports/workforce/payroll-hours', authRequired, (req, res) => {
     if (!['Admin','CommercialManager','ProjectManager'].includes(req.user!.role)) { res.status(403).json({ error: 'No access' }); return; }
-    const { project_id, period_start, period_end } = req.query as any;
-    if (!project_id || !period_start || !period_end) { res.status(400).json({ error: 'project_id, period_start, period_end required' }); return; }
+    const { project_id, period_start, period_end, start_date, end_date } = req.query as any;
+    const effStart = period_start || start_date;
+    const effEnd = period_end || end_date;
+    if (!project_id || !effStart || !effEnd) { res.status(400).json({ error: 'project_id, period_start, period_end required' }); return; }
     if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
-    const rows = db.prepare(`SELECT w.id as worker_id, w.name as worker_name, w.trade, w.employee_id, SUM(a.regular_hours) as total_regular_hours, SUM(a.overtime_hours) as total_overtime_hours, COUNT(a.id) as days_worked FROM attendance a JOIN workers w ON w.user_id=a.user_id WHERE a.project_id=? AND a.work_date>=? AND a.work_date<=? AND a.punch_out IS NOT NULL GROUP BY w.id ORDER BY w.name`).all(project_id, period_start, period_end);
-    res.json({ project_id, period_start, period_end, workers: rows });
+    const rows = db.prepare(`SELECT w.id as worker_id, w.name as worker_name, w.trade, w.employee_id, SUM(a.regular_hours) as total_regular_hours, SUM(a.overtime_hours) as total_overtime_hours, COUNT(a.id) as days_worked FROM attendance a JOIN workers w ON (w.id=a.worker_id OR w.user_id=a.user_id) WHERE a.project_id=? AND a.work_date>=? AND a.work_date<=? AND a.punch_out IS NOT NULL GROUP BY w.id ORDER BY w.name`).all(project_id, effStart, effEnd);
+    res.json({ project_id, period_start: effStart, period_end: effEnd, workers: rows });
   });
 
 }

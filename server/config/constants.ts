@@ -453,7 +453,23 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
     ],
     module: "commissioning",
   },
+  commissioning: {
+    cols: [
+      "id", "project_id", "system", "subsystem", "equipment", "test_type", "power_available",
+      "installation_complete", "controls_complete", "interface_complete", "drawings_approved",
+      "test_date", "test_engineer", "witness", "result", "failure_reason", "retest_date",
+      "certificate", "status", "comments"
+    ],
+    module: "commissioning",
+  },
   handover_items: {
+    cols: [
+      "id", "project_id", "contractor", "system", "item_type", "description", "required",
+      "submitted", "approved", "due_date", "status", "notes"
+    ],
+    module: "handover",
+  },
+  handover: {
     cols: [
       "id", "project_id", "contractor", "system", "item_type", "description", "required",
       "submitted", "approved", "due_date", "status", "notes"

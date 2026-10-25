@@ -633,6 +633,8 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
     await procurementApi.createOrder({
       project_id: selectedProject,
       ...poForm,
+      expected_delivery: poForm.delivery_date || undefined,
+      expected_delivery_date: poForm.delivery_date || undefined,
       amount: Number(poForm.amount),
     });
     setShowAddPo(false);
@@ -1058,7 +1060,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
       }
       setSelectedSuggestions(map);
     } catch (err: any) {
-      alert(err.message || 'Could not extract project setup suggestions from stored documents');
+      console.error(err.message || 'Could not extract project setup suggestions from stored documents');
     } finally {
       setExtracting(false);
     }
@@ -1072,8 +1074,13 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   };
 
   const toggleClientVisibility = async (doc: any) => {
-    const nextVal = Number(doc.client_visible) === 1 ? 0 : 1;
-    await api.put(`/api/documents/${doc.id}`, { ...doc, client_visible: nextVal });
+    const currentlyVisible = doc.visibility === 'Client' || doc.visibility === 'All' || Number(doc.client_visible) === 1;
+    const nextVis = currentlyVisible ? 'Internal' : 'Client';
+    const nextStatus = !currentlyVisible ? 'Approved' : (doc.status || 'Approved');
+    await api.put(`/api/documents/${doc.id}`, {
+      visibility: nextVis,
+      status: nextStatus,
+    });
     loadDocs();
   };
 
@@ -1095,10 +1102,17 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   const handleCreateDoc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
-    await api.post('/api/documents', {
+    const created = await api.post<any>('/api/documents', {
       project_id: selectedProject,
       ...docForm,
+      revision: docForm.version || '1.0',
     });
+    if (docForm.client_visible && canManage && created?.id) {
+      await api.put(`/api/documents/${created.id}`, {
+        visibility: 'Client',
+        status: 'Approved',
+      }).catch(() => {});
+    }
     setShowUploadDoc(false);
     setDocForm({
       name: '',
@@ -1233,7 +1247,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               </tr>
             ) : (
               docs.map((doc: any) => {
-                const isClientVisible = Number(doc.client_visible) === 1 && doc.status === 'Approved';
+                const isClientVisible = doc.visibility === 'Client' || doc.visibility === 'All' || (Number(doc.client_visible) === 1 && doc.status === 'Approved');
                 return (
                   <tr key={doc.id} className="hover:bg-stone-50/80">
                     <td className="py-3.5 px-4 font-semibold text-slate-900 flex items-center gap-2">
@@ -1394,6 +1408,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
     await risksApi.create({
       project_id: selectedProject,
       ...form,
+      mitigation: form.mitigation_plan,
       probability: Number(form.probability),
       impact: Number(form.impact),
       risk_score: Number(form.probability) * Number(form.impact),
@@ -1641,6 +1656,8 @@ const WorkflowRegisterWorkspace: React.FC<{
     await api.post(`/api/${moduleKey}`, {
       project_id: selectedProject,
       ...form,
+      trade: form.discipline,
+      cost_impact: Number(form.amount || 0),
       amount: Number(form.amount || 0),
     });
     setShowAdd(false);
@@ -1650,10 +1667,10 @@ const WorkflowRegisterWorkspace: React.FC<{
 
   const handleTransition = async (rec: any, nextStatus: string) => {
     try {
-      await api.put(`/api/${moduleKey}/${rec.id}`, { ...rec, status: nextStatus });
+      await api.put(`/api/${moduleKey}/${rec.id}`, { status: nextStatus });
       loadRecords();
     } catch (err: any) {
-      alert(err.message || 'Status transition not permitted');
+      console.error(err.message || 'Status transition not permitted');
     }
   };
 
@@ -1875,7 +1892,7 @@ const CompaniesDirectoryWorkspace: React.FC = () => {
         {companies.map(c => (
           <div key={c.id} className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-slate-700">{c.company_type || 'Subcontractor'}</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-slate-700">{c.type || c.company_type || 'Subcontractor'}</span>
               <span className="text-xs font-semibold text-amber-700">{c.trade || 'MEP'}</span>
             </div>
             <h3 className="font-bold text-slate-900 text-base mt-2">{c.name}</h3>
@@ -2001,7 +2018,7 @@ const AuditTrailWorkspace: React.FC<{ selectedProject: string }> = ({ selectedPr
             {logs.map((l: any) => (
               <tr key={l.id} className="hover:bg-stone-50">
                 <td className="py-3 px-4 font-mono text-slate-500">{l.timestamp || l.created_at}</td>
-                <td className="py-3 px-4 font-semibold text-slate-800">{l.user_id}</td>
+                <td className="py-3 px-4 font-semibold text-slate-800">{l.user_name || l.user_id}</td>
                 <td className="py-3 px-4 font-mono text-amber-700">{l.module}</td>
                 <td className="py-3 px-4 font-bold text-slate-900">{l.action}</td>
                 <td className="py-3 px-4 font-mono text-slate-500">{l.record_id}</td>

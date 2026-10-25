@@ -682,24 +682,36 @@ export function registerOperationsController(app: Express): void {
   });
 
   // Audit Logs
-  app.get("/api/audit", authRequired, (req, res) => {
+  app.get(["/api/audit", "/api/audit_logs"], authRequired, (req, res) => {
     if (req.user!.role !== "Admin") {
       res.status(403).json({ error: "Admin access required" });
       return;
     }
     const projectId = req.query.project_id as string;
+    const entityType = (req.query.entity_type || req.query.module) as string;
+    const limit = Math.min(500, Math.max(1, parseInt((req.query.limit as string) || "500", 10) || 500));
     const { where, params } = projectScopeSql(req.user!, projectId, "id");
     if (!where) {
       res.status(403).json({ error: "No access to this project" });
       return;
     }
+    let auditWhere = `audit_logs.project_id IN (SELECT id FROM projects WHERE ${where})`;
+    if (!projectId) {
+      auditWhere = `(${auditWhere} OR audit_logs.project_id = 'SYSTEM' OR audit_logs.project_id IS NULL)`;
+    }
+    const queryParams: any[] = [...params];
+    if (entityType) {
+      auditWhere += ` AND audit_logs.module = ?`;
+      queryParams.push(entityType);
+    }
+    queryParams.push(limit);
     const rows = db.prepare(`
       SELECT audit_logs.*, users.name AS user_name
       FROM audit_logs
       LEFT JOIN users ON users.id = audit_logs.user_id
-      WHERE audit_logs.project_id IN (SELECT id FROM projects WHERE ${where})
-      ORDER BY audit_logs.created_at DESC LIMIT 500
-    `).all(...params);
+      WHERE ${auditWhere}
+      ORDER BY audit_logs.created_at DESC LIMIT ?
+    `).all(...queryParams);
     res.json(rows.map(rowToDict));
   });
 

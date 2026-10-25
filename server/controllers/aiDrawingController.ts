@@ -963,7 +963,7 @@ Provide a structured list of at least 3-5 verified locations/suppliers including
   });
 
   // MEP Project Copilot Intelligence endpoint (answers all questions with full project context)
-  app.post("/api/ai/chat", authRequired, async (req: Request, res: Response) => {
+  app.post(["/api/ai/chat", "/api/copilot/ask", "/api/copilot"], authRequired, async (req: Request, res: Response) => {
     try {
       const result = await answerCopilotQuestion(req.user!, req.body);
       res.json({
