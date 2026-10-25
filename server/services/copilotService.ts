@@ -54,140 +54,168 @@ export function getProjectCopilotContext(projectId?: string, user?: Authenticate
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId) as any;
   if (!project) return null;
 
-  // Work packages
-  const workPackages = db.prepare(`
-    SELECT id, name, code, discipline, description, budget_allocated, status, assigned_subcontractor, start_date, end_date
-    FROM work_packages
-    WHERE project_id = ?
-    ORDER BY created_at ASC
-  `).all(projectId) as any[];
+  const safeAll = (sql: string, ...params: any[]): any[] => {
+    try {
+      return db.prepare(sql).all(...params) as any[];
+    } catch {
+      return [];
+    }
+  };
+
+  const safeGet = (sql: string, ...params: any[]): any => {
+    try {
+      return db.prepare(sql).get(...params) as any;
+    } catch {
+      return null;
+    }
+  };
+
+  // Work packages (with company name lookup if company_id is used)
+  const rawWorkPackages = safeAll(`
+    SELECT wp.*, c.name as company_name
+    FROM work_packages wp
+    LEFT JOIN companies c ON wp.company_id = c.id
+    WHERE wp.project_id = ?
+    ORDER BY wp.created_at ASC
+  `, projectId);
+  const workPackages = rawWorkPackages.map(wp => ({
+    id: wp.id,
+    name: wp.name,
+    code: wp.code || wp.package_code || "WP",
+    discipline: wp.discipline || wp.trade || "Multi-Trade",
+    description: wp.description || wp.scope || "",
+    budget_allocated: wp.budget_allocated ?? wp.value ?? wp.contract_value ?? 0,
+    status: wp.status || "Active",
+    assigned_subcontractor: wp.assigned_subcontractor || wp.company_name || wp.subcontractor || "In-House MEP Team",
+    start_date: wp.start_date || wp.planned_start || "",
+    end_date: wp.end_date || wp.planned_finish || "",
+  }));
 
   // BOQ Summary
-  const boqAgg = db.prepare(`
+  const boqAgg = safeGet(`
     SELECT COUNT(*) as cnt, COALESCE(SUM(tender_amount), 0) as total
     FROM boq_items
     WHERE project_id = ?
-  `).get(projectId) as any;
+  `, projectId);
 
-  const boqByDiscipline = db.prepare(`
-    SELECT discipline, COUNT(*) as count, COALESCE(SUM(tender_amount), 0) as total_amount
+  const boqByDiscipline = safeAll(`
+    SELECT COALESCE(discipline, 'General MEP') as discipline, COUNT(*) as count, COALESCE(SUM(tender_amount), 0) as total_amount
     FROM boq_items
     WHERE project_id = ?
     GROUP BY discipline
     ORDER BY total_amount DESC
-  `).all(projectId) as any[];
+  `, projectId);
 
-  const sampleBoqItems = db.prepare(`
+  const sampleBoqItems = safeAll(`
     SELECT item_number, description, unit, tender_quantity, tender_rate, tender_amount, discipline, system, area
     FROM boq_items
     WHERE project_id = ?
     ORDER BY tender_amount DESC
     LIMIT 15
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Documents
-  const documents = db.prepare(`
+  const documents = safeAll(`
     SELECT id, name, category, revision, date_added, attachment_name
     FROM documents
     WHERE project_id = ?
     ORDER BY date_added DESC
     LIMIT 25
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Tasks
-  const taskCount = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE project_id = ?").get(projectId) as any;
-  const tasksByStatus = db.prepare(`
+  const taskCount = safeGet("SELECT COUNT(*) as c FROM tasks WHERE project_id = ?", projectId);
+  const tasksByStatus = safeAll(`
     SELECT status, COUNT(*) as count
     FROM tasks
     WHERE project_id = ?
     GROUP BY status
-  `).all(projectId) as any[];
+  `, projectId);
 
-  const activeTasks = db.prepare(`
+  const activeTasks = safeAll(`
     SELECT title, trade, assignee, start, end, progress, status, priority, wbs_code
     FROM tasks
     WHERE project_id = ?
     ORDER BY CASE WHEN status = 'In Progress' THEN 0 WHEN status = 'Not Started' THEN 1 ELSE 2 END, end ASC
     LIMIT 20
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Punch list / Snags
-  const punchAgg = db.prepare("SELECT COUNT(*) as c FROM punchlist WHERE project_id = ?").get(projectId) as any;
-  const punchOpen = db.prepare("SELECT COUNT(*) as c FROM punchlist WHERE project_id = ? AND status != 'Closed'").get(projectId) as any;
-  const punchByPriority = db.prepare(`
+  const punchAgg = safeGet("SELECT COUNT(*) as c FROM punchlist WHERE project_id = ?", projectId);
+  const punchOpen = safeGet("SELECT COUNT(*) as c FROM punchlist WHERE project_id = ? AND status != 'Closed'", projectId);
+  const punchByPriority = safeAll(`
     SELECT priority, COUNT(*) as count
     FROM punchlist
     WHERE project_id = ? AND status != 'Closed'
     GROUP BY priority
-  `).all(projectId) as any[];
+  `, projectId);
 
-  const openSnags = db.prepare(`
+  const openSnags = safeAll(`
     SELECT id, item, trade, location, priority, date_raised, status
     FROM punchlist
     WHERE project_id = ? AND status != 'Closed'
     ORDER BY CASE priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, date_raised DESC
     LIMIT 15
-  `).all(projectId) as any[];
+  `, projectId);
 
   // RFIs
-  const rfis = db.prepare(`
+  const rfis = safeAll(`
     SELECT number, subject, trade, date_raised, due_date, status
     FROM rfis
     WHERE project_id = ?
     ORDER BY date_raised DESC
     LIMIT 15
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Material requests & Procurement
-  const materialRequests = db.prepare(`
+  const materialRequests = safeAll(`
     SELECT material, description, quantity, unit, required_date, status, location
     FROM material_requests
     WHERE project_id = ?
     ORDER BY required_date ASC
     LIMIT 15
-  `).all(projectId) as any[];
+  `, projectId);
 
-  const procurementItems = db.prepare(`
+  const procurementItems = safeAll(`
     SELECT pr_number, material, quantity, unit, required_on_site, selected_supplier, po_number, status
     FROM procurement_items
     WHERE project_id = ?
     ORDER BY required_on_site ASC
     LIMIT 15
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Risks
-  const risks = db.prepare(`
+  const risks = safeAll(`
     SELECT risk_no, title, category, probability, impact, risk_score, risk_level, mitigation, status
     FROM risks
     WHERE project_id = ?
     ORDER BY risk_score DESC
     LIMIT 10
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Actions & Decisions
-  const actions = db.prepare(`
+  const actions = safeAll(`
     SELECT action_no, title, assigned_to_name, priority, status, due_date
     FROM project_actions
     WHERE project_id = ? AND status != 'Completed'
     LIMIT 10
-  `).all(projectId) as any[];
+  `, projectId);
 
-  const decisions = db.prepare(`
+  const decisions = safeAll(`
     SELECT decision_no, title, decision_taken, decided_by, decision_date
     FROM project_decisions
     WHERE project_id = ?
     ORDER BY decision_date DESC
     LIMIT 10
-  `).all(projectId) as any[];
+  `, projectId);
 
   // Attendance
   const today = new Date().toISOString().split("T")[0];
-  const workforceToday = db.prepare(`
-    SELECT worker, punch_in, punch_out, status
+  const workforceToday = safeAll(`
+    SELECT *
     FROM attendance
-    WHERE project_id = ? AND work_date = ?
-    ORDER BY punch_in ASC
-  `).all(projectId, today) as any[];
+    WHERE project_id = ? AND (work_date = ? OR date = ?)
+  `, projectId, today, today);
 
   return {
     project,
