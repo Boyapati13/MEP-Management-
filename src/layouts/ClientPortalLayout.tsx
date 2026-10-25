@@ -78,7 +78,7 @@ export function ClientPortalLayout({
         </div>
       </header>
 
-      <div className="bg-white/95 border-b border-[#e5e0d5] px-3.5 sm:px-6 py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+      <div className="bg-white/95 border-b border-[#e5e0d5] px-3.5 sm:px-6 py-2 flex items-center gap-1.5 sm:gap-2 flex-wrap">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = t.id === activeTab;
@@ -86,7 +86,7 @@ export function ClientPortalLayout({
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors touch-manipulation flex-shrink-0 ${
+              className={`flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-colors text-left touch-manipulation flex-shrink-0 ${
                 active
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-stone-100'

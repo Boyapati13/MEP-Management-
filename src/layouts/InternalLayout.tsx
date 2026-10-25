@@ -35,7 +35,8 @@ export function InternalLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const role = user?.role || 'Worker';
   const visibleDomains = DOMAINS.filter(
-    (d) => !d.allowedRoles || d.allowedRoles.includes(role)
+    (d) => (!d.allowedRoles || d.allowedRoles.includes(role)) &&
+      ROUTE_ITEMS.some(r => r.domain === d.id && (!r.allowedRoles || r.allowedRoles.includes(role)))
   );
   const subRoutes = ROUTE_ITEMS.filter(
     (r) =>
@@ -226,7 +227,7 @@ export function InternalLayout({
 
             {/* Subroute Navigation Tabs - Horizontal Scroll on small screens */}
             {subRoutes.length > 0 && (
-              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 -mx-1 px-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap py-0.5 -mx-1 px-1">
                 {subRoutes.map((r) => {
                   const active = r.id === activeRoute;
                   return (
@@ -286,7 +287,7 @@ export function InternalLayout({
           <span>Site</span>
         </button>
 
-        <button
+        {visibleDomains.some(d => d.id === 'commercial') && <button
           onClick={() => handleDomainSelect('commercial', 'boq')}
           className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium touch-manipulation ${
             activeDomain === 'commercial' ? 'text-amber-400 font-bold' : 'text-slate-400'
@@ -294,7 +295,7 @@ export function InternalLayout({
         >
           <Receipt size={18} />
           <span>Cost/BOQ</span>
-        </button>
+        </button>}
 
         <button
           onClick={() => setMobileMenuOpen(true)}
