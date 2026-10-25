@@ -426,3 +426,8 @@ The application runs on port `3000` by default. Data is persisted to the `mep_da
 ## License
 
 No license file is currently included in this repository. Add a `LICENSE` file (e.g. MIT, Apache-2.0, or a proprietary notice) to clarify usage terms for anyone outside the project.
+
+
+## Accuracy audit
+
+See [Accuracy-first audit and release gates](docs/ACCURACY_AUDIT.md) before releasing changes that affect BOQ, tasks, engineering, project metrics, or financial records.
