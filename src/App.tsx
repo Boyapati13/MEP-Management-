@@ -193,33 +193,74 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-500/20 rounded-3xl mb-4 backdrop-blur border border-blue-400/30">
-            <HardHat size={36} className="text-blue-300" />
+    <main className="min-h-screen bg-[#071526] text-white lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(400px,0.85fr)]">
+      <section className="relative isolate flex min-h-[460px] flex-col overflow-hidden px-6 py-8 sm:px-12 lg:min-h-screen lg:px-16 lg:py-12">
+        <div className="absolute inset-0 -z-20 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85')] bg-cover bg-center" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#061426]/95 via-[#071b32]/85 to-[#08192a]/45" />
+        <div className="absolute inset-0 -z-10 opacity-20 [background-image:linear-gradient(rgba(110,183,255,.15)_1px,transparent_1px),linear-gradient(90deg,rgba(110,183,255,.15)_1px,transparent_1px)] [background-size:42px_42px]" />
+        <header className="flex items-center gap-3">
+          <div className="rounded-xl border border-sky-400/40 bg-sky-500/20 p-3"><HardHat size={27} className="text-sky-300" /></div>
+          <div><div className="text-2xl font-extrabold tracking-tight">MEP <span className="text-sky-400">FieldHub</span></div><p className="text-[10px] font-semibold uppercase tracking-[.28em] text-sky-100/70">Plan · Build · Track · Deliver</p></div>
+        </header>
+        <div className="my-auto max-w-3xl py-14 lg:py-24">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[.14em] text-sky-200">
+            <span className="h-2 w-2 rounded-full bg-amber-400" /> Complete MEP project management
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">MEP Management</h1>
-          <p className="text-blue-300 mt-2 text-sm">Professional Construction Platform</p>
+          <h1 className="max-w-2xl text-4xl font-bold leading-[1.12] tracking-tight sm:text-5xl xl:text-6xl">
+            From <span className="text-sky-400">Design</span> to <span className="text-sky-400">Handover.</span><br />One connected platform.
+          </h1>
+          <p className="mt-6 max-w-xl text-base leading-8 text-slate-200/90 sm:text-lg">
+            Coordinate mechanical, electrical, plumbing and fire protection projects with connected engineering, site delivery, quality and commercial workflows.
+          </p>
+          <div className="mt-9 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { Icon: Layers, label: 'BIM & Drawings' },
+              { Icon: HardHat, label: 'Site Execution' },
+              { Icon: Shield, label: 'Quality & Safety' },
+              { Icon: BarChart3, label: 'Cost & Progress' },
+            ].map(({ Icon, label }) => (
+              <div key={label} className="rounded-xl border border-white/15 bg-slate-950/40 px-3 py-4 backdrop-blur-sm">
+                <Icon size={23} className="mb-3 text-sky-300" />
+                <span className="text-xs font-medium text-white/90">{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <Card className="p-8 bg-white/5 backdrop-blur border border-white/10">
-          <form onSubmit={handleLogin} className="space-y-4">
+        <footer className="border-t border-white/15 pt-5 text-xs text-slate-300/80">Mechanical · Electrical · Plumbing · Fire Protection · Testing & Commissioning</footer>
+      </section>
+      <section className="flex min-h-[550px] items-center justify-center bg-[#f7f9fc] px-6 py-12 text-slate-900 sm:px-12 lg:min-h-screen lg:px-14">
+        <div className="w-full max-w-md">
+          <div className="mb-9 flex items-center gap-3 lg:hidden"><HardHat className="text-blue-700" /><strong>MEP FieldHub</strong></div>
+          <div className="mb-9 hidden items-center gap-3 lg:flex">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><HardHat size={26}/></div>
+            <div><p className="text-xl font-bold tracking-tight">MEP FieldHub</p><p className="text-xs text-slate-500">Enterprise Construction Platform</p></div>
+          </div>
+          <div className="mb-8">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[.2em] text-blue-700">Secure workspace access</p>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Welcome back</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-500">Sign in to your MEP project workspace. Your permissions and assigned projects are loaded automatically.</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-2">Username</label>
-              <input className={cn(inputCls, 'bg-white/10 border-white/20 text-white placeholder-blue-300 focus:ring-blue-400')} placeholder="admin" value={username} onChange={e => setUsername(e.target.value)} required />
+              <label htmlFor="mep-login-username" className="mb-2 block text-sm font-semibold text-slate-700">Username</label>
+              <input id="mep-login-username" autoComplete="username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100" placeholder="Enter your username" value={username} onChange={e => setUsername(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-2">Password</label>
-              <input type="password" className={cn(inputCls, 'bg-white/10 border-white/20 text-white placeholder-blue-300 focus:ring-blue-400')} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+              <label htmlFor="mep-login-password" className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
+              <input id="mep-login-password" type="password" autoComplete="current-password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100" placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
-            <button type="submit" disabled={loading} className={cn(btnPrimary, 'w-full justify-center py-3 bg-blue-500 hover:bg-blue-400 text-base mt-2')}>
-              {loading ? <Spinner size={16} /> : <><Shield size={16} />Sign In</>}
+            <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-700 px-5 py-4 text-sm font-bold text-white shadow-lg shadow-blue-700/15 transition hover:bg-blue-800 focus-visible:outline focus-visible:outline-4 focus-visible:outline-blue-200 disabled:cursor-not-allowed disabled:opacity-60">
+              {loading ? <><Spinner size={17}/> Signing in…</> : <><Lock size={17}/> Sign in securely <ChevronRight size={18}/></>}
             </button>
           </form>
-        </Card>
-        <p className="text-center text-amber-400/80 text-xs mt-6">MEP FieldHub v1.5.0 — Enterprise Construction Edition</p>
-      </div>
-    </div>
+          <div className="mt-7 rounded-xl border border-blue-100 bg-blue-50/80 p-4 text-xs leading-6 text-slate-600">
+            <Shield size={16} className="mr-2 inline text-blue-700" />
+            Access for project teams, engineers, subcontractors and clients is managed by your administrator.
+          </div>
+          <p className="mt-10 text-center text-xs text-slate-400">MEP FieldHub v1.5.0 · Enterprise Construction Edition</p>
+        </div>
+      </section>
+    </main>
   );
 }
 
