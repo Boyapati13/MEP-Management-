@@ -193,71 +193,149 @@ function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#071526] text-white lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(400px,0.85fr)]">
-      <section className="relative isolate flex min-h-[460px] flex-col overflow-hidden px-6 py-8 sm:px-12 lg:min-h-screen lg:px-16 lg:py-12">
-        <div className="absolute inset-0 -z-20 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85')] bg-cover bg-center" />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#061426]/95 via-[#071b32]/85 to-[#08192a]/45" />
+    <main className="min-h-screen bg-[#071526] text-white flex flex-col lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(420px,0.85fr)]">
+      {/* Desktop / Laptop Hero Showcase (Hidden on small mobile screens, compact on tablet, full on laptop) */}
+      <section className="relative isolate hidden md:flex flex-col overflow-hidden px-6 py-8 sm:px-10 lg:min-h-screen lg:px-14 lg:py-12 border-b lg:border-b-0 lg:border-r border-slate-800">
+        <div className="absolute inset-0 -z-20 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85')] bg-cover bg-center opacity-60" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#061426]/95 via-[#071b32]/90 to-[#08192a]/80" />
         <div className="absolute inset-0 -z-10 opacity-20 [background-image:linear-gradient(rgba(110,183,255,.15)_1px,transparent_1px),linear-gradient(90deg,rgba(110,183,255,.15)_1px,transparent_1px)] [background-size:42px_42px]" />
+        
         <header className="flex items-center gap-3">
-          <div className="rounded-xl border border-sky-400/40 bg-sky-500/20 p-3"><HardHat size={27} className="text-sky-300" /></div>
-          <div><div className="text-2xl font-extrabold tracking-tight">MEP <span className="text-sky-400">FieldHub</span></div><p className="text-[10px] font-semibold uppercase tracking-[.28em] text-sky-100/70">Plan · Build · Track · Deliver</p></div>
-        </header>
-        <div className="my-auto max-w-3xl py-14 lg:py-24">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[.14em] text-sky-200">
-            <span className="h-2 w-2 rounded-full bg-amber-400" /> Complete MEP project management
+          <div className="rounded-xl border border-sky-400/40 bg-sky-500/20 p-2.5 sm:p-3">
+            <HardHat size={26} className="text-sky-300" />
           </div>
-          <h1 className="max-w-2xl text-4xl font-bold leading-[1.12] tracking-tight sm:text-5xl xl:text-6xl">
+          <div>
+            <div className="text-xl sm:text-2xl font-extrabold tracking-tight">MEP <span className="text-sky-400">FieldHub</span></div>
+            <p className="text-[10px] font-semibold uppercase tracking-[.25em] text-sky-100/70">Plan · Build · Track · Deliver</p>
+          </div>
+        </header>
+
+        <div className="my-auto max-w-2xl py-8 lg:py-16">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-300/10 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[.12em] text-sky-200">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" /> Complete MEP project management
+          </div>
+          <h1 className="text-3xl font-bold leading-[1.15] tracking-tight sm:text-4xl xl:text-5xl">
             From <span className="text-sky-400">Design</span> to <span className="text-sky-400">Handover.</span><br />One connected platform.
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-8 text-slate-200/90 sm:text-lg">
+          <p className="mt-4 text-sm sm:text-base leading-relaxed text-slate-200/90 max-w-lg">
             Coordinate mechanical, electrical, plumbing and fire protection projects with connected engineering, site delivery, quality and commercial workflows.
           </p>
-          <div className="mt-9 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { Icon: Layers, label: 'BIM & Drawings' },
               { Icon: HardHat, label: 'Site Execution' },
               { Icon: Shield, label: 'Quality & Safety' },
               { Icon: BarChart3, label: 'Cost & Progress' },
             ].map(({ Icon, label }) => (
-              <div key={label} className="rounded-xl border border-white/15 bg-slate-950/40 px-3 py-4 backdrop-blur-sm">
-                <Icon size={23} className="mb-3 text-sky-300" />
-                <span className="text-xs font-medium text-white/90">{label}</span>
+              <div key={label} className="rounded-xl border border-white/15 bg-slate-950/40 p-3 backdrop-blur-sm">
+                <Icon size={20} className="mb-2 text-sky-300" />
+                <span className="text-xs font-medium text-white/90 block leading-tight">{label}</span>
               </div>
             ))}
           </div>
         </div>
-        <footer className="border-t border-white/15 pt-5 text-xs text-slate-300/80">Mechanical · Electrical · Plumbing · Fire Protection · Testing & Commissioning</footer>
+
+        <footer className="border-t border-white/15 pt-4 text-xs text-slate-300/80">
+          Mechanical · Electrical · Plumbing · Fire Protection · Testing & Commissioning
+        </footer>
       </section>
-      <section className="flex min-h-[550px] items-center justify-center bg-[#f7f9fc] px-6 py-12 text-slate-900 sm:px-12 lg:min-h-screen lg:px-14">
-        <div className="w-full max-w-md">
-          <div className="mb-9 flex items-center gap-3 lg:hidden"><HardHat className="text-blue-700" /><strong>MEP FieldHub</strong></div>
-          <div className="mb-9 hidden items-center gap-3 lg:flex">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><HardHat size={26}/></div>
-            <div><p className="text-xl font-bold tracking-tight">MEP FieldHub</p><p className="text-xs text-slate-500">Enterprise Construction Platform</p></div>
+
+      {/* Login Card Section (Mobile, Tablet & Laptop Friendly) */}
+      <section className="flex flex-1 items-center justify-center bg-[#f7f9fc] px-4 py-8 sm:px-8 sm:py-12 text-slate-900 lg:min-h-screen lg:px-12">
+        <div className="w-full max-w-md mx-auto">
+          {/* Mobile Top Brand Header */}
+          <div className="mb-6 flex md:hidden items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded-xl bg-blue-700 p-2 text-white shadow-md">
+                <HardHat size={22}/>
+              </div>
+              <div>
+                <p className="text-lg font-bold tracking-tight text-slate-900 leading-none">MEP <span className="text-blue-700">FieldHub</span></p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Construction Platform</p>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300">
+              v1.5.0
+            </span>
           </div>
-          <div className="mb-8">
-            <p className="mb-3 text-xs font-bold uppercase tracking-[.2em] text-blue-700">Secure workspace access</p>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Welcome back</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-500">Sign in to your MEP project workspace. Your permissions and assigned projects are loaded automatically.</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-5">
+
+          {/* Tablet Brand Header */}
+          <div className="mb-6 hidden md:flex lg:hidden items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-2.5 text-blue-700 border border-blue-100"><HardHat size={24}/></div>
             <div>
-              <label htmlFor="mep-login-username" className="mb-2 block text-sm font-semibold text-slate-700">Username</label>
-              <input id="mep-login-username" autoComplete="username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100" placeholder="Enter your username" value={username} onChange={e => setUsername(e.target.value)} required />
+              <p className="text-xl font-bold tracking-tight">MEP FieldHub</p>
+              <p className="text-xs text-slate-500">Enterprise Construction Platform</p>
+            </div>
+          </div>
+
+          {/* Desktop Brand Header */}
+          <div className="mb-6 hidden lg:flex items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-700 border border-blue-100"><HardHat size={26}/></div>
+            <div>
+              <p className="text-xl font-bold tracking-tight">MEP FieldHub</p>
+              <p className="text-xs text-slate-500">Enterprise Construction Platform</p>
+            </div>
+          </div>
+
+          <div className="mb-6 sm:mb-8">
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-[.15em] text-blue-700">Secure workspace access</p>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Welcome back</h2>
+            <p className="mt-1.5 text-xs sm:text-sm leading-relaxed text-slate-500">
+              Sign in to your MEP project workspace. Your permissions and assigned projects are loaded automatically.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
+            <div>
+              <label htmlFor="mep-login-username" className="mb-1.5 block text-xs sm:text-sm font-semibold text-slate-700">
+                Username
+              </label>
+              <input
+                id="mep-login-username"
+                autoComplete="username"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 sm:px-4 sm:py-3.5 text-sm text-slate-900 shadow-xs outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 touch-manipulation"
+                placeholder="Enter your username (e.g. admin)"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                required
+              />
             </div>
             <div>
-              <label htmlFor="mep-login-password" className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
-              <input id="mep-login-password" type="password" autoComplete="current-password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100" placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} required />
+              <label htmlFor="mep-login-password" className="mb-1.5 block text-xs sm:text-sm font-semibold text-slate-700">
+                Password
+              </label>
+              <input
+                id="mep-login-password"
+                type="password"
+                autoComplete="current-password"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 sm:px-4 sm:py-3.5 text-sm text-slate-900 shadow-xs outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 touch-manipulation"
+                placeholder="Enter your password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
             </div>
-            <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-700 px-5 py-4 text-sm font-bold text-white shadow-lg shadow-blue-700/15 transition hover:bg-blue-800 focus-visible:outline focus-visible:outline-4 focus-visible:outline-blue-200 disabled:cursor-not-allowed disabled:opacity-60">
-              {loading ? <><Spinner size={17}/> Signing in…</> : <><Lock size={17}/> Sign in securely <ChevronRight size={18}/></>}
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-blue-700 px-4 py-3 sm:px-5 sm:py-3.5 text-sm font-bold text-white shadow-md shadow-blue-700/15 transition hover:bg-blue-800 active:bg-blue-900 focus-visible:outline focus-visible:outline-4 focus-visible:outline-blue-200 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation"
+            >
+              {loading ? (
+                <><Spinner size={16}/> Signing in…</>
+              ) : (
+                <><Lock size={16}/> Sign in securely <ChevronRight size={16}/></>
+              )}
             </button>
           </form>
-          <div className="mt-7 rounded-xl border border-blue-100 bg-blue-50/80 p-4 text-xs leading-6 text-slate-600">
-            <Shield size={16} className="mr-2 inline text-blue-700" />
+
+          <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/80 p-3 sm:p-4 text-xs leading-relaxed text-slate-600">
+            <Shield size={15} className="mr-1.5 inline text-blue-700 flex-shrink-0" />
             Access for project teams, engineers, subcontractors and clients is managed by your administrator.
           </div>
-          <p className="mt-10 text-center text-xs text-slate-400">MEP FieldHub v1.5.0 · Enterprise Construction Edition</p>
+
+          <p className="mt-6 sm:mt-8 text-center text-xs text-slate-400">
+            MEP FieldHub v1.5.0 · Enterprise Construction Edition
+          </p>
         </div>
       </section>
     </main>

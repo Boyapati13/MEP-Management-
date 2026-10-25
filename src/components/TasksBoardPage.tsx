@@ -84,20 +84,20 @@ function KpiStrip({ tasks }: { tasks: Task[] }) {
   const withPhoto = tasks.filter(t => t.evidence_url).length;
 
   return (
-    <div className="flex items-center gap-0 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100 sm:divide-y-0 sm:divide-x divide-gray-100">
       {[
         { label: 'Total', val: total, cls: 'text-gray-900', bar: 'bg-gray-200' },
         { label: 'Done', val: done, cls: 'text-emerald-700', bar: 'bg-emerald-500' },
         { label: 'In Progress', val: wip, cls: 'text-blue-700', bar: 'bg-blue-500' },
         { label: 'Blocked', val: blocked, cls: 'text-red-700', bar: 'bg-red-500' },
         { label: 'With Photo', val: withPhoto, cls: 'text-indigo-700', bar: 'bg-indigo-500' },
-      ].map((k, i) => (
-        <div key={k.label} className={cn('flex-1 px-4 py-3 border-r border-gray-100 last:border-r-0', i === 0 ? '' : '')}>
-          <div className={cn('text-xl font-bold tabular-nums', k.cls)}>{k.val}</div>
+      ].map((k) => (
+        <div key={k.label} className="px-3.5 py-2.5 sm:px-4 sm:py-3">
+          <div className={cn('text-lg sm:text-xl font-bold tabular-nums', k.cls)}>{k.val}</div>
           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{k.label}</div>
         </div>
       ))}
-      <div className="flex-1 px-4 py-3">
+      <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 col-span-2 sm:col-span-1">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Progress</span>
           <span className="text-sm font-bold text-gray-900">{pct}%</span>
@@ -708,53 +708,55 @@ export function TasksBoardPage({
       <KpiStrip tasks={tasks} />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2">
-        {/* Search */}
-        <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-xs">
-          <Search size={14} className="text-gray-400 flex-shrink-0" />
-          <input
-            type="text"
-            placeholder="Search tasks, WBS, BOQ ref…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="bg-transparent text-xs w-full focus:outline-none text-gray-800 placeholder-gray-400"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
-              <X size={12} />
-            </button>
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-white/70 p-2 sm:p-2.5 rounded-2xl border border-gray-100 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1 min-w-[180px] max-w-sm bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-xs">
+            <Search size={14} className="text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Search tasks, WBS, BOQ ref…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="bg-transparent text-xs w-full focus:outline-none text-gray-800 placeholder-gray-400 touch-manipulation"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Project selector */}
+          <select
+            value={selectedProject}
+            onChange={e => setSelectedProject(e.target.value)}
+            className="text-xs font-semibold border border-gray-200 rounded-xl px-2.5 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs max-w-[180px] truncate touch-manipulation"
+          >
+            <option value="">All Projects</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+
+          {/* Trade filter pills */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+            {trades.map(trade => (
+              <button
+                key={trade}
+                onClick={() => setTradeFilter(trade)}
+                className={cn(
+                  'px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors whitespace-nowrap border touch-manipulation flex-shrink-0',
+                  tradeFilter === trade
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                )}
+              >
+                {trade}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Project selector */}
-        <select
-          value={selectedProject}
-          onChange={e => setSelectedProject(e.target.value)}
-          className="text-xs font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-        >
-          <option value="">All Projects</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-
-        {/* Trade filter pills */}
-        <div className="flex items-center gap-1">
-          {trades.map(trade => (
-            <button
-              key={trade}
-              onClick={() => setTradeFilter(trade)}
-              className={cn(
-                'px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors whitespace-nowrap border',
-                tradeFilter === trade
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-              )}
-            >
-              {trade}
-            </button>
-          ))}
-        </div>
-
-        <div className="ml-auto text-[11px] text-gray-400 font-medium">
+        <div className="text-[11px] text-gray-400 font-medium whitespace-nowrap px-1">
           {filtered.length} of {tasks.length} tasks
         </div>
       </div>
@@ -768,8 +770,8 @@ export function TasksBoardPage({
           </div>
         </div>
       ) : viewMode === 'kanban' ? (
-        /* ── Kanban Board ─────────────────────────────────────────────────── */
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        /* ── Kanban Board (Horizontal scroll with touch snap) ──────────────── */
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 scroll-smooth snap-x">
           {STATUSES.map(status => (
             <KanbanColumn
               key={status.id}

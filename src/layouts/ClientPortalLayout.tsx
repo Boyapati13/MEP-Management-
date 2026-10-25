@@ -32,39 +32,40 @@ export function ClientPortalLayout({
 
   return (
     <div className="min-h-screen blueprint-surface flex flex-col text-[#14171f]">
-      <header className="bg-[#0f172a] border-b border-slate-800 px-6 py-3.5 flex items-center justify-between gap-4 text-white">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center">
+      <header className="bg-[#0f172a] border-b border-slate-800 px-3.5 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-white">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center flex-shrink-0">
             <Building2 size={18} />
           </div>
-          <div>
-            <div className="font-bold text-white text-sm">MEP FieldHub — Client Executive Portal</div>
-            <div className="text-xs text-amber-400">Curated Project Visibility &amp; Published Deliverables</div>
+          <div className="min-w-0">
+            <div className="font-bold text-white text-sm truncate">MEP FieldHub — Client Executive Portal</div>
+            <div className="text-[11px] text-amber-400 truncate">Curated Project Visibility &amp; Published Deliverables</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
           <select
             value={selectedProject}
             onChange={(e) => onSelectProject(e.target.value)}
-            className="text-xs font-semibold border border-slate-700 rounded-xl px-3 py-1.5 bg-slate-800 text-white"
+            className="text-xs font-semibold border border-slate-700 rounded-xl px-2.5 py-1.5 sm:py-2 bg-slate-800 text-white max-w-[200px] truncate touch-manipulation"
           >
             {projects.map((p: any) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <span className="text-xs text-slate-300 font-medium">{user?.name || user?.username}</span>
+          <span className="text-xs text-slate-300 font-medium truncate max-w-[120px]">{user?.name || user?.username}</span>
           <button
             onClick={logout}
-            className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800"
+            className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors touch-manipulation flex-shrink-0"
             title="Sign out"
+            aria-label="Sign out"
           >
             <LogOut size={16} />
           </button>
         </div>
       </header>
 
-      <div className="bg-white/95 border-b border-[#e5e0d5] px-6 py-2.5 flex items-center gap-2 overflow-x-auto">
+      <div className="bg-white/95 border-b border-[#e5e0d5] px-3.5 sm:px-6 py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = t.id === activeTab;
@@ -72,20 +73,20 @@ export function ClientPortalLayout({
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
+              className={`flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors touch-manipulation flex-shrink-0 ${
                 active
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-stone-100'
               }`}
             >
-              <Icon size={14} />
+              <Icon size={14} className="flex-shrink-0" />
               <span>{t.label}</span>
             </button>
           );
         })}
       </div>
 
-      <main className="flex-1 p-6 max-w-6xl w-full mx-auto">{renderContent(activeTab)}</main>
+      <main className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-7xl w-full mx-auto">{renderContent(activeTab)}</main>
     </div>
   );
 }
