@@ -174,7 +174,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
       fd.append('project_id', targetProj);
       const res = await api.post<any>('/api/boq/import', fd);
       setBoqUploadMsg(
-        `✓ Imported ${res.imported_lines || res.imported || 0} BOQ lines ($${Number(res.tender_amount || 0).toLocaleString()}) & generated ${res.material_requests_created || 0} Material Requests with specifications.`
+        `Imported ${res.imported_lines ?? res.imported ?? 0} BOQ lines (${Number(res.tender_amount || 0).toLocaleString()}). ${res.skipped_invalid_quantity ? `${res.skipped_invalid_quantity} rows skipped due to missing/invalid quantities — review source file. ` : ''}Generated ${res.tasks_created ?? 0} programme tasks and ${res.material_requests_created ?? 0} material requests. ${res.requires_review ? 'Import requires review before use.' : ''}`
       );
       await loadData();
       onProjectUpdated?.();
