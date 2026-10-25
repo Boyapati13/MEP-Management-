@@ -36,7 +36,8 @@ function updateJobContextRibbon(){
     </div>
     <div class="bt-quick-actions">
       <span class="bt-quick-label">Quick Create:</span>
-      ${canEditTasks ? '<button type="button" class="bt-quick-btn primary-quick" id="btQuickTaskBtn">+ Task</button>' : ''}
+      ${canEditCosts || ME.permissions?.edit?.includes('projects') ? '<button type="button" class="bt-quick-btn primary-quick" id="btQuickContractBoqBtn" title="Upload a Contract, Tender or BOQ to auto-fill Project, Budget, BOQ, Work Packages & Schedule">📄 Upload Contract / BOQ</button>' : ''}
+      ${canEditTasks ? '<button type="button" class="bt-quick-btn" id="btQuickTaskBtn">+ Task</button>' : ''}
       ${canEditLogs ? '<button type="button" class="bt-quick-btn" id="btQuickLogBtn">+ Daily Log</button>' : ''}
       ${canEditRfis ? '<button type="button" class="bt-quick-btn" id="btQuickRfiBtn">+ RFI</button>' : ''}
       ${canEditPunch ? '<button type="button" class="bt-quick-btn" id="btQuickSnagBtn">+ Punch Snag</button>' : ''}
@@ -46,6 +47,13 @@ function updateJobContextRibbon(){
   `;
 
   const todayIso = new Date().toISOString().slice(0,10);
+  if(document.getElementById('btQuickContractBoqBtn')){
+    document.getElementById('btQuickContractBoqBtn').onclick = () => {
+      if(typeof window.openContractBoqAutoFillModal === 'function'){
+        window.openContractBoqAutoFillModal();
+      }
+    };
+  }
   if(document.getElementById('btQuickTaskBtn')){
     document.getElementById('btQuickTaskBtn').onclick = () => openAddModal('tasks', 'Task', null, { start: todayIso, end: todayIso, progress: 0, status: 'Not Started' });
   }

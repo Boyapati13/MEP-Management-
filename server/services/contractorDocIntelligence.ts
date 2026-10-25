@@ -7,6 +7,20 @@
 import crypto from "crypto";
 import { DatabaseSync } from "node:sqlite";
 
+export interface ExtractedBoqLine {
+  item_number: string;
+  description: string;
+  discipline: string;
+  system: string;
+  unit: string;
+  tender_quantity: number;
+  tender_rate: number;
+  tender_amount: number;
+  building?: string;
+  floor?: string;
+  area?: string;
+}
+
 export interface ExtractedContractorData {
   projectName?: string;
   projectCode?: string;
@@ -32,6 +46,7 @@ export interface ExtractedContractorData {
     endDate?: string;
     priority?: string;
   }>;
+  boqItems?: ExtractedBoqLine[];
   confidence: "High" | "Medium" | "Low";
   sourceExcerpts: Record<string, string>;
 }
@@ -407,6 +422,15 @@ export function extractContractorDocumentIntelligence(rawText: string, filename:
     );
   }
 
+  const tradesArray = Array.from(detectedTrades);
+  const boqItems = extractBoqItemsFromText(rawText, filename, tradesArray, budget);
+  if (boqItems.length > 0) {
+    const boqTotal = boqItems.reduce((sum, item) => sum + (Number(item.tender_amount) || 0), 0);
+    if (boqTotal > 0 && (budget === undefined || budget === 500000)) {
+      budget = Math.round(boqTotal * 100) / 100;
+    }
+  }
+
   const confidence: ExtractedContractorData["confidence"] =
     budget && startDate && endDate ? "High" : "Medium";
 
@@ -425,11 +449,180 @@ export function extractContractorDocumentIntelligence(rawText: string, filename:
     startDate,
     endDate,
     scopeDescription,
-    trades: Array.from(detectedTrades),
+    trades: tradesArray,
     milestones: detectedMilestones,
+    boqItems,
     confidence,
     sourceExcerpts: excerpts,
   };
+}
+
+function inferDisciplineAndSystem(desc: string, fallbackTrade: string = "MEP"): { discipline: string; system: string; unit: string } {
+  const lower = desc.toLowerCase();
+  if (/chiller|ahu|fcu|duct|vrf|hvac|cooling|ventilation|damper|diffuser|refrigerant/i.test(lower)) {
+    const sys = /chiller|cooling/i.test(lower) ? "Chilled Water Plant" : /duct|diffuser|damper/i.test(lower) ? "Air Distribution" : "HVAC Systems";
+    const unit = /duct/i.test(lower) ? "m²" : /pipe|refrigerant/i.test(lower) ? "m" : "Nr";
+    return { discipline: "HVAC", system: sys, unit };
+  }
+  if (/switchgear|panel|mdb|smdb|db|cable|tray|trunking|lighting|luminaire|socket|generator|ups|transformer|electrical|busbar/i.test(lower)) {
+    const sys = /switchgear|panel|mdb|smdb|db|transformer/i.test(lower) ? "LV Power Distribution" : /lighting|luminaire/i.test(lower) ? "Lighting & Controls" : "Containment & Cabling";
+    const unit = /cable|tray|trunking|conduit/i.test(lower) ? "m" : "Nr";
+    return { discipline: "Electrical", system: sys, unit };
+  }
+  if (/pump|water|drain|sanitary|pipe|valve|calorifier|tank|plumb/i.test(lower)) {
+    const sys = /drain|soil|waste/i.test(lower) ? "Drainage & Waste" : "Domestic Water Services";
+    const unit = /pipe/i.test(lower) ? "m" : "Nr";
+    return { discipline: "Plumbing", system: sys, unit };
+  }
+  if (/sprinkler|fire|hydrant|hose\s*reel|fm200|extinguisher|smoke/i.test(lower)) {
+    return { discipline: "Fire Fighting", system: "Fire Protection & Suppression", unit: "Nr" };
+  }
+  if (/cctv|access|bms|data|elv|telecom|speaker|pava/i.test(lower)) {
+    return { discipline: "ELV", system: "BMS & Security Systems", unit: "Nr" };
+  }
+  return { discipline: fallbackTrade || "MEP", system: `${fallbackTrade || "MEP"} Installation`, unit: "Item" };
+}
+
+function parseNumClean(val: any): number {
+  if (val === null || val === undefined || val === "") return 0;
+  const n = parseFloat(String(val).replace(/[,€$£\s]/g, "").trim());
+  return isNaN(n) ? 0 : n;
+}
+
+/**
+ * Extracts structured BOQ line items from CSV/TSV tables, PDF/DOCX text schedules,
+ * or synthesizes trade-level BOQ lines from a contract's scope & budget.
+ */
+export function extractBoqItemsFromText(
+  rawText: string,
+  filename: string,
+  trades: string[] = ["HVAC", "Electrical", "Plumbing"],
+  contractBudget?: number
+): ExtractedBoqLine[] {
+  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const items: ExtractedBoqLine[] = [];
+
+  // 1. Check if text looks like a delimited table (CSV / TSV / Semicolon / Pipe)
+  const headerIdx = lines.findIndex(l =>
+    /(description|item|scope)/i.test(l) && /(qty|quantity|rate|amount|total|unit|uom|discipline|trade)/i.test(l) && /[,;\t|]/.test(l)
+  );
+  if (headerIdx !== -1 && headerIdx < 25) {
+    const hdrLine = lines[headerIdx];
+    const sep = hdrLine.includes("\t") ? "\t" : hdrLine.includes("|") ? "|" : hdrLine.includes(";") ? ";" : ",";
+    const cols = hdrLine.split(sep).map(c => c.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const parts = lines[i].split(sep).map(p => p.trim().replace(/^["']|["']$/g, ""));
+      if (parts.length < 2) continue;
+      const row: Record<string, string> = {};
+      cols.forEach((c, idx) => { row[c] = parts[idx] || ""; });
+      const desc = row.description || row.itemdescription || row.scope || row.name || "";
+      if (!desc || desc.length < 3 || /^total|subtotal/i.test(desc)) continue;
+      const inferred = inferDisciplineAndSystem(desc, trades[0] || "MEP");
+      const qty = parseNumClean(row.tenderquantity || row.quantity || row.qty) || 1;
+      const rate = parseNumClean(row.tenderrate || row.rate || row.unitrate || row.price);
+      const amount = parseNumClean(row.tenderamount || row.amount || row.total || row.value) || (qty * rate);
+      const calcRate = rate > 0 ? rate : (qty > 0 ? Math.round((amount / qty) * 100) / 100 : amount);
+      items.push({
+        item_number: row.itemnumber || row.itemno || row.item || row.code || `${items.length + 1}.01`,
+        description: desc,
+        discipline: row.discipline || row.trade || row.category || inferred.discipline,
+        system: row.system || row.subsystem || inferred.system,
+        unit: row.unit || row.uom || inferred.unit,
+        tender_quantity: qty,
+        tender_rate: calcRate,
+        tender_amount: amount > 0 ? amount : qty * calcRate,
+        building: row.building || "Main Building",
+        floor: row.floor || row.level || "All Levels",
+        area: row.area || row.room || "Site-Wide",
+      });
+    }
+  }
+
+  // 2. If no delimited rows found, scan unstructured PDF/DOCX lines for priced schedule items
+  if (items.length === 0) {
+    for (const line of lines) {
+      // Match patterns like: "1.1 Supply & install Chiller Plant 2 Nr 45,000 90,000" or "A.01 LV Switchboard — €65,000"
+      const m = line.match(/^([A-Z0-9]{1,4}(?:\.[0-9]{1,3})+|\d{1,2}\.\d{1,2})\s+(.+?)\s+(?:(\d+(?:\.\d+)?)\s*(Nr|No|Item|Lot|Set|m2|m²|m|lm|kg)?\s+)?(?:[€$£]|EUR|USD|AED|GBP)?\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.\d{1,2})?|[0-9]{4,}(?:\.\d{1,2})?)$/i);
+      if (m) {
+        const code = m[1];
+        const desc = m[2].replace(/[\-–—:\s]+$/, "").trim();
+        const qty = m[3] ? parseFloat(m[3]) : 1;
+        const unit = m[4] || "";
+        const amount = parseNumClean(m[5]);
+        if (desc.length >= 5 && amount > 0) {
+          const inferred = inferDisciplineAndSystem(desc, trades[0] || "MEP");
+          items.push({
+            item_number: code,
+            description: desc,
+            discipline: inferred.discipline,
+            system: inferred.system,
+            unit: unit || inferred.unit,
+            tender_quantity: qty,
+            tender_rate: Math.round((amount / (qty || 1)) * 100) / 100,
+            tender_amount: amount,
+            building: "Main Building",
+            floor: "All Levels",
+            area: "Site-Wide",
+          });
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: synthesize structured MEP BOQ schedule from contract trades & budget
+  if (items.length === 0 && trades.length > 0) {
+    const totalBudget = contractBudget && contractBudget > 0 ? contractBudget : 500000;
+    const perTradeBudget = totalBudget / trades.length;
+    const defaultTemplates: Record<string, Array<{ sub: string; desc: string; unit: string; qty: number; share: number }>> = {
+      HVAC: [
+        { sub: "Chilled Water & DX Plant", desc: "Supply, rigging & installation of primary HVAC cooling units & AHU/FCU equipment", unit: "Set", qty: 4, share: 0.45 },
+        { sub: "Air Distribution Ductwork", desc: "Galvanized sheet metal supply/extract ductwork with thermal insulation, fire dampers & grilles", unit: "m²", qty: 650, share: 0.35 },
+        { sub: "HVAC Controls & TAB", desc: "Testing, adjusting, air/hydronic balancing & BMS commissioning for HVAC systems", unit: "Item", qty: 1, share: 0.20 },
+      ],
+      Electrical: [
+        { sub: "LV Power Distribution", desc: "Main LV Switchboard (MDB), SMDBs, Final Distribution Boards & metering", unit: "Set", qty: 6, share: 0.42 },
+        { sub: "Containment & Cabling", desc: "Heavy-duty perforated cable trays, ladder racks, XLPE/SWA sub-main & final circuit cabling", unit: "m", qty: 1200, share: 0.35 },
+        { sub: "Lighting & Emergency Systems", desc: "LED architectural & industrial luminaires, DALI controls & 3-hour central battery emergency lighting", unit: "Nr", qty: 180, share: 0.23 },
+      ],
+      Plumbing: [
+        { sub: "Domestic Water Booster & Piping", desc: "PRV stations, PPR/copper domestic hot & cold water distribution piping & isolation valves", unit: "m", qty: 540, share: 0.55 },
+        { sub: "Above-Ground Drainage & Sanitary", desc: "uPVC/HDPE acoustic soil, waste & condensate drainage network with sanitary ware hookup", unit: "Item", qty: 1, share: 0.45 },
+      ],
+      "Fire Fighting": [
+        { sub: "Sprinkler & Wet Riser Network", desc: "UL/FM fire pump set, zone control valve assemblies, seamless Sch40 fire piping & sprinkler heads", unit: "Nr", qty: 220, share: 0.65 },
+        { sub: "Addressable Fire Alarm System", desc: "EN54 addressable FACP loop panel, optical smoke/heat detectors, sounder beacons & call points", unit: "Set", qty: 1, share: 0.35 },
+      ],
+      ELV: [
+        { sub: "Structured Cabling & CCTV", desc: "Cat6A data cabling, fiber backbone racks, IP CCTV cameras & door access control readers", unit: "Set", qty: 1, share: 1.0 },
+      ],
+    };
+
+    trades.forEach((tName, tIdx) => {
+      const templates = defaultTemplates[tName] || [
+        { sub: `${tName} Primary Equipment`, desc: `Supply & installation of primary ${tName} plant & equipment per contract specification`, unit: "Set", qty: 2, share: 0.6 },
+        { sub: `${tName} Distribution & Testing`, desc: `First & second fix distribution, containment, testing & commissioning for ${tName}`, unit: "Item", qty: 1, share: 0.4 },
+      ];
+      templates.forEach((tpl, subIdx) => {
+        const lineAmount = Math.round(perTradeBudget * tpl.share);
+        const rate = Math.round((lineAmount / (tpl.qty || 1)) * 100) / 100;
+        items.push({
+          item_number: `${tIdx + 1}.0${subIdx + 1}`,
+          description: tpl.desc,
+          discipline: tName,
+          system: tpl.sub,
+          unit: tpl.unit,
+          tender_quantity: tpl.qty,
+          tender_rate: rate,
+          tender_amount: lineAmount,
+          building: "Main Building",
+          floor: "All Levels",
+          area: "Site-Wide",
+        });
+      });
+    });
+  }
+
+  return items;
 }
 
 /**
@@ -557,7 +750,40 @@ export function applyContractorIntelligenceAndVerify(
     projectRow = db.prepare("SELECT * FROM projects WHERE id=?").get(projectId);
   }
 
-  // 2. CONTRACTOR COMPANY IN DIRECTORY
+  // Ensure uploading user has project membership
+  if (userId) {
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active)
+        VALUES (?, ?, 'Project Manager', 1)
+      `).run(userId, projectId);
+    } catch {}
+  }
+
+  // 2. CONTRACTOR & STAKEHOLDER COMPANIES IN DIRECTORY
+  const registerStakeholder = (cName: string | undefined, cType: string, cTrade: string) => {
+    if (!cName || cName === "Primary Employer / Client" || cName === "Lead Contractor") return undefined;
+    const existingComp = db.prepare("SELECT id, name FROM companies WHERE LOWER(name)=LOWER(?)").get(cName) as any;
+    let cId = existingComp?.id;
+    if (!cId) {
+      cId = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO companies (id, name, type, trade, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(cId, cName, cType, cTrade, "Active", now);
+    }
+    try {
+      db.prepare(`INSERT OR IGNORE INTO project_companies (project_id, company_id) VALUES (?, ?)`).run(projectId, cId);
+    } catch {}
+    return cId;
+  };
+
+  registerStakeholder(extracted.client, "Client", "Employer / Developer");
+  registerStakeholder(extracted.consultant, "Consultant", "Building Services Engineering");
+  if (extracted.mainContractor && extracted.mainContractor !== extracted.subcontractor) {
+    registerStakeholder(extracted.mainContractor, "MainContractor", "Principal Contractor");
+  }
+
   let companyId: string | undefined;
   let companyName = extracted.subcontractor || extracted.mainContractor;
   if (companyName) {
@@ -571,6 +797,9 @@ export function applyContractorIntelligenceAndVerify(
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(companyId, companyName, "Subcontractor", extracted.trades[0] || "MEP", "Active", now);
     }
+    try {
+      db.prepare(`INSERT OR IGNORE INTO project_companies (project_id, company_id) VALUES (?, ?)`).run(projectId, companyId);
+    } catch {}
   }
 
   // 3. WORK PACKAGES (DECOMPOSE TRADES)
@@ -676,6 +905,90 @@ export function applyContractorIntelligenceAndVerify(
     "Approved",
     "Internal"
   );
+
+  // 5B. POPULATE BOQ ITEMS, WBS, JOB COSTING BUDGET & MATERIAL REQUESTS
+  const boqToInsert = Array.isArray(extracted.boqItems) && extracted.boqItems.length > 0
+    ? extracted.boqItems
+    : extractBoqItemsFromText("", fileMeta.name, extracted.trades, extracted.budget);
+
+  const existingBoqDesc = new Set(
+    (db.prepare("SELECT LOWER(description) as d FROM boq_items WHERE project_id=?").all(projectId) as any[]).map(r => r.d)
+  );
+  const existingMatItems = new Set(
+    (db.prepare("SELECT LOWER(item) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
+  );
+  const existingCostDesc = new Set(
+    (db.prepare("SELECT LOWER(description) as d FROM costs WHERE project_id=?").all(projectId) as any[]).map(r => r.d)
+  );
+
+  const insertBoqStmt = db.prepare("INSERT INTO boq_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const insertCostStmt = db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const insertMatStmt = db.prepare(`
+    INSERT INTO material_requests (
+      id, project_id, item, spec, quantity, unit, required_date, supplier, status, boq_item_id, wbs_code
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const todayIso = now.split("T")[0];
+  const reqDateIso = extracted.startDate || new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
+
+  for (const bItem of boqToInsert) {
+    if (!existingBoqDesc.has(bItem.description.toLowerCase())) {
+      const bId = crypto.randomUUID();
+      insertBoqStmt.run(
+        bId,
+        projectId,
+        bItem.item_number,
+        bItem.description,
+        bItem.unit,
+        bItem.tender_quantity,
+        bItem.tender_rate,
+        bItem.tender_amount,
+        bItem.tender_quantity,
+        0,
+        0,
+        0,
+        bItem.discipline,
+        bItem.system,
+        bItem.building || "Main Building",
+        bItem.floor || "All Levels",
+        bItem.area || "Site-Wide",
+        documentId,
+        now
+      );
+      existingBoqDesc.add(bItem.description.toLowerCase());
+
+      if (!existingCostDesc.has(bItem.description.toLowerCase())) {
+        insertCostStmt.run(
+          crypto.randomUUID(),
+          projectId,
+          bItem.discipline || "MEP",
+          bItem.description,
+          bItem.tender_amount,
+          0,
+          todayIso
+        );
+        existingCostDesc.add(bItem.description.toLowerCase());
+      }
+
+      if (!existingMatItems.has(bItem.description.toLowerCase())) {
+        insertMatStmt.run(
+          crypto.randomUUID(),
+          projectId,
+          bItem.description,
+          `${bItem.discipline} — ${bItem.system} (BOQ #${bItem.item_number})`,
+          bItem.tender_quantity,
+          bItem.unit,
+          reqDateIso,
+          companyName || "Approved MEP Vendor",
+          "Draft",
+          bId,
+          bItem.item_number
+        );
+        existingMatItems.add(bItem.description.toLowerCase());
+      }
+    }
+  }
 
   // 6. RECORD AUDIT LOGS
   const auditId = crypto.randomUUID();

@@ -523,14 +523,25 @@ async function openDocumentModal(record){
     : ['Drawing','Specification','Contract','Tender','BOQ','Programme','Report','Submittal','Safety','Site Photo','Other'];
   const html = `<div class="form-grid">
     ${projectPicker}
-    <div class="full"><label>Document Name</label><input id="f_name" value="${record?escHtml(record.name):''}" placeholder="${isClient?'e.g. Client response, marked-up drawing, clarification attachment':'e.g. Electrical Submittal, Safety Plan, Shop Drawing'}"></div>
-    <div><label>Category</label><select id="f_category">${documentCategories.map(c=>`<option ${record&&record.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="full" style="background:rgba(217,119,6,0.06);border:1px dashed var(--accent);border-radius:10px;padding:12px;">
+      <label style="color:var(--accent);font-weight:700;">1. Attach Document / Contract / BOQ ${isEdit&&record.attachment_name?'(current: '+escHtml(record.attachment_name)+' — choose a new file to replace)':''}</label>
+      <input type="file" id="f_file" accept=".pdf,.docx,.csv,.txt,.tsv,.xlsx,.xls,image/*">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Selecting a Contract, Tender, or BOQ file will automatically fill the document name, category, and extract project & BOQ data below.</div>
+      <div id="f_doc_autofill_banner" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.3);font-size:12px;"></div>
+    </div>
+    <div class="full"><label>Document Name</label><input id="f_name" value="${record?escHtml(record.name):''}" placeholder="${isClient?'e.g. Client response, marked-up drawing, clarification attachment':'Auto-filled when you select a file above'}"></div>
+    <div><label>Category</label><select id="f_category">${documentCategories.map(c=>`<option value="${c}" ${record&&record.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
     <div><label>Revision</label><input id="f_revision" value="${record?escHtml(record.revision):'Rev 0'}"></div>
     <div><label>Date Added</label><input type="date" id="f_date_added" value="${record?escHtml(record.date_added):new Date().toISOString().slice(0,10)}"></div>
     ${subOptions}
-    <div class="full"><label>Attach File ${isEdit&&record.attachment_name?'(current: '+escHtml(record.attachment_name)+' — choose a new file to replace)':''}</label><input type="file" id="f_file"></div>
+    ${!isClient ? `<div class="full" id="f_doc_apply_wrap" style="display:none;padding:8px 10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;font-size:12px;color:var(--ink);">
+        <input type="checkbox" id="f_doc_auto_populate" checked style="width:auto;">
+        <b>Auto-fill Project Master, BOQ Register, Job Costing Budget, Work Packages & Schedule Tasks from this file</b>
+      </label>
+    </div>` : ''}
   </div>`;
-  openModal(isEdit?'Edit Document':(isClient?'Submit Document to Project':'Add Document'), html, async ()=>{
+  openModal(isEdit?'Edit Document':(isClient?'Submit Document to Project':'Add Document (Auto-Fill Enabled)'), html, async ()=>{
     const file = document.getElementById('f_file').files[0];
     if(isClient && !file) throw new Error('Choose a file to submit to the project.');
     const MAX_FILE_MB = 100;
@@ -549,7 +560,7 @@ async function openDocumentModal(record){
       });
     }
     const payload = {
-      name: document.getElementById('f_name').value,
+      name: document.getElementById('f_name').value || (file ? file.name.replace(/\.[^.]+$/, '') : 'Document'),
       category: document.getElementById('f_category').value,
       revision: document.getElementById('f_revision').value,
       date_added: document.getElementById('f_date_added').value,
@@ -559,28 +570,98 @@ async function openDocumentModal(record){
     if(subSelect){
       payload.subcontractor_id = subSelect.value || null;
     }
+    let savedDoc = null;
+    const projId = isEdit ? record.project_id : (currentProjectId==='ALL' ? document.getElementById('f_project_id').value : currentProjectId);
     if(isEdit){
-      await apiFetch(`/api/documents/${record.id}`, {method:'PUT', body: JSON.stringify(payload)});
+      savedDoc = await apiFetch(`/api/documents/${record.id}`, {method:'PUT', body: JSON.stringify(payload)});
     }else{
-      payload.project_id = currentProjectId==='ALL' ? document.getElementById('f_project_id').value : currentProjectId;
-      await apiFetch('/api/documents', {method:'POST', body: JSON.stringify(payload)});
+      payload.project_id = projId;
+      savedDoc = await apiFetch('/api/documents', {method:'POST', body: JSON.stringify(payload)});
+    }
+    const shouldAutoPopulate = document.getElementById('f_doc_auto_populate')?.checked;
+    if(file && shouldAutoPopulate && savedDoc && savedDoc.id && projId){
+      try {
+        await apiFetch(`/api/projects/${projId}/extract-setup-data`, {
+          method: 'POST',
+          body: JSON.stringify({ document_ids: [savedDoc.id] })
+        });
+        await loadProjectsAndRender();
+      } catch(err) {
+        console.warn('Auto-populate from document warning:', err);
+      }
     }
   });
+
+  const docFileInput = document.getElementById('f_file');
+  if (docFileInput) {
+    docFileInput.onchange = async () => {
+      const f = docFileInput.files && docFileInput.files[0];
+      if (!f) return;
+      const nameInput = document.getElementById('f_name');
+      const catSelect = document.getElementById('f_category');
+      const banner = document.getElementById('f_doc_autofill_banner');
+      const applyWrap = document.getElementById('f_doc_apply_wrap');
+
+      const inferredCat = inferProjectSetupCategory(f.name);
+      if (catSelect && inferredCat && inferredCat !== 'Other') {
+        catSelect.value = inferredCat;
+      }
+      if (nameInput && !nameInput.value.trim()) {
+        nameInput.value = f.name.replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ');
+      }
+      if (banner) {
+        banner.style.display = 'block';
+        banner.innerHTML = '⏳ <b>Scanning document to auto-fill Contract & BOQ metadata...</b>';
+      }
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        const res = await fetch(API + '/api/projects/parse-document', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + TOKEN },
+          body: fd
+        });
+        const parsed = await res.json();
+        if (res.ok && parsed && parsed.extracted) {
+          const ex = parsed.extracted;
+          if (nameInput && ex.projectName) {
+            nameInput.value = `${ex.projectName} — ${parsed.document_category || inferredCat}`;
+          }
+          if (catSelect && parsed.document_category) {
+            catSelect.value = parsed.document_category;
+          }
+          if (applyWrap) applyWrap.style.display = 'block';
+          if (banner) {
+            banner.innerHTML = `✓ <b>Auto-Filled from ${escHtml(f.name)}:</b><br>`
+              + `• <b>Project:</b> ${escHtml(ex.projectName || '—')} | <b>Client:</b> ${escHtml(ex.client || '—')}<br>`
+              + `• <b>Contract Value:</b> ${fmtCurrency(ex.budget || 0)} | <b>Dates:</b> ${escHtml(ex.startDate || '—')} → ${escHtml(ex.endDate || '—')}<br>`
+              + `• <b>BOQ Lines:</b> ${(parsed.boq_summary && parsed.boq_summary.count) || 0} items | <b>Trades:</b> ${(ex.trades || []).join(', ')}`;
+          }
+        }
+      } catch (e) {
+        if (banner) banner.style.display = 'none';
+      }
+    };
+  }
 }
 
 async function renderProjects(){
   const canEdit = ME.permissions.edit.includes('projects');
   const canDel = ME.permissions.delete;
   document.getElementById('viewContent').innerHTML = `
-  <div class="panel"><h3><span>Projects</span><span>${canEdit?'<button class="btn accent small" id="addProjBtn">+ Add Project</button>':''}<button class="btn ghost small" id="exportBtn" style="margin-left:8px;">Export CSV</button></span></h3>
-    ${PROJECTS.length ? `<table><thead><tr><th>Name</th><th>Client</th><th>Status</th><th>Budget</th>${canEdit?'<th></th>':''}</tr></thead>
-    <tbody>${PROJECTS.map(p=>`<tr><td>${escHtml(p.name)}</td><td>${escHtml(p.client)}</td><td><span class="badge ${badgeClass(p.status)}">${p.status}</span></td><td>${fmtCurrency(p.budget)}</td>
-    ${canEdit?`<td class="row-actions"><button class="icon-btn edit" data-editp="${p.id}" title="Edit">✎</button>${canDel?`<button class="icon-btn" data-delp="${p.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}</tbody></table>` : `<div class="empty-state">
+  <div class="panel"><h3><span>Projects</span><span style="display:flex;gap:8px;align-items:center;">${canEdit?'<button class="btn accent small" id="uploadContractBoqProjBtn">📄 Upload Contract / BOQ (Auto-Fill)</button><button class="btn ghost small" id="addProjBtn">+ Add Project</button>':''}<button class="btn ghost small" id="exportBtn">Export CSV</button></span></h3>
+    ${PROJECTS.length ? `<table><thead><tr><th>Name</th><th>Client</th><th>Main Contractor</th><th>Timeline</th><th>Status</th><th>Contract Budget</th>${canEdit?'<th></th>':''}</tr></thead>
+    <tbody>${PROJECTS.map(p=>`<tr><td><b>${escHtml(p.name)}</b></td><td>${escHtml(p.client||'—')}</td><td>${escHtml(p.main_contractor||'—')}</td><td style="font-size:12px;color:var(--muted);">${escHtml(p.start_date||'—')} → ${escHtml(p.end_date||'—')}</td><td><span class="badge ${badgeClass(p.status)}">${p.status}</span></td><td><b>${fmtCurrency(p.budget)}</b></td>
+    ${canEdit?`<td class="row-actions"><button class="icon-btn edit" data-editp="${p.id}" title="Edit / Upload Contract & BOQ">✎</button>${canDel?`<button class="icon-btn" data-delp="${p.id}" title="Delete">✕</button>`:''}</td>`:''}</tr>`).join('')}</tbody></table>` : `<div class="empty-state">
       <p>No projects yet.</p>
       ${canEdit?'<button class="btn accent small" id="emptyAddProjBtn">+ Add your first project</button>':''}
     </div>`}
   </div>`;
-  if(canEdit) document.getElementById('addProjBtn').onclick = ()=> openProjectModal(null);
+  if(canEdit && document.getElementById('addProjBtn')) document.getElementById('addProjBtn').onclick = ()=> openProjectModal(null);
+  if(canEdit && document.getElementById('uploadContractBoqProjBtn')) document.getElementById('uploadContractBoqProjBtn').onclick = ()=> {
+    const activeProj = PROJECTS.find(x=>x.id===currentProjectId) || null;
+    openProjectModal(activeProj);
+  };
   if(canEdit && document.getElementById('emptyAddProjBtn')) document.getElementById('emptyAddProjBtn').onclick = ()=> openProjectModal(null);
   document.getElementById('exportBtn').onclick = ()=> exportCsv('projects');
   document.querySelectorAll('[data-editp]').forEach(btn=>{
@@ -684,27 +765,36 @@ function openProjectSetupReview(projectId, analysis){
 
 function openProjectModal(record){
   const isEdit=!!record;
-  const setupLabel=isEdit?'Add More Project Documents':'Project Setup Documents';
+  const setupLabel=isEdit?'Upload Contract / Tender / BOQ to Auto-Fill & Update Project':'1. Upload Contract / Tender / BOQ (Instant Auto-Fill)';
   const html='<div class="form-grid">'
-    +'<div class="full"><label>Name</label><input id="f_name" value="'+(record?escHtml(record.name):'')+'" placeholder="Optional — can be extracted from the uploaded documents"></div>'
-    +'<div><label>Client</label><input id="f_client" value="'+(record?escHtml(record.client):'')+'" placeholder="Can be extracted from contract/tender documents"></div>'
-    +'<div><label>Status</label><select id="f_status">'+['Active','On Hold','Completed'].map(s=>'<option '+(record&&record.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select></div>'
-    +'<div><label>Start Date</label><input type="date" id="f_start_date" value="'+(record?escHtml(record.start_date):'')+'"></div>'
-    +'<div><label>End Date</label><input type="date" id="f_end_date" value="'+(record?escHtml(record.end_date):'')+'"></div>'
-    +'<div><label>Budget (€)</label><input type="number" id="f_budget" value="'+(record?record.budget:'')+'" placeholder="Can be extracted from contract/tender documents"></div>'
-    +'<div class="full" style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border);">'
-      +'<label>'+setupLabel+'</label>'
+    +'<div class="full" style="background:rgba(217,119,6,0.06);border:1.5px dashed var(--accent);border-radius:10px;padding:12px 14px;margin-bottom:4px;">'
+      +'<label style="color:var(--accent);font-weight:700;font-size:12px;">📄 '+setupLabel+'</label>'
       +'<input type="file" id="f_project_docs" multiple accept=".pdf,.docx,.csv,.txt,.tsv,.xlsx,.xls,image/*">'
-      +'<div style="font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px;">Upload contract, tender, BOQ, programme, specifications or drawings. PDF, DOCX, CSV and TXT files can be scanned for project data. Other files are still saved in Documents. Extracted values always require your approval.</div>'
-      +'<div id="f_project_docs_list" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>'
+      +'<div style="font-size:11px;color:var(--muted);line-height:1.45;margin-top:5px;">Select a Contract, Subcontract Agreement, Tender RFQ, or BOQ (PDF, DOCX, CSV, XLSX, TXT) — all project fields below will <b>auto-fill immediately</b>, and BOQ items, Work Packages, Budget & Schedule Tasks will be populated on Save.</div>'
+      +'<div id="f_project_docs_list" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>'
+      +'<div id="f_project_autofill_card" style="display:none;margin-top:8px;padding:10px 12px;border-radius:8px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.35);font-size:12px;color:var(--ink);"></div>'
     +'</div>'
+    +'<div class="full"><label>Project Name</label><input id="f_name" value="'+(record?escHtml(record.name):'')+'" placeholder="Auto-filled from uploaded Contract / BOQ"></div>'
+    +'<div><label>Client / Employer</label><input id="f_client" value="'+(record?escHtml(record.client):'')+'" placeholder="Auto-filled from Contract / BOQ"></div>'
+    +'<div><label>Main Contractor</label><input id="f_main_contractor" value="'+(record&&record.main_contractor?escHtml(record.main_contractor):'')+'" placeholder="Auto-filled from Contract / BOQ"></div>'
+    +'<div><label>Supervising Consultant</label><input id="f_consultant" value="'+(record&&record.consultant?escHtml(record.consultant):'')+'" placeholder="Auto-filled from Contract / BOQ"></div>'
+    +'<div><label>Site Location</label><input id="f_location" value="'+(record&&record.location?escHtml(record.location):'')+'" placeholder="Auto-filled from Contract / BOQ"></div>'
+    +'<div><label>Contract Type</label><input id="f_contract_type" value="'+(record&&record.contract_type?escHtml(record.contract_type):'Lump Sum EPC')+'" placeholder="e.g. Lump Sum EPC"></div>'
+    +'<div><label>Status</label><select id="f_status">'+['Active','On Hold','Completed'].map(s=>'<option '+(record&&record.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select></div>'
+    +'<div><label>Start / Commencement Date</label><input type="date" id="f_start_date" value="'+(record?escHtml(record.start_date):'')+'"></div>'
+    +'<div><label>Completion Date</label><input type="date" id="f_end_date" value="'+(record?escHtml(record.end_date):'')+'"></div>'
+    +'<div class="full"><label>Contract Sum / Budget (€)</label><input type="number" id="f_budget" value="'+(record?record.budget:'')+'" placeholder="Auto-filled from Contract / BOQ"></div>'
     +'</div>';
 
-  openModal(isEdit?'Edit Project':'Add Project',html,async()=>{
+  openModal(isEdit?'Edit Project / Upload Contract & BOQ':'Add Project (Auto-Fill from Contract / BOQ)',html,async()=>{
     const files=Array.from(document.getElementById('f_project_docs')?.files||[]);
     const payload={
       name:document.getElementById('f_name').value,
       client:document.getElementById('f_client').value,
+      main_contractor:document.getElementById('f_main_contractor')?.value||'',
+      consultant:document.getElementById('f_consultant')?.value||'',
+      location:document.getElementById('f_location')?.value||'',
+      contract_type:document.getElementById('f_contract_type')?.value||'Lump Sum EPC',
       status:document.getElementById('f_status').value,
       start_date:document.getElementById('f_start_date').value,
       end_date:document.getElementById('f_end_date').value,
@@ -730,54 +820,128 @@ function openProjectModal(record){
             method:'POST',
             body:JSON.stringify({document_ids:documentIds})
           });
+          // Re-apply user-edited form values on top if the user customized any auto-filled field before clicking Save
+          const finalOverride = {};
+          if(payload.name) finalOverride.name = payload.name;
+          if(payload.client) finalOverride.client = payload.client;
+          if(payload.main_contractor) finalOverride.main_contractor = payload.main_contractor;
+          if(payload.consultant) finalOverride.consultant = payload.consultant;
+          if(payload.location) finalOverride.location = payload.location;
+          if(payload.contract_type) finalOverride.contract_type = payload.contract_type;
+          if(payload.start_date) finalOverride.start_date = payload.start_date;
+          if(payload.end_date) finalOverride.end_date = payload.end_date;
+          if(payload.budget) { finalOverride.budget = payload.budget; finalOverride.contract_value = payload.budget; }
+          if(Object.keys(finalOverride).length){
+            await apiFetch('/api/projects/'+projectId,{method:'PUT',body:JSON.stringify(finalOverride)});
+          }
         }catch(e){
           analysisError=e;
         }
       }
     }
 
+    currentProjectId = projectId;
     await loadProjectsAndRender();
-    if(activeProjectId === projectId || !activeProjectId){
-      activeProjectId = projectId;
-      if(typeof loadProjectDetail === 'function') await loadProjectDetail(projectId);
-      else await loadProjectsAndRender();
-    }
     if(analysis && (analysis.auto_updated || analysis.report)){
       const rep = analysis.report;
       const wpCount = rep && rep.work_packages ? rep.work_packages.count : (analysis.work_packages ? analysis.work_packages.length : 0);
       const taskCount = rep && rep.programme_tasks ? rep.programme_tasks.count : (analysis.tasks ? analysis.tasks.length : 0);
-      const pName = (analysis.project && analysis.project.name) || 'Project Master';
-      const cName = (analysis.project && analysis.project.client) || 'Client Verified';
-      const dirName = (rep && rep.contractor_directory && rep.contractor_directory.company_name) || 'Contractor Registered';
-      const alertMsg = '✓ Contractor Document Extracted & Portal Updated Automatically!\n\n'
+      const pName = payload.name || (analysis.project && analysis.project.name) || 'Project Master';
+      const cName = payload.client || (analysis.project && analysis.project.client) || 'Client Verified';
+      const dirName = (rep && rep.contractor_directory && rep.contractor_directory.company_name) || payload.main_contractor || 'Contractor Registered';
+      const alertMsg = '✓ Contract / BOQ Auto-Filled & Applied Across All Modules!\n\n'
         + '• Project: ' + pName + '\n'
         + '• Client / Employer: ' + cName + '\n'
+        + '• Contract Budget: ' + fmtCurrency(payload.budget || (analysis.project && analysis.project.budget) || 0) + '\n'
         + '• Work Packages: ' + wpCount + ' trade packages generated\n'
         + '• Programme Tasks: ' + taskCount + ' milestones scheduled\n'
-        + '• Contractor Directory: ' + dirName + '\n'
-        + '• Technical Documents: 100% Verified in Contract & Legal';
+        + '• BOQ, Job Costing & Material Requests: Populated\n'
+        + '• Contractor Directory: ' + dirName;
       setTimeout(()=>alert(alertMsg), 120);
     }else if(analysis&&Array.isArray(analysis.suggestions)&&analysis.suggestions.length){
       setTimeout(()=>openProjectSetupReview(projectId,analysis),120);
-    }else if(files.length){
-      const msg=analysisError
-        ? 'Project and documents were saved, but automatic extraction could not complete: '+(analysisError.message||'Unknown error')+'. You can still use the files from Documents.'
-        : 'Project and documents were saved. No project fields were extracted confidently; you can review the files in Documents.';
-      setTimeout(()=>alert(msg),120);
+    }else if(files.length && analysisError){
+      setTimeout(()=>alert('Project and documents were saved, but automatic extraction could not complete: '+(analysisError.message||'Unknown error')),120);
     }
   });
 
   const fileInput=document.getElementById('f_project_docs');
   const fileList=document.getElementById('f_project_docs_list');
+  const autoCard=document.getElementById('f_project_autofill_card');
   if(fileInput&&fileList){
-    fileInput.onchange=()=>{
+    fileInput.onchange=async()=>{
       const files=Array.from(fileInput.files||[]);
       fileList.innerHTML=files.length
-        ? files.map(f=>'• '+escHtml(f.name)+' — '+(f.size/1024/1024).toFixed(1)+' MB').join('<br>')
+        ? files.map(f=>'• <b>'+escHtml(f.name)+'</b> — '+(f.size/1024/1024).toFixed(2)+' MB').join('<br>')
         : '';
+      if(!files.length){
+        if(autoCard) autoCard.style.display='none';
+        return;
+      }
+      if(autoCard){
+        autoCard.style.display='block';
+        autoCard.innerHTML='⏳ <b>Scanning '+escHtml(files[0].name)+' and auto-filling Contract & BOQ fields...</b>';
+      }
+      try{
+        const fd=new FormData();
+        fd.append('file', files[0]);
+        const res=await fetch(API+'/api/projects/parse-document',{
+          method:'POST',
+          headers:{Authorization:'Bearer '+TOKEN},
+          body:fd
+        });
+        const data=await res.json();
+        if(res.ok && data && data.extracted){
+          const ex=data.extracted;
+          const setField=(id,val)=>{
+            const el=document.getElementById(id);
+            if(el && val!==undefined && val!==null && String(val).trim()!==''){
+              el.value=val;
+              el.style.borderColor='#16a34a';
+              el.style.backgroundColor='rgba(22,163,74,0.05)';
+            }
+          };
+          if(ex.projectName) setField('f_name', ex.projectName);
+          if(ex.client) setField('f_client', ex.client);
+          if(ex.mainContractor) setField('f_main_contractor', ex.mainContractor);
+          if(ex.consultant) setField('f_consultant', ex.consultant);
+          if(ex.location) setField('f_location', ex.location);
+          if(ex.contractType) setField('f_contract_type', ex.contractType);
+          if(ex.startDate) setField('f_start_date', ex.startDate);
+          if(ex.endDate) setField('f_end_date', ex.endDate);
+          if(ex.budget) setField('f_budget', ex.budget);
+
+          const boqCount=(data.boq_summary && data.boq_summary.count) || 0;
+          const boqTotal=(data.boq_summary && data.boq_summary.total_amount) || ex.budget || 0;
+          const tradesList=(ex.trades || []).join(', ') || 'MEP';
+          const msCount=(ex.milestones || []).length;
+
+          if(autoCard){
+            autoCard.innerHTML=`<div style="font-weight:700;color:#15803d;margin-bottom:4px;">✓ Auto-Filled ${escHtml(data.document_category||'Contract / BOQ')} Information from ${escHtml(files[0].name)}</div>`
+              +`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:11.5px;">`
+              +`<div><b>Project:</b> ${escHtml(ex.projectName||'—')}</div>`
+              +`<div><b>Client:</b> ${escHtml(ex.client||'—')}</div>`
+              +`<div><b>Contract Budget:</b> ${fmtCurrency(boqTotal)}</div>`
+              +`<div><b>Trades:</b> ${escHtml(tradesList)}</div>`
+              +`<div><b>BOQ Items Detected:</b> ${boqCount} lines</div>`
+              +`<div><b>Schedule Milestones:</b> ${msCount} tasks</div>`
+              +`</div>`
+              +`<div style="margin-top:6px;font-size:11px;color:var(--muted);">Click <b>Save</b> below to apply all auto-filled fields and populate BOQ, Job Costing, Work Packages, Schedule & Material Requests.</div>`;
+          }
+        }
+      }catch(err){
+        if(autoCard){
+          autoCard.innerHTML='⚠️ Could not preview file automatically ('+escHtml(err.message||'error')+'), but it will be processed on Save.';
+        }
+      }
     };
   }
 }
+
+window.openContractBoqAutoFillModal = function(){
+  const activeProj = PROJECTS.find(x => x.id === currentProjectId) || null;
+  openProjectModal(activeProj);
+};
 
 /* =========================================================
    COMPANIES & PARTIES DIRECTORY VIEW

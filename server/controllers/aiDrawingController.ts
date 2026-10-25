@@ -80,121 +80,305 @@ import { syncProcurementTaskBlocker } from "../services/blockerService";
 import { calculateRiskScore } from "../services/riskService";
 import {
   extractContractorDocumentIntelligence,
+  extractBoqItemsFromText,
   applyContractorIntelligenceAndVerify,
   normalizeDate,
 } from "../services/contractorDocIntelligence";
 
 export function registerAiDrawingController(app: Express): void {
-  // BOQ File Import
   const upload = multer({ storage: multer.memoryStorage() });
-  app.post("/api/boq/import", authRequired, upload.single("file"), (req, res) => {
-    const projectId = req.body?.project_id;
-    if (!hasProjectAccess(req.user!, projectId)) {
-      res.status(403).json({ error: "No project access" });
-      return;
-    }
-    if (!canEdit(req.user!, "budget")) {
-      res.status(403).json({ error: "No edit access to budget" });
-      return;
-    }
-    const file = req.file;
-    if (!file) {
-      res.status(400).json({ error: "A CSV, XLSX, or text-based BOQ file is required" });
-      return;
-    }
 
-    const filename = file.originalname;
-    const textContent = file.buffer.toString("utf-8");
-    const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) {
-      res.status(400).json({ error: "The BOQ file contains no data rows" });
-      return;
-    }
+  // Instant Contract & BOQ Auto-Fill Preview / Parse Endpoint
+  app.post("/api/projects/parse-document", authRequired, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      let filename = req.body?.filename || "document.txt";
+      let dataUrl = req.body?.attachment_data || "";
 
-    const separator = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
-    const headerCols = lines[0].split(separator).map(normaliseHeader);
-    const parsedRows = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(separator);
-      const rowObj: Record<string, string> = {};
-      for (let j = 0; j < headerCols.length; j++) {
-        rowObj[headerCols[j]] = (parts[j] || "").trim().replace(/^["']|["']$/g, "");
+      if (req.file) {
+        filename = req.file.originalname || filename;
+        const mime = req.file.mimetype || "application/octet-stream";
+        dataUrl = `data:${mime};base64,${req.file.buffer.toString("base64")}`;
       }
-      parsedRows.push(rowObj);
+
+      if (!dataUrl) {
+        res.status(400).json({ error: "No document provided for auto-fill extraction" });
+        return;
+      }
+
+      const extractedDoc = await extractDocumentText(dataUrl, filename);
+      let rawText = "";
+      if (extractedDoc.kind === "text") {
+        rawText = extractedDoc.text;
+      } else if (req.file) {
+        rawText = req.file.buffer.toString("utf-8");
+      }
+
+      const extracted = extractContractorDocumentIntelligence(rawText, filename);
+      const boqItems = extracted.boqItems || extractBoqItemsFromText(rawText, filename, extracted.trades, extracted.budget);
+      const boqTotal = boqItems.reduce((s, r) => s + (Number(r.tender_amount) || 0), 0);
+      const disciplines = Array.from(new Set(boqItems.map(b => b.discipline).filter(Boolean)));
+      const systems = Array.from(new Set(boqItems.map(b => b.system).filter(Boolean)));
+
+      const fnLower = filename.toLowerCase();
+      let documentCategory = "Contract";
+      if (fnLower.includes("boq") || fnLower.includes("bill of quantities") || fnLower.endsWith(".csv") || fnLower.endsWith(".tsv") || fnLower.endsWith(".xlsx")) {
+        documentCategory = "BOQ";
+      } else if (fnLower.includes("tender") || fnLower.includes("rfq") || fnLower.includes("quote")) {
+        documentCategory = "Tender";
+      } else if (fnLower.includes("prog") || fnLower.includes("sched")) {
+        documentCategory = "Programme";
+      } else if (fnLower.includes("spec")) {
+        documentCategory = "Specification";
+      }
+
+      res.json({
+        success: true,
+        filename,
+        document_category: documentCategory,
+        extracted: {
+          ...extracted,
+          budget: extracted.budget || (boqTotal > 0 ? boqTotal : 500000),
+        },
+        boq_items: boqItems,
+        boq_summary: {
+          count: boqItems.length,
+          total_amount: boqTotal,
+          disciplines,
+          systems,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to parse document for auto-fill" });
     }
+  });
 
-    const docId = crypto.randomUUID();
-    const attData = "data:application/octet-stream;base64," + file.buffer.toString("base64");
-    const today = new Date().toISOString().split("T")[0];
-    db.prepare("INSERT INTO documents (id, project_id, name, category, revision, date_added, attachment_name, attachment_data, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      docId, projectId, filename, "BOQ / Tender", "Imported", today, filename, attData, req.user!.user_id
-    );
+  // BOQ & Contract File Import (supports CSV, TSV, TXT, PDF, DOCX)
+  app.post("/api/boq/import", authRequired, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const projectId = req.body?.project_id;
+      if (!hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "No project access" });
+        return;
+      }
+      if (!canEdit(req.user!, "budget")) {
+        res.status(403).json({ error: "No edit access to budget" });
+        return;
+      }
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: "A CSV, XLSX, PDF, DOCX, or text-based BOQ/Contract file is required" });
+        return;
+      }
 
-    let imported = 0;
-    let totalAmount = 0.0;
-    const disciplines = new Set<string>();
-    const systems = new Set<string>();
-    const now = new Date().toISOString();
+      const filename = file.originalname;
+      const mimeType = file.mimetype || "application/octet-stream";
+      const attData = `data:${mimeType};base64,` + file.buffer.toString("base64");
 
-    const insertBoq = db.prepare("INSERT INTO boq_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const r of parsedRows) {
-      const description = r.description || r.itemdescription || r.scope || r.name;
-      if (!description) continue;
+      const textExtraction = await extractDocumentText(attData, filename);
+      const textContent = textExtraction.kind === "text" ? textExtraction.text : file.buffer.toString("utf-8");
 
-      const qty = parseImportNumber(r.tenderquantity || r.quantity || r.qty);
-      const rate = parseImportNumber(r.tenderrate || r.rate || r.unitrate || r.price);
-      const amount = parseImportNumber(r.tenderamount || r.amount || r.total || r.value) || (qty * rate);
-      const discipline = (r.discipline || r.trade || r.category || "").trim();
-      const system = (r.system || r.subsystem || "").trim();
-      const itemId = crypto.randomUUID();
+      const extractedMeta = extractContractorDocumentIntelligence(textContent, filename);
+      const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-      insertBoq.run(
-        itemId, projectId, r.itemnumber || r.itemno || r.code || r.number || "", description,
-        r.unit || r.uom || "", qty, rate, amount,
-        parseImportNumber(r.revisedquantity), parseImportNumber(r.installedquantity),
-        parseImportNumber(r.claimedquantity), parseImportNumber(r.certifiedquantity),
-        discipline, system, r.building || "", r.floor || r.level || "", r.area || r.room || "",
-        docId, now
+      const parsedRows: Array<Record<string, any>> = [];
+      if (lines.length >= 2 && /[,;\t]/.test(lines[0])) {
+        const separator = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
+        const headerCols = lines[0].split(separator).map(normaliseHeader);
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(separator);
+          const rowObj: Record<string, string> = {};
+          for (let j = 0; j < headerCols.length; j++) {
+            rowObj[headerCols[j]] = (parts[j] || "").trim().replace(/^["']|["']$/g, "");
+          }
+          if (rowObj.description || rowObj.itemdescription || rowObj.scope || rowObj.name) {
+            parsedRows.push(rowObj);
+          }
+        }
+      }
+
+      // If not a simple CSV header file (e.g., PDF/DOCX/Contract or multi-line header BOQ), use intelligent BOQ extractor
+      if (parsedRows.length === 0) {
+        const smartBoq = extractedMeta.boqItems || extractBoqItemsFromText(textContent, filename, extractedMeta.trades, extractedMeta.budget);
+        for (const sb of smartBoq) {
+          parsedRows.push({
+            itemnumber: sb.item_number,
+            description: sb.description,
+            unit: sb.unit,
+            tenderquantity: String(sb.tender_quantity),
+            tenderrate: String(sb.tender_rate),
+            tenderamount: String(sb.tender_amount),
+            discipline: sb.discipline,
+            system: sb.system,
+            building: sb.building || "Main Building",
+            floor: sb.floor || "All Levels",
+            area: sb.area || "Site-Wide",
+          });
+        }
+      }
+
+      const docId = crypto.randomUUID();
+      const today = new Date().toISOString().split("T")[0];
+      db.prepare("INSERT INTO documents (id, project_id, name, category, revision, date_added, attachment_name, attachment_data, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+        docId, projectId, filename, "BOQ / Tender", "Imported", today, filename, attData, req.user!.user_id
       );
 
-      imported++;
-      totalAmount += amount;
-      if (discipline) disciplines.add(discipline);
-      if (system) systems.add(`${discipline}:${system}`);
-    }
+      let imported = 0;
+      let totalAmount = 0.0;
+      const disciplines = new Set<string>();
+      const systems = new Set<string>();
+      const now = new Date().toISOString();
 
-    if (imported === 0) {
-      res.status(400).json({ error: "No rows contained a usable description column" });
-      return;
-    }
+      const insertBoq = db.prepare("INSERT INTO boq_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const createdBoqRows: Array<{ id: string; code: string; desc: string; disc: string; sys: string; unit: string; qty: number; amount: number }> = [];
 
-    db.prepare("UPDATE projects SET budget=? WHERE id=?").run(totalAmount, projectId);
-    db.prepare("DELETE FROM costs WHERE project_id=? AND category='BOQ / Tender Import'").run(projectId);
-    db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-      crypto.randomUUID(), projectId, "BOQ / Tender Import", `Imported ${imported} BOQ lines from ${filename}`, totalAmount, 0, today
-    );
+      for (const r of parsedRows) {
+        const description = r.description || r.itemdescription || r.scope || r.name;
+        if (!description) continue;
 
-    const insertWbs = db.prepare("INSERT INTO wbs_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const d of disciplines) {
-      insertWbs.run(crypto.randomUUID(), projectId, null, d.slice(0, 12).toUpperCase(), d, "Discipline", d, "", 1);
-    }
-    for (const s of systems) {
-      const [d, sys] = s.split(":");
-      insertWbs.run(crypto.randomUUID(), projectId, null, `${d.slice(0, 6).toUpperCase()}-${sys.slice(0, 6).toUpperCase()}`, sys, "System", d, sys, 1);
-    }
+        const qty = parseImportNumber(r.tenderquantity || r.quantity || r.qty) || 1;
+        const rate = parseImportNumber(r.tenderrate || r.rate || r.unitrate || r.price);
+        const amount = parseImportNumber(r.tenderamount || r.amount || r.total || r.value) || (qty * rate);
+        const calcRate = rate > 0 ? rate : (qty > 0 ? Math.round((amount / qty) * 100) / 100 : amount);
+        const discipline = (r.discipline || r.trade || r.category || "MEP").trim();
+        const system = (r.system || r.subsystem || `${discipline} System`).trim();
+        const itemCode = r.itemnumber || r.itemno || r.code || r.number || `${imported + 1}.01`;
+        const unit = r.unit || r.uom || "Item";
+        const itemId = crypto.randomUUID();
 
-    writeAudit(req.user!.user_id, "budget", docId, projectId, "import_boq", null, { file: filename, lines: imported, amount: totalAmount });
-    res.status(200).json({
-      document_id: docId,
-      filename,
-      imported,
-      imported_lines: imported,
-      tender_amount: totalAmount,
-      disciplines: Array.from(disciplines).sort(),
-      systems: systems.size,
-      project_budget_updated: totalAmount > 0,
-    });
+        insertBoq.run(
+          itemId, projectId, itemCode, description,
+          unit, qty, calcRate, amount,
+          parseImportNumber(r.revisedquantity) || qty, parseImportNumber(r.installedquantity),
+          parseImportNumber(r.claimedquantity), parseImportNumber(r.certifiedquantity),
+          discipline, system, r.building || "Main Building", r.floor || r.level || "All Levels", r.area || r.room || "Site-Wide",
+          docId, now
+        );
+
+        createdBoqRows.push({ id: itemId, code: itemCode, desc: description, disc: discipline, sys: system, unit, qty, amount });
+        imported++;
+        totalAmount += amount;
+        if (discipline) disciplines.add(discipline);
+        if (system) systems.add(`${discipline}:${system}`);
+      }
+
+      if (imported === 0) {
+        res.status(400).json({ error: "No rows contained a usable description column" });
+        return;
+      }
+
+      // Auto-fill Project Master fields (budget + any blank client/dates/contractor fields extracted from the document)
+      const projRow = db.prepare("SELECT * FROM projects WHERE id=?").get(projectId) as any;
+      if (projRow) {
+        const finalBudget = totalAmount > 0 ? totalAmount : (extractedMeta.budget || projRow.budget || 0);
+        const nextClient = (!projRow.client || projRow.client === "Primary Employer / Client") && extractedMeta.client ? extractedMeta.client : projRow.client;
+        const nextStart = !projRow.start_date && extractedMeta.startDate ? extractedMeta.startDate : projRow.start_date;
+        const nextEnd = !projRow.end_date && extractedMeta.endDate ? extractedMeta.endDate : projRow.end_date;
+        const nextContractor = !projRow.main_contractor && extractedMeta.mainContractor ? extractedMeta.mainContractor : projRow.main_contractor;
+        const nextConsultant = !projRow.consultant && extractedMeta.consultant ? extractedMeta.consultant : projRow.consultant;
+        const nextLocation = !projRow.location && extractedMeta.location ? extractedMeta.location : projRow.location;
+        db.prepare(`
+          UPDATE projects
+          SET budget=?, contract_value=?, client=?, client_name=?, start_date=?, end_date=?,
+              main_contractor=?, consultant=?, location=?
+          WHERE id=?
+        `).run(finalBudget, finalBudget, nextClient, nextClient, nextStart, nextEnd, nextContractor, nextConsultant, nextLocation, projectId);
+      }
+
+      // Update Job Costing Budget lines (by discipline)
+      db.prepare("DELETE FROM costs WHERE project_id=? AND category='BOQ / Tender Import'").run(projectId);
+      const discTotals = new Map<string, number>();
+      for (const row of createdBoqRows) {
+        discTotals.set(row.disc, (discTotals.get(row.disc) || 0) + row.amount);
+      }
+      const insertCost = db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)");
+      for (const [disc, sumAmt] of discTotals.entries()) {
+        insertCost.run(
+          crypto.randomUUID(), projectId, disc || "BOQ / Tender Import",
+          `${disc} Trade Budget (Auto-filled from ${filename})`, sumAmt, 0, today
+        );
+      }
+
+      // Auto-fill WBS & Work Packages
+      const insertWbs = db.prepare("INSERT INTO wbs_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const existingWps = new Set(
+        (db.prepare("SELECT UPPER(discipline) as d FROM work_packages WHERE project_id=?").all(projectId) as any[]).map(w => w.d)
+      );
+      let wpCreatedCount = 0;
+      for (const d of disciplines) {
+        insertWbs.run(crypto.randomUUID(), projectId, null, d.slice(0, 12).toUpperCase(), d, "Discipline", d, "", 1);
+        if (!existingWps.has(d.toUpperCase())) {
+          db.prepare(`
+            INSERT INTO work_packages (id, project_id, name, code, discipline, description, budget_allocated, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?)
+          `).run(
+            crypto.randomUUID(), projectId, `${d} Engineering & Installation Package`,
+            `WP-${d.slice(0, 4).toUpperCase()}`, d, `Auto-created from BOQ import (${filename})`,
+            discTotals.get(d) || 0, now
+          );
+          existingWps.add(d.toUpperCase());
+          wpCreatedCount++;
+        }
+      }
+      for (const s of systems) {
+        const [d, sys] = s.split(":");
+        insertWbs.run(crypto.randomUUID(), projectId, null, `${d.slice(0, 6).toUpperCase()}-${sys.slice(0, 6).toUpperCase()}`, sys, "System", d, sys, 1);
+      }
+
+      // Auto-fill Programme Tasks & Material Requests from imported BOQ
+      const existingTasks = new Set(
+        (db.prepare("SELECT LOWER(title) as t FROM tasks WHERE project_id=?").all(projectId) as any[]).map(r => r.t)
+      );
+      const existingMats = new Set(
+        (db.prepare("SELECT LOWER(item) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
+      );
+      let tasksCreated = 0;
+      let matsCreated = 0;
+      const baseStart = extractedMeta.startDate || today;
+      for (const s of systems) {
+        const [d, sys] = s.split(":");
+        const title = `${sys || d} — Supply, Installation & Testing`;
+        if (!existingTasks.has(title.toLowerCase())) {
+          const endIso = new Date(Date.now() + (14 + tasksCreated * 7) * 86400000).toISOString().split("T")[0];
+          db.prepare(`
+            INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status, wbs_code, priority, description)
+            VALUES (?, ?, ?, ?, 'MEP Site Team', ?, ?, 0, 'Not Started', ?, 'High', ?)
+          `).run(crypto.randomUUID(), projectId, title, d || "MEP", baseStart, endIso, `BOQ-${tasksCreated + 1}`, `Auto-generated from BOQ system: ${sys}`);
+          existingTasks.add(title.toLowerCase());
+          tasksCreated++;
+        }
+      }
+      for (const row of createdBoqRows) {
+        if (!existingMats.has(row.desc.toLowerCase())) {
+          const reqDate = new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
+          db.prepare(`
+            INSERT INTO material_requests (id, project_id, item, spec, quantity, unit, required_date, supplier, status, boq_item_id, wbs_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Approved MEP Vendor', 'Draft', ?, ?)
+          `).run(
+            crypto.randomUUID(), projectId, row.desc, `${row.disc} — ${row.sys} (BOQ #${row.code})`,
+            row.qty, row.unit, reqDate, row.id, row.code
+          );
+          existingMats.add(row.desc.toLowerCase());
+          matsCreated++;
+        }
+      }
+
+      writeAudit(req.user!.user_id, "budget", docId, projectId, "import_boq", null, { file: filename, lines: imported, amount: totalAmount });
+      res.status(200).json({
+        document_id: docId,
+        filename,
+        imported,
+        imported_lines: imported,
+        tender_amount: totalAmount,
+        disciplines: Array.from(disciplines).sort(),
+        systems: systems.size,
+        work_packages_created: wpCreatedCount,
+        tasks_created: tasksCreated,
+        material_requests_created: matsCreated,
+        project_budget_updated: totalAmount > 0,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "BOQ import failed" });
+    }
   });
 
   function generateFallbackEngineeringAdvice(drawing: string, zone: string, sub: string, question: string, items: any[]): string {

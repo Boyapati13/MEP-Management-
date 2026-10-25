@@ -125,16 +125,22 @@ async function renderBOQ(){
     };
   }
   if(canImport) document.getElementById('boqUploadBtn').onclick = async ()=>{
-    const input = document.createElement('input'); input.type='file'; input.accept='.csv,.xlsx,.pdf';
+    const input = document.createElement('input'); input.type='file'; input.accept='.csv,.tsv,.txt,.xlsx,.xls,.pdf,.docx';
     input.onchange = async ()=>{
       const file = input.files[0]; if(!file) return;
       const form = new FormData(); form.append('project_id', currentProjectId); form.append('file', file);
-      const result = document.getElementById('boqResult'); result.textContent='Importing and updating project controls...'; result.classList.add('show');
+      const result = document.getElementById('boqResult'); result.textContent='⏳ Scanning & importing BOQ / Contract, auto-filling project budget, work packages, tasks & material requests...'; result.classList.add('show');
       try{
         const response = await fetch(API+'/api/boq/import', {method:'POST', headers:{Authorization:'Bearer '+TOKEN}, body:form});
         const data = await response.json(); if(!response.ok) throw new Error(data.error||'Import failed');
-        result.textContent = `Imported ${data.imported_lines} lines, ${fmtCurrency(data.tender_amount)} tender value, ${data.systems} WBS systems. Project controls updated.`;
+        PROJECTS = await apiFetch('/api/projects');
+        if(typeof updateJobContextRibbon === 'function') updateJobContextRibbon();
         await renderBOQ();
+        const afterResult = document.getElementById('boqResult');
+        if(afterResult){
+          afterResult.classList.add('show');
+          afterResult.innerHTML = `✓ <b>Auto-Filled from ${escHtml(file.name)}:</b> Imported <b>${data.imported_lines} BOQ lines</b> (${fmtCurrency(data.tender_amount)} tender value across ${data.systems} systems), created <b>${data.work_packages_created||0} Work Packages</b>, <b>${data.tasks_created||0} Schedule Tasks</b> & <b>${data.material_requests_created||0} Material Requests</b>.`;
+        }
       }catch(error){ result.textContent=error.message; result.classList.add('show'); }
     }; input.click();
   };
