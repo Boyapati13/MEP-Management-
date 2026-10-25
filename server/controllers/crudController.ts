@@ -82,6 +82,188 @@ import {
   normalizeDate,
 } from "../services/contractorDocIntelligence";
 
+function resolveActualTable(table: string): string {
+  if (table === "drawings") return "documents";
+  if (table === "daily_logs") return "dailylogs";
+  if (table === "wbs") return "wbs_items";
+  if (table === "boq") return "boq_items";
+  if (table === "actions") return "project_actions";
+  if (table === "decisions") return "project_decisions";
+  if (table === "project_risks") return "risks";
+  return table;
+}
+
+function recalculateProjectProgress(projectId: string | undefined | null): void {
+  if (!projectId) return;
+  try {
+    const avgRow = db.prepare(`SELECT ROUND(AVG(COALESCE(progress, 0))) as avg_prog FROM tasks WHERE project_id = ?`).get(projectId) as any;
+    if (avgRow && avgRow.avg_prog !== null && avgRow.avg_prog !== undefined) {
+      db.prepare(`UPDATE projects SET progress = ? WHERE id = ?`).run(Number(avgRow.avg_prog) || 0, projectId);
+    }
+  } catch {}
+}
+
+function syncRfiTaskBlocker(rfiRow: any): void {
+  if (!rfiRow || !rfiRow.task_id || !rfiRow.project_id) return;
+  try {
+    const now = new Date().toISOString();
+    const isResolved = ["answered", "closed", "resolved"].includes(String(rfiRow.status || "").toLowerCase());
+    const existingBlocker = db.prepare(
+      `SELECT * FROM task_blockers WHERE task_id = ? AND source_type = 'rfis' AND source_id = ?`
+    ).get(rfiRow.task_id, rfiRow.id) as any;
+
+    if (isResolved) {
+      if (existingBlocker) {
+        db.prepare(`UPDATE task_blockers SET status = 'Resolved', resolved = 1, resolved_at = ? WHERE id = ?`).run(now, existingBlocker.id);
+      }
+    } else {
+      const desc = `Open RFI ${rfiRow.number || ""}: ${rfiRow.subject || rfiRow.question || "Technical Clarification"}`.trim();
+      if (existingBlocker) {
+        db.prepare(`UPDATE task_blockers SET description = ?, status = 'Active', resolved = 0, resolved_at = NULL WHERE id = ?`).run(desc, existingBlocker.id);
+      } else {
+        db.prepare(`
+          INSERT INTO task_blockers (
+            id, project_id, task_id, blocker_type, source_type, source_id,
+            description, status, reported_by, resolved, created_at
+          ) VALUES (?, ?, ?, 'RFI', 'rfis', ?, ?, 'Active', ?, 0, ?)
+        `).run(crypto.randomUUID(), rfiRow.project_id, rfiRow.task_id, rfiRow.id, desc, rfiRow.raised_by || "system", now);
+      }
+    }
+  } catch {}
+}
+
+function syncInspectionVerifiedProgress(inspRow: any, userName: string): void {
+  if (!inspRow || !inspRow.project_id) return;
+  try {
+    const isPassed =
+      ["pass", "passed", "approved"].includes(String(inspRow.result || "").toLowerCase()) ||
+      ["pass", "passed", "approved", "completed"].includes(String(inspRow.status || "").toLowerCase());
+    if (!isPassed) return;
+
+    const now = new Date().toISOString();
+    const verifiedPct = inspRow.verified_progress !== undefined && inspRow.verified_progress !== null
+      ? Number(inspRow.verified_progress)
+      : 100;
+
+    if (inspRow.task_id) {
+      const nextStatus = verifiedPct >= 100 ? "Completed" : "In Progress";
+      db.prepare(`
+        UPDATE tasks
+        SET progress = MAX(COALESCE(progress, 0), ?),
+            status = ?,
+            verified_by = ?,
+            verified_at = ?
+        WHERE id = ?
+      `).run(verifiedPct, nextStatus, userName, now, inspRow.task_id);
+      recalculateProjectProgress(inspRow.project_id);
+    } else if (inspRow.work_package_id) {
+      db.prepare(`
+        UPDATE tasks
+        SET progress = MAX(COALESCE(progress, 0), ?),
+            verified_by = ?,
+            verified_at = ?
+        WHERE work_package_id = ? AND status != 'Completed'
+      `).run(verifiedPct, userName, now, inspRow.work_package_id);
+      recalculateProjectProgress(inspRow.project_id);
+    }
+
+    if (inspRow.boq_item_id) {
+      db.prepare(`
+        UPDATE boq_items
+        SET certified_quantity = CASE WHEN COALESCE(installed_quantity, 0) > 0 THEN installed_quantity ELSE tender_quantity END
+        WHERE id = ?
+      `).run(inspRow.boq_item_id);
+    }
+  } catch {}
+}
+
+function syncBoqToMaterialRequestAndCosts(boqRow: any, userId: string): void {
+  if (!boqRow || !boqRow.project_id || !boqRow.description) return;
+  try {
+    const specText =
+      boqRow.specification ||
+      `${boqRow.discipline || "MEP"} — ${boqRow.system || "General"} | ${boqRow.description} (BOQ #${boqRow.item_number || "1.01"}, UOM: ${boqRow.unit || "Item"})`;
+    const reqDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const existingMr = db.prepare(
+      `SELECT * FROM material_requests WHERE project_id = ? AND (boq_item_id = ? OR LOWER(COALESCE(material, item, '')) = LOWER(?)) LIMIT 1`
+    ).get(boqRow.project_id, boqRow.id, boqRow.description) as any;
+
+    if (existingMr) {
+      db.prepare(`
+        UPDATE material_requests
+        SET material = ?, item = ?, specification = ?, spec = ?, description = ?,
+            discipline = ?, system = ?, quantity = ?, unit = ?, boq_reference = ?, wbs_code = ?, boq_item_id = ?
+        WHERE id = ?
+      `).run(
+        boqRow.description,
+        boqRow.description,
+        specText,
+        specText,
+        specText,
+        boqRow.discipline || "MEP",
+        boqRow.system || "General",
+        Number(boqRow.revised_quantity ?? boqRow.tender_quantity ?? 1),
+        boqRow.unit || "Item",
+        boqRow.item_number || "1.01",
+        boqRow.item_number || "1.01",
+        boqRow.id,
+        existingMr.id
+      );
+    } else {
+      db.prepare(`
+        INSERT INTO material_requests (
+          id, project_id, location, discipline, system, material, item, specification, spec,
+          description, quantity, unit, required_date, boq_reference, boq_item_id, wbs_code,
+          supplier, requested_by, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft')
+      `).run(
+        crypto.randomUUID(),
+        boqRow.project_id,
+        boqRow.area || "Site-Wide",
+        boqRow.discipline || "MEP",
+        boqRow.system || "General",
+        boqRow.description,
+        boqRow.description,
+        specText,
+        specText,
+        specText,
+        Number(boqRow.tender_quantity ?? 1),
+        boqRow.unit || "Item",
+        reqDate,
+        boqRow.item_number || "1.01",
+        boqRow.id,
+        boqRow.item_number || "1.01",
+        "Approved MEP Vendor",
+        userId
+      );
+    }
+
+    const existingCost = db.prepare(
+      `SELECT * FROM costs WHERE project_id = ? AND LOWER(description) = LOWER(?) LIMIT 1`
+    ).get(boqRow.project_id, boqRow.description) as any;
+    const plannedAmt = Number(boqRow.tender_amount ?? 0);
+    const actualAmt = (Number(boqRow.installed_quantity ?? 0) > 0 && Number(boqRow.tender_rate ?? 0) > 0)
+      ? Math.round(Number(boqRow.installed_quantity) * Number(boqRow.tender_rate) * 100) / 100
+      : (existingCost?.actual || 0);
+
+    if (existingCost) {
+      db.prepare(`UPDATE costs SET planned = ?, actual = ? WHERE id = ?`).run(plannedAmt, actualAmt, existingCost.id);
+    } else if (plannedAmt > 0) {
+      db.prepare(`INSERT INTO costs (id, project_id, category, description, planned, actual, date) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+        crypto.randomUUID(),
+        boqRow.project_id,
+        boqRow.discipline || "MEP",
+        boqRow.description,
+        plannedAmt,
+        actualAmt,
+        today
+      );
+    }
+  } catch {}
+}
+
 export function registerCrudController(app: Express): void {
   // Generic CRUD for all configured tables
   for (const [table, cfg] of Object.entries(TABLE_CONFIG)) {
@@ -93,7 +275,7 @@ export function registerCrudController(app: Express): void {
         res.status(403).json({ error: `No view access to ${module}` });
         return;
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+      const actualTable = resolveActualTable(table);
       if (actualTable === "project_actions") {
         const today = new Date().toISOString().slice(0, 10);
         try {
@@ -188,7 +370,7 @@ export function registerCrudController(app: Express): void {
 
     // Direct GET by ID with full authorization check
     app.get(`/api/${table}/:id`, authRequired, (req, res) => {
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+      const actualTable = resolveActualTable(table);
       let record: any;
       if (actualTable === "documents") {
         record = db.prepare(`
@@ -301,10 +483,69 @@ export function registerCrudController(app: Express): void {
         if (!data.due_date) data.due_date = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
       } else if (table === "drawings") {
         if (!data.category) data.category = "Drawing";
-      } else if (table === "wbs_items") {
+      } else if (table === "wbs_items" || table === "wbs") {
         if (data.active === undefined) data.active = 1;
       } else if (table === "plan_task_checklist") {
         if (data.is_checked === undefined) data.is_checked = 0;
+      } else if (table === "boq_items" || table === "boq") {
+        data.item_number = data.item_number || data.item_code || "1.01";
+        data.description = data.description || data.material || data.item || "MEP Line Item";
+        data.unit = data.unit || data.uom || "Item";
+        data.tender_quantity = Number(data.tender_quantity ?? data.quantity ?? 1);
+        data.tender_rate = Number(data.tender_rate ?? data.unit_rate ?? 0);
+        data.tender_amount = Number(data.tender_amount ?? data.total_amount ?? (data.tender_quantity * data.tender_rate));
+        data.revised_quantity = Number(data.revised_quantity ?? data.tender_quantity);
+        data.installed_quantity = Number(data.installed_quantity ?? data.completed_qty ?? 0);
+        data.claimed_quantity = Number(data.claimed_quantity ?? 0);
+        data.certified_quantity = Number(data.certified_quantity ?? 0);
+        data.discipline = data.discipline || data.trade || "MEP";
+        data.system = data.system || `${data.discipline} System`;
+        data.specification =
+          data.specification ||
+          data.spec ||
+          `${data.discipline} — ${data.system} | ${data.description} (BOQ #${data.item_number}, UOM: ${data.unit})`;
+        data.created_at = data.created_at || new Date().toISOString();
+      } else if (table === "material_requests") {
+        const linkedBoq = data.boq_item_id
+          ? (db.prepare("SELECT * FROM boq_items WHERE id = ?").get(data.boq_item_id) as any)
+          : data.boq_reference
+          ? (db.prepare("SELECT * FROM boq_items WHERE project_id = ? AND item_number = ?").get(data.project_id, data.boq_reference) as any)
+          : null;
+        const matName = data.material || data.item || linkedBoq?.description || data.description || "MEP Material";
+        const specVal =
+          data.specification ||
+          data.spec ||
+          linkedBoq?.specification ||
+          (linkedBoq ? `${linkedBoq.discipline || "MEP"} — ${linkedBoq.system || "System"} | ${linkedBoq.description} (BOQ #${linkedBoq.item_number})` : data.description || `${data.discipline || "MEP"} Standard Specification`);
+        data.material = matName;
+        data.item = matName;
+        data.specification = specVal;
+        data.spec = specVal;
+        data.description = data.description || specVal;
+        data.discipline = data.discipline || linkedBoq?.discipline || "MEP";
+        data.system = data.system || linkedBoq?.system || "General";
+        data.unit = data.unit || linkedBoq?.unit || "Item";
+        data.quantity = Number(data.quantity ?? linkedBoq?.tender_quantity ?? 1);
+        data.boq_item_id = data.boq_item_id || linkedBoq?.id || null;
+        data.boq_reference = data.boq_reference || data.wbs_code || linkedBoq?.item_number || null;
+        data.wbs_code = data.wbs_code || data.boq_reference || null;
+        data.status = data.status || "Draft";
+        data.requested_by = data.requested_by || req.user!.name;
+      } else if (table === "rfis") {
+        data.subject = data.subject || data.title || data.question || "RFI Clarification";
+        data.question = data.question || data.subject || data.title || "";
+        data.status = data.status || "Open";
+        if (data.drawing_id && !data.drawing_ref) {
+          const doc = db.prepare("SELECT name FROM documents WHERE id = ?").get(data.drawing_id) as any;
+          if (doc?.name) data.drawing_ref = doc.name;
+        }
+      } else if (table === "inspections") {
+        data.type = data.type || data.title || "QA/QC Site Inspection";
+        data.title = data.title || data.type;
+        data.status = data.status || data.result || "Scheduled";
+        data.result = data.result || (["approved", "pass", "passed"].includes(String(data.status).toLowerCase()) ? "Pass" : data.status);
+        data.inspector = data.inspector || req.user!.name;
+        data.date = data.date || new Date().toISOString().slice(0, 10);
       }
 
       const id = crypto.randomUUID();
@@ -327,7 +568,7 @@ export function registerCrudController(app: Express): void {
           }
         }
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+      const actualTable = resolveActualTable(table);
 
       if (actualTable === "project_actions") {
         if (!data.action_no) {
@@ -370,47 +611,47 @@ export function registerCrudController(app: Express): void {
       db.prepare(`INSERT INTO ${actualTable} (${cols.join(",")}) VALUES (${placeholders})`).run(...values);
       db.prepare("INSERT OR IGNORE INTO record_owners VALUES (?, ?, ?)").run(module, id, req.user!.user_id);
 
-      if (actualTable === "purchase_orders" && data.task_id) {
-        try {
-          syncProcurementTaskBlocker(db, {
-            id,
-            project_id: data.project_id,
-            task_id: data.task_id,
-            po_number: data.po_number,
-            item_name: data.description,
-            expected_delivery_date: data.expected_delivery_date || data.expected_delivery,
-            status: data.status
-          });
-        } catch {}
+      if (actualTable === "purchase_orders") {
+        if (data.task_id) {
+          try {
+            syncProcurementTaskBlocker(db, {
+              id,
+              project_id: data.project_id,
+              task_id: data.task_id,
+              po_number: data.po_number,
+              item_name: data.description,
+              expected_delivery_date: data.expected_delivery_date || data.expected_delivery,
+              status: data.status
+            });
+          } catch {}
+        }
+        if (Number(data.amount) > 0 && data.project_id) {
+          try {
+            const today = new Date().toISOString().slice(0, 10);
+            db.prepare(`INSERT INTO costs (id, project_id, category, description, planned, actual, date) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+              crypto.randomUUID(),
+              data.project_id,
+              "Procurement PO",
+              `${data.po_number || "PO"} — ${data.vendor || "Vendor"}: ${data.description || "Material Order"}`,
+              Number(data.amount),
+              Number(data.amount),
+              today
+            );
+          } catch {}
+        }
       }
 
-      if (actualTable === "documents" && data.project_id && data.attachment_data) {
-        try {
-          const project = db.prepare("SELECT * FROM projects WHERE id=?").get(data.project_id) as any;
-          const wpCount = (db.prepare("SELECT COUNT(*) as c FROM work_packages WHERE project_id=?").get(data.project_id) as any)?.c || 0;
-          const docName = String(data.attachment_name || data.name || "");
-          const isTenderOrContract = /(?:contract|subcontract|agreement|rfq|tender|specifications|refurbishment|award)/i.test(docName);
-          const isProjectIncomplete = !project || !project.name || project.name === "Untitled Project" || project.budget === 0 || wpCount === 0;
-
-          if (isTenderOrContract || isProjectIncomplete) {
-            extractDocumentText(data.attachment_data, docName).then(textRes => {
-              if (textRes.kind === "text" && textRes.text.length > 50) {
-                const extracted = extractContractorDocumentIntelligence(textRes.text, docName);
-                const b64 = String(data.attachment_data || "").replace(/^data:.*?;base64,/, "");
-                const buf = Buffer.from(b64, "base64");
-                applyContractorIntelligenceAndVerify(
-                  db,
-                  extracted,
-                  { name: docName, buffer: buf, mimeType: "application/pdf" },
-                  data.project_id,
-                  req.user!.user_id
-                );
-              }
-            }).catch(e => console.warn("Auto-update on document upload background error:", e?.message));
-          }
-        } catch (e: any) {
-          console.warn("Auto-update on document upload error:", e?.message);
-        }
+      if (actualTable === "boq_items") {
+        syncBoqToMaterialRequestAndCosts(data, req.user!.user_id);
+      }
+      if (actualTable === "tasks") {
+        recalculateProjectProgress(data.project_id);
+      }
+      if (actualTable === "rfis") {
+        syncRfiTaskBlocker(data);
+      }
+      if (actualTable === "inspections") {
+        syncInspectionVerifiedProgress(data, req.user!.name);
       }
 
       writeAudit(req.user!.user_id, module, id, data.project_id, "create", null, data);
@@ -424,7 +665,7 @@ export function registerCrudController(app: Express): void {
         res.status(403).json({ error: `No edit access to ${module}` });
         return;
       }
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+      const actualTable = resolveActualTable(table);
       const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });
@@ -513,6 +754,19 @@ export function registerCrudController(app: Express): void {
         data.published_by = null;
         data.published_at = null;
       }
+      if (actualTable === "material_requests") {
+        if (data.material && !data.item) data.item = data.material;
+        if (data.item && !data.material) data.material = data.item;
+        if (data.specification && !data.spec) data.spec = data.specification;
+        if (data.spec && !data.specification) data.specification = data.spec;
+      }
+      if (actualTable === "boq_items") {
+        if (data.quantity !== undefined && data.tender_quantity === undefined) data.tender_quantity = Number(data.quantity);
+        if (data.unit_rate !== undefined && data.tender_rate === undefined) data.tender_rate = Number(data.unit_rate);
+        if (data.completed_qty !== undefined && data.installed_quantity === undefined) data.installed_quantity = Number(data.completed_qty);
+        if (data.spec !== undefined && data.specification === undefined) data.specification = data.spec;
+      }
+
       const editableCols = cols.filter(c => c !== "id" && c !== "project_id");
       const updates: string[] = [];
       const values: any[] = [];
@@ -540,6 +794,19 @@ export function registerCrudController(app: Express): void {
             status: updated.status
           });
         } catch {}
+      }
+
+      if (actualTable === "boq_items") {
+        syncBoqToMaterialRequestAndCosts(updated, req.user!.user_id);
+      }
+      if (actualTable === "tasks") {
+        recalculateProjectProgress(updated.project_id);
+      }
+      if (actualTable === "rfis") {
+        syncRfiTaskBlocker(updated);
+      }
+      if (actualTable === "inspections") {
+        syncInspectionVerifiedProgress(updated, req.user!.name);
       }
 
       if (actualTable === "tasks" && updated.evidence_url) {
@@ -606,7 +873,7 @@ export function registerCrudController(app: Express): void {
 
     // Delete
     app.delete(`/api/${table}/:id`, authRequired, (req, res) => {
-      const actualTable = table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table;
+      const actualTable = resolveActualTable(table);
       const existing = db.prepare(`SELECT * FROM ${actualTable} WHERE id=?`).get(req.params.id) as any;
       if (!existing) {
         res.status(404).json({ error: "Not found" });
@@ -618,6 +885,9 @@ export function registerCrudController(app: Express): void {
       }
       db.prepare(`DELETE FROM ${actualTable} WHERE id=?`).run(req.params.id);
       db.prepare("DELETE FROM record_owners WHERE module=? AND record_id=?").run(module, req.params.id);
+      if (actualTable === "tasks") {
+        recalculateProjectProgress(existing.project_id);
+      }
       writeAudit(req.user!.user_id, module, req.params.id, existing.project_id, "delete", existing, null);
       res.json({ ok: true });
     });

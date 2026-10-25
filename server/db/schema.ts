@@ -853,8 +853,40 @@ export function initDb() {
   try { db.exec("ALTER TABLE purchase_orders ADD COLUMN expected_delivery_date TEXT;"); } catch {}
   try { db.exec("ALTER TABLE purchase_orders ADD COLUMN actual_delivery_date TEXT;"); } catch {}
   try { db.exec("ALTER TABLE purchase_orders ADD COLUMN lead_time_days INTEGER DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN issue_date TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN boq_item_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE costs ADD COLUMN date TEXT;"); } catch {}
 
   try { db.exec("ALTER TABLE material_requests ADD COLUMN task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN specification TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN spec TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN item TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN boq_item_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN wbs_code TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN supplier TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE boq_items ADD COLUMN specification TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE boq_items ADD COLUMN created_at TEXT;"); } catch {}
+
+  try { db.exec("ALTER TABLE rfis ADD COLUMN question TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN answer TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN drawing_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN drawing_ref TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN priority TEXT DEFAULT 'Medium';"); } catch {}
+  try { db.exec("ALTER TABLE rfis ADD COLUMN discipline TEXT;"); } catch {}
+
+  try { db.exec("ALTER TABLE inspections ADD COLUMN type TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN title TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN status TEXT DEFAULT 'Scheduled';"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN task_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN work_package_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN boq_item_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN verified_progress REAL;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN location TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE inspections ADD COLUMN discipline TEXT;"); } catch {}
 
   // V1.4 Enterprise: Risk management enhancements
   try { db.exec("ALTER TABLE risks ADD COLUMN risk_no TEXT;"); } catch {}

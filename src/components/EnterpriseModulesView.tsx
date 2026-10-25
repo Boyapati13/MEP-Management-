@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   FileSpreadsheet,
   Plus,
+  Upload,
   Search,
   Download,
   Sparkles,
@@ -122,9 +123,13 @@ const BoqAndJobCostingWorkspace: React.FC<{
   const [disciplineFilter, setDisciplineFilter] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
+  const [uploadingBoq, setUploadingBoq] = useState(false);
+  const [boqUploadMsg, setBoqUploadMsg] = useState<string | null>(null);
+  const boqFileInputRef = React.useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     item_code: '',
     description: '',
+    specification: '',
     discipline: 'HVAC',
     unit: 'Nos',
     quantity: 1,
@@ -153,6 +158,29 @@ const BoqAndJobCostingWorkspace: React.FC<{
     loadData();
   }, [loadData]);
 
+  const handleDirectBoqFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f || !selectedProject) return;
+    setUploadingBoq(true);
+    setBoqUploadMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('project_id', selectedProject);
+      const res = await api.post<any>('/api/boq/import', fd);
+      setBoqUploadMsg(
+        `Imported ${res.imported_lines || res.imported || 0} BOQ lines ($${Number(res.tender_amount || 0).toLocaleString()}) & generated ${res.material_requests_created || 0} Material Requests with specifications.`
+      );
+      await loadData();
+      onProjectUpdated?.();
+    } catch (err: any) {
+      setBoqUploadMsg(`Import error: ${err?.message || 'Failed to import BOQ file'}`);
+    } finally {
+      setUploadingBoq(false);
+      if (boqFileInputRef.current) boqFileInputRef.current.value = '';
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
@@ -166,7 +194,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
       completed_qty: Number(form.completed_qty),
     });
     setShowAddModal(false);
-    setForm({ item_code: '', description: '', discipline: 'HVAC', unit: 'Nos', quantity: 1, unit_rate: 0, completed_qty: 0 });
+    setForm({ item_code: '', description: '', specification: '', discipline: 'HVAC', unit: 'Nos', quantity: 1, unit_rate: 0, completed_qty: 0 });
     loadData();
   };
 
@@ -238,12 +266,28 @@ const BoqAndJobCostingWorkspace: React.FC<{
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            ref={boqFileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.pdf,.csv,.tsv,.docx,.txt"
+            className="hidden"
+            onChange={handleDirectBoqFileUpload}
+          />
+          <button
+            type="button"
+            disabled={uploadingBoq || !selectedProject}
+            onClick={() => boqFileInputRef.current?.click()}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <Upload size={15} />
+            {uploadingBoq ? 'Importing Excel / PDF BOQ...' : 'Import BOQ (Excel .xlsx / PDF / CSV)'}
+          </button>
           <button
             onClick={() => setShowDocModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors"
           >
             <Sparkles size={15} />
-            Extract from Contract / BOQ
+            Extract &amp; Review Contract
           </button>
           <button
             onClick={exportCsv}
@@ -259,6 +303,13 @@ const BoqAndJobCostingWorkspace: React.FC<{
           </button>
         </div>
       </div>
+
+      {boqUploadMsg && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs font-semibold text-emerald-900">
+          <span>{boqUploadMsg}</span>
+          <button onClick={() => setBoqUploadMsg(null)} className="text-emerald-700 hover:underline ml-4">Dismiss</button>
+        </div>
+      )}
 
       {/* Buildertrend 6-Column Job Costing Summary Ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -332,7 +383,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
             <thead>
               <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="py-3.5 px-4">Item Code</th>
-                <th className="py-3.5 px-4">Description</th>
+                <th className="py-3.5 px-4">BOQ Material &amp; Technical Specification</th>
                 <th className="py-3.5 px-4">Discipline</th>
                 <th className="py-3.5 px-4">Unit</th>
                 <th className="py-3.5 px-4 text-right">Tender Qty</th>
@@ -350,7 +401,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-500">
-                    No BOQ line items found for this filter. Click <strong>Add BOQ Line</strong> or <strong>Extract from Contract / BOQ</strong>.
+                    No BOQ line items found for this filter. Click <strong>Import BOQ (Excel .xlsx / PDF / CSV)</strong> or <strong>Add BOQ Line</strong>.
                   </td>
                 </tr>
               ) : (
@@ -361,12 +412,18 @@ const BoqAndJobCostingWorkspace: React.FC<{
                   const doneQty = Number(item.completed_qty ?? item.installed_quantity ?? 0);
                   const earned = doneQty * rate;
                   const pct = qty > 0 ? Math.min(100, Math.round((doneQty / qty) * 100)) : 0;
+                  const specText = item.specification || item.spec || `${item.discipline || 'MEP'} — ${item.system || 'Standard Specification'}`;
                   return (
                     <tr key={item.id} className="hover:bg-stone-50/80 transition-colors">
                       <td className="py-3 px-4 font-mono font-semibold text-slate-900">
                         {item.item_code || item.item_number || item.id?.slice(0, 8)}
                       </td>
-                      <td className="py-3 px-4 font-medium text-slate-800">{item.description}</td>
+                      <td className="py-3 px-4">
+                        <p className="font-bold text-slate-900">{item.description}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 font-mono">
+                          Spec: {specText}
+                        </p>
+                      </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-semibold text-[11px]">
                           {item.discipline || 'MEP'}
@@ -427,12 +484,21 @@ const BoqAndJobCostingWorkspace: React.FC<{
               </div>
             </div>
             <div>
-              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Description</label>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Material / Description</label>
               <input
                 required
                 value={form.description}
                 onChange={e => setForm(s => ({ ...s, description: e.target.value }))}
                 placeholder="Supply & installation of Chilled Water Air Handling Unit"
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Technical Specification</label>
+              <input
+                value={form.specification}
+                onChange={e => setForm(s => ({ ...s, specification: e.target.value }))}
+                placeholder="Eurovent certified double-skin AHU, 50mm rockwool panel, IE4 fan motor"
                 className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
               />
             </div>
@@ -498,7 +564,9 @@ const BoqAndJobCostingWorkspace: React.FC<{
 const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedProject }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
+  const [boqItems, setBoqItems] = useState<any[]>([]);
   const [showAddPo, setShowAddPo] = useState(false);
+  const [showAddMr, setShowAddMr] = useState(false);
   const [poForm, setPoForm] = useState({
     po_number: '',
     vendor: '',
@@ -507,15 +575,30 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
     delivery_date: '',
     status: 'Submitted',
   });
+  const [mrForm, setMrForm] = useState({
+    boq_item_id: '',
+    boq_reference: '',
+    material: '',
+    specification: '',
+    discipline: 'HVAC',
+    system: 'HVAC System',
+    quantity: 1,
+    unit: 'Set',
+    required_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+    supplier: 'Approved MEP Vendor',
+  });
 
   const loadProcurement = useCallback(async () => {
     const q = selectedProject ? { project_id: selectedProject } : undefined;
-    const [poList, mrList] = await Promise.all([
+    const qs = selectedProject ? `?project_id=${selectedProject}` : '';
+    const [poList, mrList, boqList] = await Promise.all([
       procurementApi.listOrders(q).catch(() => []),
       procurementApi.materialRequests(q).catch(() => []),
+      api.get<any[]>(`/api/boq${qs}`).catch(() => []),
     ]);
     setOrders(Array.isArray(poList) ? poList : []);
     setRequests(Array.isArray(mrList) ? mrList : []);
+    setBoqItems(Array.isArray(boqList) ? boqList : []);
   }, [selectedProject]);
 
   useEffect(() => {
@@ -535,6 +618,51 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
     loadProcurement();
   };
 
+  const handleSelectBoqForMr = (boqId: string) => {
+    const found = boqItems.find(b => b.id === boqId);
+    if (!found) {
+      setMrForm(s => ({ ...s, boq_item_id: '' }));
+      return;
+    }
+    const specText =
+      found.specification ||
+      found.spec ||
+      `${found.discipline || 'MEP'} — ${found.system || 'System'} | ${found.description} (BOQ #${found.item_number || '1.01'}, UOM: ${found.unit || 'Item'})`;
+    setMrForm(s => ({
+      ...s,
+      boq_item_id: found.id,
+      boq_reference: found.item_number || found.item_code || '1.01',
+      material: found.description || '',
+      specification: specText,
+      discipline: found.discipline || 'MEP',
+      system: found.system || 'MEP System',
+      quantity: Number(found.tender_quantity ?? found.quantity ?? 1),
+      unit: found.unit || 'Item',
+    }));
+  };
+
+  const handleCreateMr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProject) return;
+    await api.post('/api/material_requests', {
+      project_id: selectedProject,
+      ...mrForm,
+      item: mrForm.material,
+      spec: mrForm.specification,
+      description: mrForm.specification,
+      quantity: Number(mrForm.quantity),
+    });
+    setShowAddMr(false);
+    loadProcurement();
+  };
+
+  const handleConvertMrToPo = async (mrId: string) => {
+    try {
+      await api.post(`/api/material_requests/${mrId}/create-po`, {});
+      loadProcurement();
+    } catch {}
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -542,17 +670,25 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
             Supply Chain &amp; Lead-Time Control
           </span>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Procurement &amp; Programme Risk</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Procurement &amp; Material Requisitions</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Monitor long-lead MEP equipment, Purchase Orders, Material Requisitions, and schedule delay impacts.
+            BOQ Material Requests with Technical Specifications, Purchase Orders, and schedule lead-time risk tracking.
           </p>
         </div>
-        <button
-          onClick={() => setShowAddPo(true)}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors"
-        >
-          <Plus size={15} /> Issue Purchase Order
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowAddMr(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <Plus size={15} /> Request Material from BOQ
+          </button>
+          <button
+            onClick={() => setShowAddPo(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <Plus size={15} /> Issue Purchase Order
+          </button>
+        </div>
       </div>
 
       {/* Programme Impact Analysis Component */}
@@ -563,10 +699,78 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <Layers size={16} className="text-blue-600" /> BOQ Material Requests &amp; Specifications ({requests.length})
+            </h3>
+          </div>
+          <div className="divide-y divide-stone-100 max-h-[480px] overflow-y-auto">
+            {requests.length === 0 ? (
+              <p className="p-6 text-xs text-slate-500 text-center">
+                No Material Requisitions yet. Import a BOQ or click <strong>Request Material from BOQ</strong>.
+              </p>
+            ) : (
+              requests.map((mr: any) => {
+                const matName = mr.material || mr.item || mr.title || mr.description || mr.id.slice(0, 8);
+                const specText = mr.specification || mr.spec || mr.description || 'Standard MEP Technical Specification';
+                const boqRef = mr.boq_reference || mr.wbs_code;
+                return (
+                  <div key={mr.id} className="p-4 flex items-start justify-between gap-3 text-xs hover:bg-stone-50">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {boqRef && (
+                          <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-[10px] font-bold">
+                            BOQ #{boqRef}
+                          </span>
+                        )}
+                        {mr.discipline && (
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                            {mr.discipline}
+                          </span>
+                        )}
+                        <span className="font-bold text-slate-900 text-sm">{matName}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 font-mono">
+                        <strong className="text-slate-800">BOQ Specification:</strong> {specText}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-0.5">
+                        <span>
+                          Qty: <strong className="font-mono text-slate-800">{Number(mr.quantity ?? 1).toLocaleString()} {mr.unit || 'Item'}</strong>
+                        </span>
+                        <span>• Required: <strong>{mr.required_date || mr.date_required || 'ASAP'}</strong></span>
+                        {mr.supplier && <span>• Vendor: <strong>{mr.supplier}</strong></span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                        mr.status === 'Ordered'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}>
+                        {mr.status || 'Draft'}
+                      </span>
+                      {mr.status !== 'Ordered' && (
+                        <button
+                          type="button"
+                          onClick={() => handleConvertMrToPo(mr.id)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold shadow-sm transition-colors"
+                        >
+                          Convert to PO
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <Truck size={16} className="text-amber-600" /> Purchase Orders ({orders.length})
             </h3>
           </div>
-          <div className="divide-y divide-stone-100 max-h-96 overflow-y-auto">
+          <div className="divide-y divide-stone-100 max-h-[480px] overflow-y-auto">
             {orders.length === 0 ? (
               <p className="p-6 text-xs text-slate-500 text-center">No Purchase Orders recorded for this project.</p>
             ) : (
@@ -587,32 +791,112 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
             )}
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <Layers size={16} className="text-blue-600" /> Material Requests ({requests.length})
-            </h3>
-          </div>
-          <div className="divide-y divide-stone-100 max-h-96 overflow-y-auto">
-            {requests.length === 0 ? (
-              <p className="p-6 text-xs text-slate-500 text-center">No Material Requisitions pending.</p>
-            ) : (
-              requests.map((mr: any) => (
-                <div key={mr.id} className="p-4 flex items-center justify-between text-xs hover:bg-stone-50">
-                  <div>
-                    <p className="font-bold text-slate-900">{mr.title || mr.item_name || mr.mr_number || mr.id.slice(0, 8)}</p>
-                    <p className="text-slate-500 mt-0.5">Required: {mr.required_date || mr.date_required || 'ASAP'}</p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                    {mr.status || 'Submitted'}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       </div>
+
+      {showAddMr && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleCreateMr} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 text-base">New Material Request (with BOQ Specification)</h3>
+              <button type="button" onClick={() => setShowAddMr(false)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Link to BOQ Item (Auto-Fills Material &amp; Specification)</label>
+              <select
+                value={mrForm.boq_item_id}
+                onChange={e => handleSelectBoqForMr(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+              >
+                <option value="">-- Select a BOQ Item or Enter Custom Material --</option>
+                {boqItems.map((b: any) => (
+                  <option key={b.id} value={b.id}>
+                    [{b.item_number || b.item_code}] {b.description} ({b.tender_quantity || b.quantity} {b.unit})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Material Name (BOQ Item)</label>
+                <input
+                  required
+                  value={mrForm.material}
+                  onChange={e => setMrForm(s => ({ ...s, material: e.target.value }))}
+                  placeholder="Chilled Water Air Handling Unit"
+                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">BOQ Reference &amp; Discipline</label>
+                <div className="flex gap-2">
+                  <input
+                    value={mrForm.boq_reference}
+                    onChange={e => setMrForm(s => ({ ...s, boq_reference: e.target.value }))}
+                    placeholder="1.01"
+                    className="w-1/2 px-3 py-2 text-xs border border-stone-300 rounded-xl font-mono"
+                  />
+                  <input
+                    value={mrForm.discipline}
+                    onChange={e => setMrForm(s => ({ ...s, discipline: e.target.value }))}
+                    placeholder="HVAC"
+                    className="w-1/2 px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">BOQ Technical Specification</label>
+              <textarea
+                required
+                rows={2}
+                value={mrForm.specification}
+                onChange={e => setMrForm(s => ({ ...s, specification: e.target.value }))}
+                placeholder="Full technical specification from BOQ / Contract schedule..."
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl font-mono"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Quantity</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={mrForm.quantity}
+                  onChange={e => setMrForm(s => ({ ...s, quantity: Number(e.target.value) }))}
+                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Unit</label>
+                <input
+                  value={mrForm.unit}
+                  onChange={e => setMrForm(s => ({ ...s, unit: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Required Date</label>
+                <input
+                  type="date"
+                  value={mrForm.required_date}
+                  onChange={e => setMrForm(s => ({ ...s, required_date: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowAddMr(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold">
+                Submit Material Request
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showAddPo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

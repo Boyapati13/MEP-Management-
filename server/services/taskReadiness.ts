@@ -24,6 +24,8 @@ export interface TaskBlockerSummary {
 export interface TaskReadinessResult {
   task_id: string;
   status: 'Ready' | 'Pending' | 'Blocked';
+  readiness_status?: 'Ready' | 'Pending' | 'Blocked';
+  open_blockers_count?: number;
   checks: {
     predecessors: ReadinessCheck;
     procurement: ReadinessCheck;
@@ -208,6 +210,8 @@ export function calculateTaskReadiness(db: DatabaseSync, taskId: string): TaskRe
   return {
     task_id: taskId,
     status: overallStatus,
+    readiness_status: overallStatus,
+    open_blockers_count: blockers.length,
     checks,
     blockers,
     calculated_at: now

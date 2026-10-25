@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 export interface ExtractedBoqLine {
   item_number: string;
   description: string;
+  specification?: string;
   discipline: string;
   system: string;
   unit: string;
@@ -522,12 +523,24 @@ export function extractBoqItemsFromText(
       const rate = parseNumClean(row.tenderrate || row.rate || row.unitrate || row.price);
       const amount = parseNumClean(row.tenderamount || row.amount || row.total || row.value) || (qty * rate);
       const calcRate = rate > 0 ? rate : (qty > 0 ? Math.round((amount / qty) * 100) / 100 : amount);
+      const disc = row.discipline || row.trade || row.category || inferred.discipline;
+      const sys = row.system || row.subsystem || inferred.system;
+      const uom = row.unit || row.uom || inferred.unit;
+      const specText =
+        row.specification ||
+        row.spec ||
+        row.technicalspecification ||
+        row.specifications ||
+        row.notes ||
+        row.remarks ||
+        `${disc} — ${sys} | ${desc} (Standard: BS EN / ASHRAE / IEC Compliant, UOM: ${uom})`;
       items.push({
         item_number: row.itemnumber || row.itemno || row.item || row.code || `${items.length + 1}.01`,
         description: desc,
-        discipline: row.discipline || row.trade || row.category || inferred.discipline,
-        system: row.system || row.subsystem || inferred.system,
-        unit: row.unit || row.uom || inferred.unit,
+        specification: specText,
+        discipline: disc,
+        system: sys,
+        unit: uom,
         tender_quantity: qty,
         tender_rate: calcRate,
         tender_amount: amount > 0 ? amount : qty * calcRate,
@@ -551,12 +564,14 @@ export function extractBoqItemsFromText(
         const amount = parseNumClean(m[5]);
         if (desc.length >= 5 && amount > 0) {
           const inferred = inferDisciplineAndSystem(desc, trades[0] || "MEP");
+          const finalUnit = unit || inferred.unit;
           items.push({
             item_number: code,
             description: desc,
+            specification: `${inferred.discipline} — ${inferred.system} | ${desc} (BOQ Ref #${code}, UOM: ${finalUnit})`,
             discipline: inferred.discipline,
             system: inferred.system,
-            unit: unit || inferred.unit,
+            unit: finalUnit,
             tender_quantity: qty,
             tender_rate: Math.round((amount / (qty || 1)) * 100) / 100,
             tender_amount: amount,
@@ -605,9 +620,11 @@ export function extractBoqItemsFromText(
       templates.forEach((tpl, subIdx) => {
         const lineAmount = Math.round(perTradeBudget * tpl.share);
         const rate = Math.round((lineAmount / (tpl.qty || 1)) * 100) / 100;
+        const itemNum = `${tIdx + 1}.0${subIdx + 1}`;
         items.push({
-          item_number: `${tIdx + 1}.0${subIdx + 1}`,
+          item_number: itemNum,
           description: tpl.desc,
+          specification: `${tName} — ${tpl.sub} | ${tpl.desc} (BOQ #${itemNum}, UOM: ${tpl.unit})`,
           discipline: tName,
           system: tpl.sub,
           unit: tpl.unit,
@@ -921,12 +938,27 @@ export function applyContractorIntelligenceAndVerify(
     (db.prepare("SELECT LOWER(description) as d FROM costs WHERE project_id=?").all(projectId) as any[]).map(r => r.d)
   );
 
-  const insertBoqStmt = db.prepare("INSERT INTO boq_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-  const insertCostStmt = db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const insertBoqStmt = db.prepare(`
+    INSERT INTO boq_items (
+      id, project_id, item_number, description, specification, unit,
+      tender_quantity, tender_rate, tender_amount, revised_quantity,
+      installed_quantity, claimed_quantity, certified_quantity,
+      discipline, system, building, floor, area, source_document_id, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertCostStmt = db.prepare("INSERT INTO costs (id, project_id, category, description, planned, actual, date_logged) VALUES (?, ?, ?, ?, ?, ?, ?)");
   const insertMatStmt = db.prepare(`
     INSERT INTO material_requests (
-      id, project_id, location, discipline, system, material, description, quantity, unit, required_date, boq_reference, requested_by, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, project_id, location, discipline, system, material, item, specification, spec,
+      description, quantity, unit, required_date, boq_reference, boq_item_id, wbs_code,
+      supplier, work_package_id, requested_by, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertProcStmt = db.prepare(`
+    INSERT INTO procurement_items (
+      id, project_id, pr_number, material, specification, boq_reference,
+      quantity, unit, required_on_site, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const todayIso = now.split("T")[0];
@@ -935,11 +967,17 @@ export function applyContractorIntelligenceAndVerify(
   for (const bItem of boqToInsert) {
     if (!existingBoqDesc.has(bItem.description.toLowerCase())) {
       const bId = crypto.randomUUID();
+      const specText =
+        bItem.specification ||
+        `${bItem.discipline} — ${bItem.system} | ${bItem.description} (BOQ #${bItem.item_number}, UOM: ${bItem.unit})`;
+      const wpIdForTrade = wpMap.get((bItem.discipline || "").toUpperCase()) || allCurrentWps[0]?.id || null;
+
       insertBoqStmt.run(
         bId,
         projectId,
         bItem.item_number,
         bItem.description,
+        specText,
         bItem.unit,
         bItem.tender_quantity,
         bItem.tender_rate,
@@ -972,20 +1010,40 @@ export function applyContractorIntelligenceAndVerify(
       }
 
       if (!existingMatItems.has(bItem.description.toLowerCase())) {
+        const mrId = crypto.randomUUID();
         insertMatStmt.run(
-          crypto.randomUUID(),
+          mrId,
           projectId,
           bItem.area || "Site-Wide",
           bItem.discipline || "MEP",
           bItem.system || "General",
           bItem.description,
-          `${bItem.discipline} — ${bItem.system} (BOQ #${bItem.item_number})`,
+          bItem.description,
+          specText,
+          specText,
+          specText,
           bItem.tender_quantity,
           bItem.unit,
           reqDateIso,
           bItem.item_number,
+          bId,
+          bItem.item_number,
+          companyName || "Approved MEP Vendor",
+          wpIdForTrade,
           userId,
           "Draft"
+        );
+        insertProcStmt.run(
+          crypto.randomUUID(),
+          projectId,
+          `MR-${bItem.item_number}`,
+          bItem.description,
+          specText,
+          bItem.item_number,
+          bItem.tender_quantity,
+          bItem.unit,
+          reqDateIso,
+          "Requested"
         );
         existingMatItems.add(bItem.description.toLowerCase());
       }

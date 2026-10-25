@@ -310,7 +310,7 @@ export function registerOperationsController(app: Express): void {
     // before deleting, and de-duplicate so each real table is only hit once.
     const realTables = new Set<string>();
     for (const table of Object.keys(TABLE_CONFIG)) {
-      realTables.add(table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table);
+      realTables.add(table === "drawings" ? "documents" : table === "daily_logs" ? "dailylogs" : table === "boq" ? "boq_items" : table === "wbs" ? "wbs_items" : table === "actions" ? "project_actions" : table === "decisions" ? "project_decisions" : table === "project_risks" ? "risks" : table);
     }
     for (const table of realTables) {
       try { db.prepare(`DELETE FROM ${table} WHERE project_id=?`).run(id); } catch {}
@@ -545,6 +545,9 @@ export function registerOperationsController(app: Express): void {
     const boqItems = db.prepare(`SELECT * FROM boq_items WHERE ${where}`).all(...params) as any[];
     const changeOrders = db.prepare(`SELECT * FROM change_orders WHERE ${where}`).all(...params) as any[];
     const safetyIncidents = db.prepare(`SELECT * FROM safety_incidents WHERE ${where}`).all(...params) as any[];
+    const materialReqs = db.prepare(`SELECT * FROM material_requests WHERE ${where}`).all(...params) as any[];
+    const purchaseOrders = db.prepare(`SELECT * FROM purchase_orders WHERE ${where}`).all(...params) as any[];
+    const inspections = db.prepare(`SELECT * FROM inspections WHERE ${where}`).all(...params) as any[];
 
     const today = new Date().toISOString().split("T")[0];
     const isOverdue = (r: any) => {
@@ -553,7 +556,7 @@ export function registerOperationsController(app: Express): void {
       return !closedLike && r.due_date < today;
     };
 
-    const openRfi = rfis.filter(r => r.status !== "Closed").length;
+    const openRfi = rfis.filter(r => r.status !== "Closed" && r.status !== "Answered").length;
     const openPunch = punch.filter(p => p.status !== "Closed").length;
     const overdue = [...rfis, ...submittals].filter(isOverdue).length;
     const avgProgress = tasks.length ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / tasks.length) : 0;
@@ -561,6 +564,11 @@ export function registerOperationsController(app: Express): void {
     const totalActual = costs.reduce((sum, c) => sum + (c.actual || 0), 0);
     const pendingChangeOrders = changeOrders.filter(c => c.status === "Pending").length;
     const openSafety = safetyIncidents.filter(s => s.status !== "Closed").length;
+    const poCommittedValue = purchaseOrders.reduce((sum, po) => sum + (Number(po.amount) || 0), 0);
+    const boqTenderValue = boqItems.reduce((sum, b) => sum + (Number(b.tender_amount) || 0), 0);
+    const boqInstalledValue = boqItems.reduce((sum, b) => sum + ((Number(b.installed_quantity) || 0) * (Number(b.tender_rate) || 0)), 0);
+    const boqCertifiedValue = boqItems.reduce((sum, b) => sum + ((Number(b.certified_quantity) || 0) * (Number(b.tender_rate) || 0)), 0);
+    const verifiedInspectionsCount = inspections.filter(i => ["pass", "approved"].includes(String(i.result || i.status || "").toLowerCase())).length;
 
     const tasksByTrade: Record<string, number> = {};
     for (const t of tasks) {
@@ -575,12 +583,20 @@ export function registerOperationsController(app: Express): void {
       open_rfi: openRfi,
       open_punch: openPunch,
       overdue_count: overdue,
+      planned_cost: totalPlanned,
+      actual_cost: totalActual,
       cost_variance: totalActual - totalPlanned,
+      po_committed_value: poCommittedValue,
+      material_requests_count: materialReqs.length,
+      purchase_orders_count: purchaseOrders.length,
+      verified_inspections_count: verifiedInspectionsCount,
       tasks_by_trade: tasksByTrade,
       pending_change_orders: pendingChangeOrders,
       open_safety_incidents: openSafety,
       boq_line_count: boqItems.length,
-      boq_tender_value: boqItems.reduce((sum, b) => sum + (b.tender_amount || 0), 0),
+      boq_tender_value: boqTenderValue,
+      boq_installed_value: boqInstalledValue,
+      boq_certified_value: boqCertifiedValue,
     });
   });
 

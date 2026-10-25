@@ -348,6 +348,21 @@ export function registerCommercialController(app: Express): void {
         data.site_id || null,
         data.wbs_item_id || null
       );
+      if (data.company_id) {
+        try {
+          db.prepare(`INSERT OR IGNORE INTO project_companies (id, project_id, company_id, role_in_project, created_at) VALUES (?, ?, ?, 'Subcontractor', ?)`).run(
+            crypto.randomUUID(), data.project_id, data.company_id, now
+          );
+          const companyUsers = db.prepare(`SELECT id FROM users WHERE company_id=?`).all(data.company_id) as any[];
+          for (const cu of companyUsers) {
+            db.prepare(`
+              INSERT INTO project_memberships (user_id, project_id, access_role, active)
+              VALUES (?, ?, 'Subcontractor', 1)
+              ON CONFLICT(user_id, project_id) DO UPDATE SET active=1
+            `).run(cu.id, data.project_id);
+          }
+        } catch {}
+      }
       writeAudit(req.user!.user_id, "work_packages", id, data.project_id, "create", null, data);
       res.status(201).json({ id, ...data, created_at: now });
     } catch (err: any) {
@@ -371,6 +386,7 @@ export function registerCommercialController(app: Express): void {
         return;
       }
       const data = req.body || {};
+      const nextCompanyId = data.company_id !== undefined ? data.company_id : existing.company_id;
       db.prepare(`
         UPDATE work_packages
         SET name=?, code=?, discipline=?, description=?, company_id=?, lead_contact=?, budget_allocated=?, status=?, start_date=?, target_date=?, site_id=?, wbs_item_id=?
@@ -380,7 +396,7 @@ export function registerCommercialController(app: Express): void {
         data.code ?? existing.code,
         data.discipline ?? existing.discipline,
         data.description ?? existing.description,
-        data.company_id ?? existing.company_id,
+        nextCompanyId,
         data.lead_contact ?? existing.lead_contact,
         data.budget_allocated !== undefined ? parseImportNumber(data.budget_allocated) : existing.budget_allocated,
         data.status ?? existing.status,
@@ -390,8 +406,29 @@ export function registerCommercialController(app: Express): void {
         data.wbs_item_id !== undefined ? data.wbs_item_id : existing.wbs_item_id,
         req.params.id
       );
-      writeAudit(req.user!.user_id, "work_packages", req.params.id, existing.project_id, "update", existing, data);
-      res.json({ ok: true, id: req.params.id });
+      if (nextCompanyId) {
+        try {
+          db.prepare(`INSERT OR IGNORE INTO project_companies (id, project_id, company_id, role_in_project, created_at) VALUES (?, ?, ?, 'Subcontractor', ?)`).run(
+            crypto.randomUUID(), existing.project_id, nextCompanyId, new Date().toISOString()
+          );
+          db.prepare(`UPDATE tasks SET company_id=? WHERE work_package_id=?`).run(nextCompanyId, req.params.id);
+          db.prepare(`UPDATE material_requests SET work_package_id=COALESCE(work_package_id, ?) WHERE project_id=? AND UPPER(discipline)=UPPER(?)`).run(
+            req.params.id, existing.project_id, data.discipline ?? existing.discipline ?? ""
+          );
+          const companyUsers = db.prepare(`SELECT id FROM users WHERE company_id=?`).all(nextCompanyId) as any[];
+          for (const cu of companyUsers) {
+            db.prepare(`UPDATE users SET work_package_id = COALESCE(work_package_id, ?) WHERE id = ?`).run(req.params.id, cu.id);
+            db.prepare(`
+              INSERT INTO project_memberships (user_id, project_id, access_role, active)
+              VALUES (?, ?, 'Subcontractor', 1)
+              ON CONFLICT(user_id, project_id) DO UPDATE SET active=1
+            `).run(cu.id, existing.project_id);
+          }
+        } catch {}
+      }
+      const updatedWp = db.prepare("SELECT * FROM work_packages WHERE id=?").get(req.params.id);
+      writeAudit(req.user!.user_id, "work_packages", req.params.id, existing.project_id, "update", existing, updatedWp);
+      res.json({ ok: true, id: req.params.id, ...(rowToDict(updatedWp) || {}) });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }

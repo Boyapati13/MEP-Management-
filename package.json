@@ -30,7 +30,8 @@
     "mobile:build:android": "node scripts/build_android.cjs",
     "mobile:ios": "cap open ios",
     "test:octo": "node --import tsx tests/test_octo_integration.ts && node --test octo-agent/scripts/whatsapp-bridge/bridge.test.js",
-    "test:doc-extraction": "tsx tests/test_contractor_doc_extraction.ts"
+    "test:doc-extraction": "tsx tests/test_contractor_doc_extraction.ts",
+    "test:dataflow": "tsx tests/test_full_dataflow_integration.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

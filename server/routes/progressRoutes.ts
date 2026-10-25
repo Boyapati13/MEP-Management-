@@ -157,6 +157,10 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
             SET progress = MAX(progress, ?)
             WHERE work_package_id = ? AND status != 'Completed'
           `).run(certPct, claim.work_package_id);
+          const avgRow = db.prepare(`SELECT ROUND(AVG(COALESCE(progress, 0))) as avg_prog FROM tasks WHERE project_id = ?`).get(claim.project_id) as any;
+          if (avgRow && avgRow.avg_prog !== null && avgRow.avg_prog !== undefined) {
+            db.prepare(`UPDATE projects SET progress = ? WHERE id = ?`).run(Number(avgRow.avg_prog) || 0, claim.project_id);
+          }
         } catch {}
       }
 

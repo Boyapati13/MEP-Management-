@@ -203,6 +203,7 @@ export function registerAiDrawingController(app: Express): void {
           parsedRows.push({
             itemnumber: sb.item_number,
             description: sb.description,
+            specification: sb.specification || `${sb.discipline} — ${sb.system} | ${sb.description} (BOQ #${sb.item_number}, UOM: ${sb.unit})`,
             unit: sb.unit,
             tenderquantity: String(sb.tender_quantity),
             tenderrate: String(sb.tender_rate),
@@ -228,11 +229,18 @@ export function registerAiDrawingController(app: Express): void {
       const systems = new Set<string>();
       const now = new Date().toISOString();
 
-      const insertBoq = db.prepare("INSERT INTO boq_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-      const createdBoqRows: Array<{ id: string; code: string; desc: string; disc: string; sys: string; unit: string; qty: number; amount: number }> = [];
+      const insertBoq = db.prepare(`
+        INSERT INTO boq_items (
+          id, project_id, item_number, description, specification, unit,
+          tender_quantity, tender_rate, tender_amount, revised_quantity,
+          installed_quantity, claimed_quantity, certified_quantity,
+          discipline, system, building, floor, area, source_document_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const createdBoqRows: Array<{ id: string; code: string; desc: string; spec: string; disc: string; sys: string; unit: string; qty: number; amount: number; area: string }> = [];
 
       for (const r of parsedRows) {
-        const description = r.description || r.itemdescription || r.scope || r.name;
+        const description = r.description || r.itemdescription || r.scope || r.name || r.material || r.item;
         if (!description) continue;
 
         const qty = parseImportNumber(r.tenderquantity || r.quantity || r.qty) || 1;
@@ -243,18 +251,27 @@ export function registerAiDrawingController(app: Express): void {
         const system = (r.system || r.subsystem || `${discipline} System`).trim();
         const itemCode = r.itemnumber || r.itemno || r.code || r.number || `${imported + 1}.01`;
         const unit = r.unit || r.uom || "Item";
+        const specText =
+          r.specification ||
+          r.spec ||
+          r.technicalspecification ||
+          r.specifications ||
+          r.notes ||
+          r.remarks ||
+          `${discipline} — ${system} | ${description} (BOQ #${itemCode}, UOM: ${unit})`;
+        const areaText = r.area || r.room || "Site-Wide";
         const itemId = crypto.randomUUID();
 
         insertBoq.run(
-          itemId, projectId, itemCode, description,
+          itemId, projectId, itemCode, description, specText,
           unit, qty, calcRate, amount,
           parseImportNumber(r.revisedquantity) || qty, parseImportNumber(r.installedquantity),
           parseImportNumber(r.claimedquantity), parseImportNumber(r.certifiedquantity),
-          discipline, system, r.building || "Main Building", r.floor || r.level || "All Levels", r.area || r.room || "Site-Wide",
+          discipline, system, r.building || "Main Building", r.floor || r.level || "All Levels", areaText,
           docId, now
         );
 
-        createdBoqRows.push({ id: itemId, code: itemCode, desc: description, disc: discipline, sys: system, unit, qty, amount });
+        createdBoqRows.push({ id: itemId, code: itemCode, desc: description, spec: specText, disc: discipline, sys: system, unit, qty, amount, area: areaText });
         imported++;
         totalAmount += amount;
         if (discipline) disciplines.add(discipline);
@@ -290,7 +307,7 @@ export function registerAiDrawingController(app: Express): void {
       for (const row of createdBoqRows) {
         discTotals.set(row.disc, (discTotals.get(row.disc) || 0) + row.amount);
       }
-      const insertCost = db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)");
+      const insertCost = db.prepare("INSERT INTO costs (id, project_id, category, description, planned, actual, date_logged) VALUES (?, ?, ?, ?, ?, ?, ?)");
       for (const [disc, sumAmt] of discTotals.entries()) {
         insertCost.run(
           crypto.randomUUID(), projectId, disc || "BOQ / Tender Import",
@@ -299,7 +316,7 @@ export function registerAiDrawingController(app: Express): void {
       }
 
       // Auto-fill WBS & Work Packages
-      const insertWbs = db.prepare("INSERT INTO wbs_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      const insertWbs = db.prepare("INSERT INTO wbs_items (id, project_id, parent_id, code, name, level, discipline, system, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
       const existingWps = new Set(
         (db.prepare("SELECT UPPER(discipline) as d FROM work_packages WHERE project_id=?").all(projectId) as any[]).map(w => w.d)
       );
@@ -324,12 +341,18 @@ export function registerAiDrawingController(app: Express): void {
         insertWbs.run(crypto.randomUUID(), projectId, null, `${d.slice(0, 6).toUpperCase()}-${sys.slice(0, 6).toUpperCase()}`, sys, "System", d, sys, 1);
       }
 
+      const wpByDisc = new Map<string, string>();
+      const allProjectWps = db.prepare("SELECT id, discipline FROM work_packages WHERE project_id=?").all(projectId) as any[];
+      for (const w of allProjectWps) {
+        if (w.discipline) wpByDisc.set(String(w.discipline).toUpperCase(), w.id);
+      }
+
       // Auto-fill Programme Tasks & Material Requests from imported BOQ
       const existingTasks = new Set(
         (db.prepare("SELECT LOWER(title) as t FROM tasks WHERE project_id=?").all(projectId) as any[]).map(r => r.t)
       );
       const existingMats = new Set(
-        (db.prepare("SELECT LOWER(item) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
+        (db.prepare("SELECT LOWER(COALESCE(material, item, description, '')) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
       );
       let tasksCreated = 0;
       let matsCreated = 0;
@@ -339,23 +362,67 @@ export function registerAiDrawingController(app: Express): void {
         const title = `${sys || d} — Supply, Installation & Testing`;
         if (!existingTasks.has(title.toLowerCase())) {
           const endIso = new Date(Date.now() + (14 + tasksCreated * 7) * 86400000).toISOString().split("T")[0];
+          const wpId = wpByDisc.get((d || "").toUpperCase()) || allProjectWps[0]?.id || null;
           db.prepare(`
-            INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status, wbs_code, priority, description)
-            VALUES (?, ?, ?, ?, 'MEP Site Team', ?, ?, 0, 'Not Started', ?, 'High', ?)
-          `).run(crypto.randomUUID(), projectId, title, d || "MEP", baseStart, endIso, `BOQ-${tasksCreated + 1}`, `Auto-generated from BOQ system: ${sys}`);
+            INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status, wbs_code, priority, work_package_id, description)
+            VALUES (?, ?, ?, ?, 'MEP Site Team', ?, ?, 0, 'Not Started', ?, 'High', ?, ?)
+          `).run(crypto.randomUUID(), projectId, title, d || "MEP", baseStart, endIso, `BOQ-${tasksCreated + 1}`, wpId, `Auto-generated from BOQ system: ${sys}`);
           existingTasks.add(title.toLowerCase());
           tasksCreated++;
         }
       }
+
+      const insertMatReq = db.prepare(`
+        INSERT INTO material_requests (
+          id, project_id, location, discipline, system, material, item, specification, spec,
+          description, quantity, unit, required_date, boq_reference, boq_item_id, wbs_code,
+          supplier, work_package_id, requested_by, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertProcItem = db.prepare(`
+        INSERT INTO procurement_items (
+          id, project_id, pr_number, material, specification, boq_reference,
+          quantity, unit, required_on_site, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
       for (const row of createdBoqRows) {
         if (!existingMats.has(row.desc.toLowerCase())) {
           const reqDate = new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
-          db.prepare(`
-            INSERT INTO material_requests (id, project_id, item, spec, quantity, unit, required_date, supplier, status, boq_item_id, wbs_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'Approved MEP Vendor', 'Draft', ?, ?)
-          `).run(
-            crypto.randomUUID(), projectId, row.desc, `${row.disc} — ${row.sys} (BOQ #${row.code})`,
-            row.qty, row.unit, reqDate, row.id, row.code
+          const wpId = wpByDisc.get((row.disc || "").toUpperCase()) || allProjectWps[0]?.id || null;
+          insertMatReq.run(
+            crypto.randomUUID(),
+            projectId,
+            row.area || "Site-Wide",
+            row.disc || "MEP",
+            row.sys || "General",
+            row.desc,
+            row.desc,
+            row.spec,
+            row.spec,
+            row.spec,
+            row.qty,
+            row.unit,
+            reqDate,
+            row.code,
+            row.id,
+            row.code,
+            "Approved MEP Vendor",
+            wpId,
+            req.user!.user_id,
+            "Draft"
+          );
+          insertProcItem.run(
+            crypto.randomUUID(),
+            projectId,
+            `MR-${row.code}`,
+            row.desc,
+            row.spec,
+            row.code,
+            row.qty,
+            row.unit,
+            reqDate,
+            "Requested"
           );
           existingMats.add(row.desc.toLowerCase());
           matsCreated++;

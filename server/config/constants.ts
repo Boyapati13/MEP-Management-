@@ -295,7 +295,11 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
     module: "project_updates",
   },
   rfis: {
-    cols: ["id", "project_id", "number", "subject", "trade", "raised_by", "date_raised", "due_date", "status"],
+    cols: [
+      "id", "project_id", "number", "subject", "question", "answer", "trade", "discipline",
+      "priority", "raised_by", "date_raised", "due_date", "drawing_id", "drawing_ref",
+      "task_id", "work_package_id", "source_clarification_id", "status"
+    ],
     module: "rfis",
   },
   submittals: {
@@ -328,7 +332,15 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
   },
   boq_items: {
     cols: [
-      "id", "project_id", "item_number", "description", "unit", "tender_quantity", "tender_rate",
+      "id", "project_id", "item_number", "description", "specification", "unit", "tender_quantity", "tender_rate",
+      "tender_amount", "revised_quantity", "installed_quantity", "claimed_quantity", "certified_quantity",
+      "discipline", "system", "building", "floor", "area", "source_document_id", "imported_at"
+    ],
+    module: "budget",
+  },
+  boq: {
+    cols: [
+      "id", "project_id", "item_number", "description", "specification", "unit", "tender_quantity", "tender_rate",
       "tender_amount", "revised_quantity", "installed_quantity", "claimed_quantity", "certified_quantity",
       "discipline", "system", "building", "floor", "area", "source_document_id", "imported_at"
     ],
@@ -347,7 +359,11 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
     module: "safety_incidents",
   },
   inspections: {
-    cols: ["id", "project_id", "date", "trade", "inspection_type", "inspector", "result", "notes"],
+    cols: [
+      "id", "project_id", "title", "date", "trade", "discipline", "inspection_type",
+      "inspector", "location", "task_id", "work_package_id", "boq_item_id",
+      "verified_progress", "result", "status", "notes"
+    ],
     module: "inspections",
   },
   meeting_minutes: {
@@ -389,8 +405,10 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
   },
   material_requests: {
     cols: [
-      "id", "project_id", "location", "discipline", "system", "material", "description",
-      "quantity", "unit", "required_date", "reason", "drawing", "boq_reference", "requested_by", "task_id", "status"
+      "id", "project_id", "location", "discipline", "system", "material", "item",
+      "specification", "spec", "description", "quantity", "unit", "required_date",
+      "reason", "drawing", "boq_reference", "boq_item_id", "wbs_code", "supplier",
+      "requested_by", "work_package_id", "task_id", "status"
     ],
     module: "material_requests",
   },

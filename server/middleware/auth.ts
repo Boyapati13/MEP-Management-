@@ -277,7 +277,9 @@ export function canAccessRecord(
     if (record.work_package_id && user.work_package_id) {
       if (record.work_package_id !== user.work_package_id) return false;
     } else if (record.work_package_id && !user.work_package_id) {
-      return false;
+      if (!(user.company_id && record.company_id && record.company_id === user.company_id)) {
+        return false;
+      }
     }
 
     // Cross company isolation
