@@ -507,9 +507,10 @@
     <label>API Server URL</label>
     <input id="apiUrl" placeholder="API URL (automatic when hosted with the app)">
     <label>Username</label>
-    <input id="loginUsername" placeholder="Username" autocomplete="username">
+    <input id="loginUsername" value="admin" placeholder="Username" autocomplete="username">
     <label>Password</label>
-    <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
+    <input id="loginPassword" type="password" value="ChangeMe123!" placeholder="Password" autocomplete="current-password">
+    <div style="font-size:11px;color:var(--muted);margin:6px 0 2px;display:flex;justify-content:space-between;align-items:center;"><span>Default Admin: <b style="color:var(--text);">admin</b> / <b style="color:var(--text);">ChangeMe123!</b> (or <b style="color:var(--text);">admin123</b>)</span></div>
     <button id="loginBtn">Sign In</button>
     
     <div style="display:flex; align-items:center; gap:8px; margin:14px 0 10px;">
@@ -787,7 +788,7 @@
 <script>
 window.MEP_API_URL = window.MEP_API_URL || '';
 const TRADES = ['HVAC','Electrical','Plumbing','Fire Protection','BMS/Controls','Other'];
-const DEFAULT_API = window.MEP_API_URL || (window.location.protocol === 'file:' ? 'http://localhost:5000' : window.location.origin);
+const DEFAULT_API = window.MEP_API_URL || (window.location.protocol === 'file:' ? 'http://localhost:3000' : window.location.origin);
 document.getElementById('apiUrl').value = DEFAULT_API;
 let API = '';
 let TOKEN = localStorage.getItem('mep_token') || '';
@@ -858,7 +859,14 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
   const password = document.getElementById('loginPassword').value;
   document.getElementById('loginError').style.display = 'none';
   try{
-    const res = await fetch(API+'/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password})});
+    let res;
+    try {
+      res = await fetch(API+'/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password})});
+    } catch (netErr) {
+      API = 'http://localhost:3000';
+      document.getElementById('apiUrl').value = API;
+      res = await fetch(API+'/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username, password})});
+    }
     if(!res.ok){
       const errBody = await res.json().catch(()=>({}));
       throw new Error(errBody.error || 'Login failed');
@@ -880,7 +888,11 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
     }
     startNotificationPolling();
   }catch(err){
-    document.getElementById('loginError').style.display = 'block';
+    const errEl = document.getElementById('loginError');
+    errEl.textContent = (err && err.message && err.message !== 'Failed to fetch')
+      ? err.message
+      : 'Could not reach the API server at ' + API + '. Open http://localhost:3000 in your browser.';
+    errEl.style.display = 'block';
   }
 });
 document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') document.getElementById('loginBtn').click(); });
