@@ -48,7 +48,7 @@ export function SubcontractorLayout({
         <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
           <select
             value={selectedProject}
-            onChange={(e) => onSelectProject(e.target.value)}
+            onChange={(e) => { setActiveTab('home'); onSelectProject(e.target.value); }}
             className="text-xs font-semibold border border-slate-700 rounded-xl px-2.5 py-1.5 sm:py-2 bg-slate-800 text-white max-w-[200px] truncate touch-manipulation"
           >
             <option value="">Select Assigned Project</option>
@@ -56,7 +56,7 @@ export function SubcontractorLayout({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          {onOpenAssistant && (
+          {onOpenAssistant && selectedProject && (
             <button
               onClick={onOpenAssistant}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors flex-shrink-0"
@@ -99,7 +99,7 @@ export function SubcontractorLayout({
         })}
       </div>
 
-      <main className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-7xl w-full mx-auto">{renderContent(activeTab)}</main>
+      <main className="flex-1 p-3.5 sm:p-5 md:p-6 max-w-7xl w-full mx-auto">{selectedProject && projects.some((p: any) => String(p.id) === String(selectedProject)) ? renderContent(activeTab) : <div role="status" className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">Select an assigned project to view your work packages and submissions.</div>}</main>
     </div>
   );
 }
