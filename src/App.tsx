@@ -172,6 +172,94 @@ const btnDanger = 'inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-whit
 const btnGreen = 'inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors';
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
+function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
+  const features = [
+    { icon: Layers, title: 'Project delivery', detail: 'Programmes, work packages, site progress and project coordination.' },
+    { icon: FileText, title: 'Engineering control', detail: 'RFIs, submittals, documents and technical review workflows.' },
+    { icon: HardHat, title: 'Site operations', detail: 'Workforce, daily records, quality and safety activities.' },
+    { icon: BarChart3, title: 'Commercial visibility', detail: 'BOQ, procurement, variations and project cost tracking.' },
+    { icon: Shield, title: 'Role-based portals', detail: 'Separate project workspaces for teams, subcontractors and clients.' },
+    { icon: CheckSquare, title: 'Actions and decisions', detail: 'Track risks, blockers, approvals and project responsibilities.' },
+  ];
+  return (
+    <main className="min-h-screen bg-[#f7f8fa] text-slate-900">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <nav aria-label="Public navigation" className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-8">
+          <a href="#top" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
+            <span className="rounded-lg bg-slate-900 p-2 text-amber-400"><HardHat size={22} /></span>
+            MEP <span className="text-amber-600">FieldHub</span>
+          </a>
+          <div className="hidden items-center gap-6 text-sm font-semibold text-slate-600 md:flex">
+            <a className="hover:text-slate-950" href="#capabilities">Capabilities</a>
+            <a className="hover:text-slate-950" href="#workflows">How it works</a>
+            <a className="hover:text-slate-950" href="#portals">Portals</a>
+          </div>
+          <button type="button" onClick={onSignIn} className="rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500">Sign in</button>
+        </nav>
+      </header>
+      <section id="top" className="relative isolate overflow-hidden bg-[#0b192c] text-white">
+        <div aria-hidden="true" className="absolute inset-0 -z-20 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85')] bg-cover bg-center opacity-30" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#081525] via-[#0b192c]/95 to-[#0b192c]/65" />
+        <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.15fr_.85fr] lg:items-center lg:py-28">
+          <div>
+            <p className="mb-5 text-xs font-bold uppercase tracking-[.22em] text-amber-400">Built for MEP construction teams</p>
+            <h1 className="max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl xl:text-6xl">One connected workspace. From engineering to handover.</h1>
+            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">Coordinate mechanical, electrical, plumbing and fire protection delivery across technical reviews, site execution and commercial control.</p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button type="button" onClick={onSignIn} className="rounded-xl bg-amber-500 px-6 py-3.5 font-bold text-slate-950 hover:bg-amber-400">Access your workspace</button>
+              <a href="#capabilities" className="rounded-xl border border-white/40 px-6 py-3.5 font-bold text-white hover:bg-white/10">Explore capabilities</a>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/20 bg-slate-950/70 p-5 shadow-2xl backdrop-blur-sm sm:p-7">
+            <div className="mb-5 flex items-center justify-between gap-3 border-b border-white/15 pb-4">
+              <div><p className="text-xs uppercase tracking-widest text-amber-300">Platform overview</p><h2 className="mt-1 text-xl font-bold">Connected MEP workflows</h2></div>
+              <Layers className="text-amber-400" size={28}/>
+            </div>
+            {['Engineering review & submittals','Work packages & site execution','Inspections & verified progress','Procurement & commercial records','Project reporting & handover'].map((item, i) => (
+              <div key={item} className="flex items-center gap-3 border-b border-white/10 py-3 last:border-0">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-sm font-bold text-amber-300">{String(i + 1).padStart(2,'0')}</span>
+                <span className="text-sm font-medium text-slate-100">{item}</span>
+              </div>
+            ))}
+            <p className="mt-4 text-xs text-slate-400">Illustrative workflow overview. Live metrics are available after authentication.</p>
+          </div>
+        </div>
+      </section>
+      <section id="capabilities" className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
+        <p className="text-xs font-bold uppercase tracking-[.2em] text-amber-700">Platform capabilities</p>
+        <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">Manage the work, not disconnected spreadsheets.</h2>
+        <p className="mt-4 max-w-2xl text-slate-600">Purpose-built workspaces covering the day-to-day needs of MEP project delivery.</p>
+        <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {features.map(({icon: Icon, title, detail}) => (
+            <article key={title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <span className="inline-flex rounded-xl bg-amber-50 p-3 text-amber-700"><Icon size={24}/></span>
+              <h3 className="mt-5 text-lg font-bold">{title}</h3><p className="mt-2 text-sm leading-7 text-slate-600">{detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section id="workflows" className="bg-white py-20">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-2 lg:items-center">
+          <div><p className="text-xs font-bold uppercase tracking-[.2em] text-amber-700">A connected delivery process</p><h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Follow the project from design to site.</h2><p className="mt-5 leading-8 text-slate-600">Keep technical information, field updates and commercial records in one place. Workflows and approvals remain subject to project permissions and verification.</p></div>
+          <ol className="space-y-3">{['Review drawings and engineering submittals','Plan packages and coordinate procurement','Capture site execution and inspections','Review progress, costs and outstanding actions'].map((item, i) => <li key={item} className="flex gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><span className="font-extrabold text-amber-700">0{i+1}</span><span className="font-semibold">{item}</span></li>)}</ol>
+        </div>
+      </section>
+      <section id="portals" className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
+        <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">A workspace for every project participant.</h2>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          {[['Internal teams','Coordinate project controls, engineering, site and commercial work.'],['Subcontractors','Work with assigned packages, technical requests and site updates.'],['Clients','Review the project information made available through the client portal.']].map(([title, description]) => <article key={title} className="rounded-2xl border border-slate-200 bg-white p-6"><h3 className="text-lg font-bold">{title}</h3><p className="mt-3 text-sm leading-7 text-slate-600">{description}</p></article>)}
+        </div>
+      </section>
+      <section className="bg-[#0b192c] px-5 py-16 text-center text-white">
+        <h2 className="text-3xl font-extrabold">Ready to manage your next MEP project?</h2>
+        <p className="mx-auto mt-4 max-w-xl text-slate-300">Already have an account? Sign in to access your assigned workspace.</p>
+        <button type="button" onClick={onSignIn} className="mt-7 rounded-xl bg-amber-500 px-7 py-3.5 font-bold text-slate-950 hover:bg-amber-400">Sign in to MEP FieldHub</button>
+      </section>
+      <footer className="border-t border-slate-200 bg-white px-5 py-6 text-center text-xs text-slate-500">MEP FieldHub · Mechanical · Electrical · Plumbing · Fire Protection</footer>
+    </main>
+  );
+}
+
 function LoginPage() {
   const { setUser } = useAuth();
   const { addToast } = useToast();
@@ -3876,6 +3964,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [showSignIn, setShowSignIn] = useState(false);
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
@@ -3923,7 +4012,7 @@ export default function App() {
     <ToastProvider>
       <AuthContext.Provider value={{ user, setUser, logout }}>
         <ProjectContext.Provider value={{ projects, selectedProject, setSelectedProject, reload: loadProjects }}>
-          {user ? <AppShell /> : <LoginPage />}
+          {user ? <AppShell /> : showSignIn ? <LoginPage /> : <PublicLandingPage onSignIn={() => setShowSignIn(true)} />}
         </ProjectContext.Provider>
       </AuthContext.Provider>
     </ToastProvider>
