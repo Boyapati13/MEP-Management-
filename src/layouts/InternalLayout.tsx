@@ -41,7 +41,7 @@ export function InternalLayout({
       r.domain === activeDomain &&
       (!r.allowedRoles || r.allowedRoles.includes(role))
   );
-  const activeProject = projects.find((p: any) => p.id === selectedProject) || projects[0] || null;
+  const activeProject = selectedProject ? projects.find((p: any) => p.id === selectedProject) || null : null;
 
   return (
     <div className="min-h-screen blueprint-surface flex text-[#14171f]">
