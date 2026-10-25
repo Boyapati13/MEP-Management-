@@ -95,12 +95,26 @@ function resolveActualTable(table: string): string {
 
 function recalculateProjectProgress(projectId: string | undefined | null): void {
   if (!projectId) return;
-  try {
-    const avgRow = db.prepare(`SELECT ROUND(AVG(COALESCE(progress, 0))) as avg_prog FROM tasks WHERE project_id = ?`).get(projectId) as any;
-    if (avgRow && avgRow.avg_prog !== null && avgRow.avg_prog !== undefined) {
-      db.prepare(`UPDATE projects SET progress = ? WHERE id = ?`).run(Number(avgRow.avg_prog) || 0, projectId);
-    }
-  } catch {}
+  // Duration-weighted task progress is preferable to an unweighted average:
+  // longer planned tasks contribute proportionally more to the project rollup.
+  // Tasks without a usable schedule receive a neutral weight of one.
+  const tasks = db.prepare(`SELECT progress, start_date, due_date FROM tasks WHERE project_id = ?`).all(projectId) as any[];
+  if (!tasks.length) return;
+  let weightedProgress = 0;
+  let totalWeight = 0;
+  for (const task of tasks) {
+    const start = Date.parse(String(task.start_date || ''));
+    const end = Date.parse(String(task.due_date || ''));
+    const duration = Number.isFinite(start) && Number.isFinite(end) && end >= start
+      ? Math.max(1, Math.ceil((end - start) / 86400000) + 1)
+      : 1;
+    const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
+    weightedProgress += progress * duration;
+    totalWeight += duration;
+  }
+  db.prepare(`UPDATE projects SET progress = ? WHERE id = ?`).run(
+    Math.round(weightedProgress / totalWeight), projectId
+  );
 }
 
 function syncRfiTaskBlocker(rfiRow: any): void {
