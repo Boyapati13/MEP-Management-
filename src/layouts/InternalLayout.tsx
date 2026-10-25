@@ -31,7 +31,8 @@ export function InternalLayout({
   onOpenAssistant,
   children,
 }: InternalLayoutProps) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);\n  const role = user?.role || 'Worker';
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const role = user?.role || 'Worker';
   const visibleDomains = DOMAINS.filter(
     (d) => !d.allowedRoles || d.allowedRoles.includes(role)
   );
@@ -43,10 +44,12 @@ export function InternalLayout({
   const activeProject = projects.find((p: any) => p.id === selectedProject) || projects[0] || null;
 
   return (
-    <div className="min-h-screen blueprint-surface flex text-[#14171f]">\n      {mobileNavOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/65 lg:hidden" onClick={() => setMobileNavOpen(false)} />}
+    <div className="min-h-screen blueprint-surface flex text-[#14171f]">
+      {mobileNavOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/65 lg:hidden" onClick={() => setMobileNavOpen(false)} />}
       {/* Deep Slate Architectural Sidebar */}
       <aside id="mep-primary-navigation" className={`${mobileNavOpen ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-72 flex-col bg-[#0f172a] border-r border-slate-800 text-slate-200 shadow-xl lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0`}>
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">\n          <button type="button" aria-label="Close menu" className="rounded-lg p-1 text-slate-300 hover:bg-slate-800 lg:hidden" onClick={() => setMobileNavOpen(false)}><X size={20}/></button>
+        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
+          <button type="button" aria-label="Close menu" className="rounded-lg p-1 text-slate-300 hover:bg-slate-800 lg:hidden" onClick={() => setMobileNavOpen(false)}><X size={20}/></button>
           <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-900/30">
             <Building2 size={20} />
           </div>
@@ -97,7 +100,8 @@ export function InternalLayout({
                       r.domain === domain.id &&
                       (!r.allowedRoles || r.allowedRoles.includes(role))
                   );
-                  onNavigate(domain.id, routes[0]?.id || domain.defaultRoute);\n                  setMobileNavOpen(false);
+                  onNavigate(domain.id, routes[0]?.id || domain.defaultRoute);
+                  setMobileNavOpen(false);
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   isActive
@@ -134,7 +138,11 @@ export function InternalLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Buildertrend Top Job Context Ribbon */}
-        <header className="bg-white/95 backdrop-blur border-b border-[#e5e0d5] px-4 sm:px-6 py-3 sticky top-0 z-20 shadow-xs">\n          <div className="mb-3 flex items-center justify-between gap-3 lg:hidden">\n            <button type="button" aria-label="Open navigation" aria-controls="mep-primary-navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"><Menu size={18}/> Menu</button>\n            <button type="button" onClick={() => onNavigate("dashboard", "dashboard")} className="inline-flex items-center gap-2 text-sm font-bold text-slate-800"><LayoutDashboard size={17}/> Command Center</button>\n          </div>
+        <header className="bg-white/95 backdrop-blur border-b border-[#e5e0d5] px-4 sm:px-6 py-3 sticky top-0 z-20 shadow-xs">
+          <div className="mb-3 flex items-center justify-between gap-3 lg:hidden">
+            <button type="button" aria-label="Open navigation" aria-controls="mep-primary-navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"><Menu size={18}/> Menu</button>
+            <button type="button" onClick={() => onNavigate("dashboard", "dashboard")} className="inline-flex items-center gap-2 text-sm font-bold text-slate-800"><LayoutDashboard size={17}/> Command Center</button>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 flex-wrap" aria-label="Workspace sections">
               {subRoutes.map((r) => {
