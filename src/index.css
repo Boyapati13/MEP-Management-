@@ -38,3 +38,30 @@ h1, h2, h3, .font-display {
     linear-gradient(180deg, #faf8f3 0%, #f3efe6 100%);
   background-size: 24px 24px, 100% 100%;
 }
+
+/* Workspace-only engineering graph paper; no pattern inside cards or drawing canvases. */
+.workspace-surface {
+  --workspace-paper: #f5f9fd;
+  --workspace-line: #cbddeb;
+  --workspace-major: #a9c6dc;
+  --workspace-line-opacity: 0.28;
+  background-color: var(--workspace-paper);
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--workspace-major) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--workspace-major) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in srgb, var(--workspace-line) 40%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--workspace-line) 40%, transparent) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+}
+.workspace-surface[data-workspace-theme="slate"] { --workspace-paper: #f7f8fa; --workspace-line: #dde2e8; --workspace-major: #c8d0d9; }
+.workspace-surface[data-workspace-theme="sage"] { --workspace-paper: #f5f9f6; --workspace-line: #d4e5da; --workspace-major: #b5d0c0; }
+.workspace-surface[data-workspace-theme="sand"] { --workspace-paper: #fbf9f5; --workspace-line: #e8e0d4; --workspace-major: #d9cbb9; }
+.workspace-surface[data-workspace-theme="dark"] { --workspace-paper: #111e30; --workspace-line: #223750; --workspace-major: #304c6a; }
+.workspace-surface[data-workspace-grid="standard"] {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--workspace-major) 75%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--workspace-major) 75%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in srgb, var(--workspace-line) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--workspace-line) 70%, transparent) 1px, transparent 1px);
+}
+.workspace-surface[data-workspace-grid="off"] { background-image: none; }
