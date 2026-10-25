@@ -60,6 +60,7 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
         tasksApi.list(projectId ? { project_id: projectId } : undefined).catch(() => []),
       ]);
       if (!tower) setLoadError('Command Center data is unavailable. Retry to load project metrics.');
+      else if (!lookahead) setLoadError('Lookahead data is unavailable. Some project metrics may be incomplete.');
       setTowerData(tower);
       setLookaheadData(lookahead);
       setActiveBlockers(Array.isArray(blockers) ? blockers : []);
