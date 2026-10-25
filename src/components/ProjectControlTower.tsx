@@ -15,6 +15,7 @@ interface ProjectControlTowerProps {
 export function ProjectControlTower({ projectId, navigate }: ProjectControlTowerProps) {
   const [loading, setLoading] = useState(true);
   const [towerData, setTowerData] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [lookaheadData, setLookaheadData] = useState<any>(null);
   const [activeBlockers, setActiveBlockers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'critical' | 'high' | 'medium'>('all');
@@ -45,6 +46,12 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
+    setTowerData(null);
+    setLookaheadData(null);
+    setActiveBlockers([]);
+    setAllTasks([]);
+    setSelectedTaskForBlocker('');
     try {
       const [tower, lookahead, blockers, tasks] = await Promise.all([
         controlTowerApi.get(projectId).catch(() => null),
@@ -52,15 +59,16 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
         blockersApi.list(projectId ? { project_id: projectId } : undefined).catch(() => []),
         tasksApi.list(projectId ? { project_id: projectId } : undefined).catch(() => []),
       ]);
+      if (!tower) setLoadError('Command Center data is unavailable. Retry to load project metrics.');
       setTowerData(tower);
       setLookaheadData(lookahead);
       setActiveBlockers(Array.isArray(blockers) ? blockers : []);
       setAllTasks(Array.isArray(tasks) ? tasks : []);
-      if (Array.isArray(tasks) && tasks.length > 0 && !selectedTaskForBlocker) {
+      if (Array.isArray(tasks) && tasks.length > 0) {
         setSelectedTaskForBlocker(tasks[0].id);
       }
     } catch (err: any) {
-      showToast(err.message || 'Failed to load control tower data', 'error');
+      setLoadError(err.message || 'Failed to load control tower data');
     } finally {
       setLoading(false);
     }
@@ -120,6 +128,8 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
       </div>
     );
   }
+
+  if (loadError && !towerData) return <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-900"><p className="font-semibold">Command Center unavailable</p><p className="text-sm mt-1">{loadError}</p><button className="mt-3 rounded-lg bg-rose-900 px-4 py-2 text-sm text-white" onClick={loadData}>Retry</button></div>;
 
   const radar = towerData?.radar || { present_count: 0, expected_count: 0, present_by_trade: {}, expected_by_trade: {}, present_workers: [] };
   const attentionItems = (towerData?.attention_items || []).filter((item: any) => {
