@@ -22,6 +22,25 @@ async function startServer() {
   configureAppMiddleware(app);
   registerAllServerRoutes(app);
 
+  // Catch unmatched API routes - NEVER let API calls fall through to Vite SPA middleware
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
+  });
+
+  // Global Express error handler for API routes
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path.startsWith("/api/")) {
+      console.error(`API Error on ${req.method} ${req.path}:`, err);
+      const statusCode = typeof err?.status === "number" ? err.status : 500;
+      res.status(statusCode).json({
+        error: err?.message || "Internal server error",
+        code: err?.code || "INTERNAL_ERROR",
+      });
+      return;
+    }
+    next(err);
+  });
+
   // Vite development middleware or static file serving
   if (process.env.NODE_ENV === "test") {
     // In test mode, omit Vite dev server to allow instantaneous startup

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, LogOut, Eye, Calendar, TrendingUp, FileText, MessageSquare } from 'lucide-react';
+import { Building2, LogOut, Eye, Calendar, TrendingUp, FileText, MessageSquare, Sparkles } from 'lucide-react';
 
 export type ClientTab = 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications';
 
@@ -9,6 +9,7 @@ interface ClientPortalLayoutProps {
   selectedProject: string;
   projects: any[];
   onSelectProject: (id: string) => void;
+  onOpenAssistant?: () => void;
   renderContent: (tab: ClientTab) => React.ReactNode;
 }
 
@@ -26,6 +27,7 @@ export function ClientPortalLayout({
   selectedProject,
   projects,
   onSelectProject,
+  onOpenAssistant,
   renderContent,
 }: ClientPortalLayoutProps) {
   const [activeTab, setActiveTab] = useState<ClientTab>('overview');
@@ -53,6 +55,16 @@ export function ClientPortalLayout({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {onOpenAssistant && (
+            <button
+              onClick={onOpenAssistant}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors flex-shrink-0"
+              title="Ask MEP AI Copilot about this project"
+            >
+              <Sparkles size={14} />
+              <span className="hidden sm:inline">Copilot</span>
+            </button>
+          )}
           <span className="text-xs text-slate-300 font-medium truncate max-w-[120px]">{user?.name || user?.username}</span>
           <button
             onClick={logout}

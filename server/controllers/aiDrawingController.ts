@@ -1,4 +1,4 @@
-import { Express, Request, Response } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
@@ -84,6 +84,7 @@ import {
   applyContractorIntelligenceAndVerify,
   normalizeDate,
 } from "../services/contractorDocIntelligence";
+import { answerCopilotQuestion, getProjectCopilotContext } from "../services/copilotService";
 
 export function registerAiDrawingController(app: Express): void {
   const upload = multer({ storage: multer.memoryStorage() });
@@ -152,70 +153,135 @@ export function registerAiDrawingController(app: Express): void {
     }
   });
 
-  // BOQ & Contract File Import (supports CSV, TSV, TXT, PDF, DOCX)
-  app.post("/api/boq/import", authRequired, upload.single("file"), async (req: Request, res: Response) => {
-    try {
-      const projectId = req.body?.project_id;
-      if (!hasProjectAccess(req.user!, projectId)) {
-        res.status(403).json({ error: "No project access" });
-        return;
-      }
-      if (!canEdit(req.user!, "budget")) {
-        res.status(403).json({ error: "No edit access to budget" });
-        return;
-      }
-      const file = req.file;
-      if (!file) {
-        res.status(400).json({ error: "A CSV, XLSX, PDF, DOCX, or text-based BOQ/Contract file is required" });
-        return;
-      }
-
-      const filename = file.originalname;
-      const mimeType = file.mimetype || "application/octet-stream";
-      const attData = `data:${mimeType};base64,` + file.buffer.toString("base64");
-
-      const textExtraction = await extractDocumentText(attData, filename);
-      const textContent = textExtraction.kind === "text" ? textExtraction.text : file.buffer.toString("utf-8");
-
-      const extractedMeta = extractContractorDocumentIntelligence(textContent, filename);
-      const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-
-      const parsedRows: Array<Record<string, any>> = [];
-      if (lines.length >= 2 && /[,;\t]/.test(lines[0])) {
-        const separator = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
-        const headerCols = lines[0].split(separator).map(normaliseHeader);
-        for (let i = 1; i < lines.length; i++) {
-          const parts = lines[i].split(separator);
-          const rowObj: Record<string, string> = {};
-          for (let j = 0; j < headerCols.length; j++) {
-            rowObj[headerCols[j]] = (parts[j] || "").trim().replace(/^["']|["']$/g, "");
-          }
-          if (rowObj.description || rowObj.itemdescription || rowObj.scope || rowObj.name) {
-            parsedRows.push(rowObj);
+  // BOQ & Contract File Import (supports CSV, TSV, TXT, PDF, DOCX, XLSX)
+  app.post(
+    "/api/boq/import",
+    authRequired,
+    (req: Request, res: Response, next: NextFunction) => {
+      upload.single("file")(req, res, (err: any) => {
+        if (err) {
+          return res.status(400).json({ error: `File upload error: ${err?.message || String(err)}` });
+        }
+        next();
+      });
+    },
+    async (req: Request, res: Response) => {
+      try {
+        let projectId = req.body?.project_id;
+        // Project ID fallback if empty, undefined, or 'all'
+        if (!projectId || projectId === "all" || projectId === "ALL") {
+          if (req.user!.role === "Admin") {
+            const firstProj = db.prepare("SELECT id FROM projects ORDER BY rowid DESC LIMIT 1").get() as any;
+            if (firstProj) projectId = firstProj.id;
+          } else {
+            const userProj = db.prepare(
+              "SELECT project_id FROM project_memberships WHERE user_id=? AND active=1 LIMIT 1"
+            ).get(req.user!.user_id) as any;
+            if (userProj) projectId = userProj.project_id;
+            else {
+              const anyProj = db.prepare("SELECT id FROM projects LIMIT 1").get() as any;
+              if (anyProj) projectId = anyProj.id;
+            }
           }
         }
-      }
 
-      // If not a simple CSV header file (e.g., PDF/DOCX/Contract or multi-line header BOQ), use intelligent BOQ extractor
-      if (parsedRows.length === 0) {
-        const smartBoq = extractedMeta.boqItems || extractBoqItemsFromText(textContent, filename, extractedMeta.trades, extractedMeta.budget);
-        for (const sb of smartBoq) {
-          parsedRows.push({
-            itemnumber: sb.item_number,
-            description: sb.description,
-            specification: sb.specification || `${sb.discipline} — ${sb.system} | ${sb.description} (BOQ #${sb.item_number}, UOM: ${sb.unit})`,
-            unit: sb.unit,
-            tenderquantity: String(sb.tender_quantity),
-            tenderrate: String(sb.tender_rate),
-            tenderamount: String(sb.tender_amount),
-            discipline: sb.discipline,
-            system: sb.system,
-            building: sb.building || "Main Building",
-            floor: sb.floor || "All Levels",
-            area: sb.area || "Site-Wide",
+        if (!projectId) {
+          res.status(400).json({ error: "No active project found. Please select or create a project first." });
+          return;
+        }
+
+        if (!hasProjectAccess(req.user!, projectId) && req.user!.role !== "Admin") {
+          res.status(403).json({ error: "You do not have access to this project" });
+          return;
+        }
+
+        const canImport =
+          canEdit(req.user!, "budget") ||
+          canEdit(req.user!, "projects") ||
+          canEdit(req.user!, "documents") ||
+          ["Admin", "ProjectManager", "CommercialManager", "SiteEngineer"].includes(req.user!.role);
+
+        if (!canImport) {
+          res.status(403).json({
+            error: `Your role (${req.user!.role}) does not have permission to import BOQs. Permitted roles: Admin, ProjectManager, CommercialManager, SiteEngineer.`,
           });
+          return;
         }
-      }
+
+        const file = req.file;
+        if (!file) {
+          res.status(400).json({ error: "A CSV, XLSX, PDF, DOCX, or text-based BOQ/Contract file is required" });
+          return;
+        }
+
+        const filename = file.originalname;
+        const mimeType = file.mimetype || "application/octet-stream";
+        const attData = `data:${mimeType};base64,` + file.buffer.toString("base64");
+
+        const textExtraction = await extractDocumentText(attData, filename);
+        const textContent = textExtraction.kind === "text" ? textExtraction.text : file.buffer.toString("utf-8");
+
+        const extractedMeta = extractContractorDocumentIntelligence(textContent, filename);
+        const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+        const parsedRows: Array<Record<string, any>> = [];
+
+        // Search for delimited table header within first 30 lines
+        const headerIdx = lines.findIndex(l =>
+          /(description|item|scope|particulars|material)/i.test(l) &&
+          /(qty|quantity|rate|amount|total|price|unit|uom|disc|trade)/i.test(l) &&
+          /[,;\t|]/.test(l)
+        );
+
+        if (headerIdx !== -1) {
+          const headerLine = lines[headerIdx];
+          const separator = headerLine.includes("\t") ? "\t" : headerLine.includes("|") ? "|" : headerLine.includes(";") ? ";" : ",";
+          const headerCols = headerLine.split(separator).map(normaliseHeader);
+          for (let i = headerIdx + 1; i < lines.length; i++) {
+            const parts = lines[i].split(separator);
+            const rowObj: Record<string, string> = {};
+            for (let j = 0; j < headerCols.length; j++) {
+              rowObj[headerCols[j]] = (parts[j] || "").trim().replace(/^["']|["']$/g, "");
+            }
+            if (rowObj.description || rowObj.itemdescription || rowObj.scope || rowObj.name || rowObj.item || rowObj.particulars) {
+              parsedRows.push(rowObj);
+            }
+          }
+        } else if (lines.length >= 2 && /[,;\t]/.test(lines[0])) {
+          const separator = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
+          const headerCols = lines[0].split(separator).map(normaliseHeader);
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(separator);
+            const rowObj: Record<string, string> = {};
+            for (let j = 0; j < headerCols.length; j++) {
+              rowObj[headerCols[j]] = (parts[j] || "").trim().replace(/^["']|["']$/g, "");
+            }
+            if (rowObj.description || rowObj.itemdescription || rowObj.scope || rowObj.name) {
+              parsedRows.push(rowObj);
+            }
+          }
+        }
+
+        // If not a simple delimited file (e.g., PDF/DOCX/Contract or complex header BOQ), use intelligent BOQ extractor
+        if (parsedRows.length === 0) {
+          const smartBoq = extractedMeta.boqItems || extractBoqItemsFromText(textContent, filename, extractedMeta.trades, extractedMeta.budget);
+          for (const sb of smartBoq) {
+            parsedRows.push({
+              itemnumber: sb.item_number,
+              description: sb.description,
+              specification: sb.specification || `${sb.discipline} — ${sb.system} | ${sb.description} (BOQ #${sb.item_number}, UOM: ${sb.unit})`,
+              unit: sb.unit,
+              tenderquantity: String(sb.tender_quantity),
+              tenderrate: String(sb.tender_rate),
+              tenderamount: String(sb.tender_amount),
+              discipline: sb.discipline,
+              system: sb.system,
+              building: sb.building || "Main Building",
+              floor: sb.floor || "All Levels",
+              area: sb.area || "Site-Wide",
+            });
+          }
+        }
 
       const docId = crypto.randomUUID();
       const today = new Date().toISOString().split("T")[0];
@@ -896,49 +962,53 @@ Provide a structured list of at least 3-5 verified locations/suppliers including
     }
   });
 
-  // General AI Chat Endpoint for Senior MEP Engineering Consultation
+  // MEP Project Copilot Intelligence endpoint (answers all questions with full project context)
   app.post("/api/ai/chat", authRequired, async (req: Request, res: Response) => {
     try {
-      const { message, question, context, model_tier = "gemini-3.5-flash" } = req.body || {};
-      const query = message || question || "How to optimize MEP site execution?";
-      const apiKey = process.env.GEMINI_API_KEY;
-      let reply = "";
+      const result = await answerCopilotQuestion(req.user!, req.body);
+      res.json({
+        ...result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error("Copilot error:", err);
+      res.status(500).json({ error: err.message || "Failed to process Copilot query" });
+    }
+  });
 
-      if (apiKey) {
-        try {
-          const ai = new GoogleGenAI({
-            apiKey,
-            httpOptions: { headers: { "User-Agent": "aistudio-build" } }
-          });
-          const prompt = `You are a Senior Technical Director and Lead MEP Project Manager.
-Provide clear, expert, standards-compliant advice (ASHRAE, CIBSE, BS EN, NFPA, IEC, SMACNA).
-${MEP_REFERENCE_KNOWLEDGE}
-Context: ${JSON.stringify(context || {})}
-Question: ${query}`;
-
-          try {
-            const result = await ai.models.generateContent({
-              model: model_tier || "gemini-3.5-flash",
-              contents: prompt
-            });
-            reply = result.text || "";
-          } catch {
-            const result = await ai.models.generateContent({
-              model: "gemini-3.8-flash",
-              contents: prompt
-            });
-            reply = result.text || "";
-          }
-        } catch (e: any) {
-          console.warn("AI Chat API call failed:", e?.message);
-        }
+  // Project Copilot Quick Facts & Context
+  app.get("/api/ai/copilot/context", authRequired, (req: Request, res: Response) => {
+    try {
+      const projectId = (req.query.project_id as string) || undefined;
+      const ctx = getProjectCopilotContext(projectId, req.user);
+      if (!ctx) {
+        res.status(404).json({ error: "Project not found or accessible" });
+        return;
       }
-
-      if (!reply || !reply.trim()) {
-        reply = `### Senior MEP Technical Assessment\nRegarding: **${query}**\n\n1. **Pre-Commissioning & Isolation Check**: Ensure all test manifolds, calibrated gauges (0-16 bar), and isolation blanks are certified with valid test certificates prior to pressurization.\n2. **Sequential Witnessing**: Coordinate joint inspection walk with supervising consultant. Ensure all air release vents are purged and static head is factored into pressure holding tests (1.5x working pressure).\n3. **Safety & Protective Mitigation**: Establish barrier cordons around testing manifolds and verify pressure relief valve calibration tags.`;
-      }
-
-      res.json({ reply, answer: reply, timestamp: new Date().toISOString() });
+      const p = ctx.project;
+      res.json({
+        project_id: p.id,
+        name: p.name,
+        code: p.code,
+        client: p.client || p.client_name,
+        main_contractor: p.main_contractor,
+        consultant: p.consultant,
+        budget: p.budget || p.contract_value || ctx.boqSummary.totalAmount,
+        currency: p.currency || "USD",
+        start_date: p.start_date,
+        end_date: p.end_date,
+        status: p.status,
+        stage: p.stage,
+        work_packages_count: ctx.workPackages.length,
+        boq_count: ctx.boqSummary.count,
+        boq_total_amount: ctx.boqSummary.totalAmount,
+        open_snags_count: ctx.punchlist.openCount,
+        documents_count: ctx.documents.length,
+        tasks_count: ctx.tasks.total,
+        risks_count: ctx.risks.length,
+        workforce_today_count: ctx.workforceToday.length,
+        disciplines: ctx.boqSummary.byDiscipline.map(d => d.discipline),
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

@@ -160,16 +160,21 @@ const BoqAndJobCostingWorkspace: React.FC<{
 
   const handleDirectBoqFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (!f || !selectedProject) return;
+    const targetProj = selectedProject || activeProject?.id || '';
+    if (!f) return;
+    if (!targetProj) {
+      setBoqUploadMsg('Please select a project before uploading a BOQ file.');
+      return;
+    }
     setUploadingBoq(true);
     setBoqUploadMsg(null);
     try {
       const fd = new FormData();
       fd.append('file', f);
-      fd.append('project_id', selectedProject);
+      fd.append('project_id', targetProj);
       const res = await api.post<any>('/api/boq/import', fd);
       setBoqUploadMsg(
-        `Imported ${res.imported_lines || res.imported || 0} BOQ lines ($${Number(res.tender_amount || 0).toLocaleString()}) & generated ${res.material_requests_created || 0} Material Requests with specifications.`
+        `✓ Imported ${res.imported_lines || res.imported || 0} BOQ lines ($${Number(res.tender_amount || 0).toLocaleString()}) & generated ${res.material_requests_created || 0} Material Requests with specifications.`
       );
       await loadData();
       onProjectUpdated?.();
@@ -275,29 +280,35 @@ const BoqAndJobCostingWorkspace: React.FC<{
           />
           <button
             type="button"
-            disabled={uploadingBoq || !selectedProject}
-            onClick={() => boqFileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-colors"
+            disabled={uploadingBoq}
+            onClick={() => {
+              if (!selectedProject && !activeProject?.id) {
+                setBoqUploadMsg('Please select a project before uploading a BOQ file.');
+                return;
+              }
+              boqFileInputRef.current?.click();
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
           >
             <Upload size={15} />
             {uploadingBoq ? 'Importing Excel / PDF BOQ...' : 'Import BOQ (Excel .xlsx / PDF / CSV)'}
           </button>
           <button
             onClick={() => setShowDocModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
           >
             <Sparkles size={15} />
             Extract &amp; Review Contract
           </button>
           <button
             onClick={exportCsv}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 text-xs font-semibold border border-stone-200 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 text-xs font-semibold border border-stone-200 transition-colors cursor-pointer"
           >
             <Download size={14} /> Export CSV
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
           >
             <Plus size={15} /> Add BOQ Line
           </button>
@@ -305,9 +316,20 @@ const BoqAndJobCostingWorkspace: React.FC<{
       </div>
 
       {boqUploadMsg && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs font-semibold text-emerald-900">
+        <div
+          className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-semibold ${
+            boqUploadMsg.startsWith('Import error') || boqUploadMsg.includes('Please select')
+              ? 'bg-rose-50 border-rose-200 text-rose-900'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+          }`}
+        >
           <span>{boqUploadMsg}</span>
-          <button onClick={() => setBoqUploadMsg(null)} className="text-emerald-700 hover:underline ml-4">Dismiss</button>
+          <button
+            onClick={() => setBoqUploadMsg(null)}
+            className="opacity-70 hover:opacity-100 hover:underline ml-4 cursor-pointer"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

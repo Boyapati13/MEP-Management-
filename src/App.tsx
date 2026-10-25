@@ -44,6 +44,8 @@ import { CompleteTaskModal } from './components/CompleteTaskModal';
 import { OctoInbox } from './components/OctoInbox';
 import { TasksBoardPage } from './components/TasksBoardPage';
 import { EnterpriseModulesView } from './components/EnterpriseModulesView';
+import { CreateProjectModal } from './components/CreateProjectModal';
+import { ProjectDocumentsSection } from './components/ProjectDocumentsSection';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -399,6 +401,15 @@ function AppShell() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const { addToast } = useToast();
 
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.projectId) setSelectedProject(e.detail.projectId);
+      setAssistantOpen(true);
+    };
+    window.addEventListener('open-copilot', handler);
+    return () => window.removeEventListener('open-copilot', handler);
+  }, [setSelectedProject]);
+
   const navigate = useCallback((p: Page, param?: string) => {
     setPage(p);
     setPageParam(param || '');
@@ -460,51 +471,73 @@ function AppShell() {
 
   if (role === 'Subcontractor') {
     return (
-      <SubcontractorLayout
-        user={user}
-        logout={logout}
-        selectedProject={selectedProject}
-        projects={projects}
-        onSelectProject={setSelectedProject}
-        renderContent={(tab) => {
-          if (tab === 'home') {
-            return (
-              <div className="space-y-5">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">My Project</h1>
-                  <p className="text-sm text-gray-500 mt-1">Assigned work packages, current tasks and delivery obligations.</p>
+      <>
+        <SubcontractorLayout
+          user={user}
+          logout={logout}
+          selectedProject={selectedProject}
+          projects={projects}
+          onSelectProject={setSelectedProject}
+          onOpenAssistant={() => setAssistantOpen(true)}
+          renderContent={(tab) => {
+            if (tab === 'home') {
+              return (
+                <div className="space-y-5">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">My Project</h1>
+                    <p className="text-sm text-gray-500 mt-1">Assigned work packages, current tasks and delivery obligations.</p>
+                  </div>
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                    <p className="font-semibold text-blue-900">Work-package scoped workspace</p>
+                    <p className="text-sm text-blue-700 mt-1">Choose your assigned package above, then open the Work Package view for current tasks, blockers and progress.</p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
-                  <p className="font-semibold text-blue-900">Work-package scoped workspace</p>
-                  <p className="text-sm text-blue-700 mt-1">Choose your assigned package above, then open the Work Package view for current tasks, blockers and progress.</p>
-                </div>
-              </div>
-            );
-          }
-          if (tab === 'work') return <TasksBoardPage navigate={navigate} projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} addToast={addToast} user={user} />;
-          if (tab === 'technical') return <EnterpriseModulesView page="rfis" selectedProject={selectedProject} projects={projects} user={user} />;
-          if (tab === 'progress') return <ProjectUpdatesPage navigate={navigate} />;
-          return <EnterpriseModulesView page="change_orders" selectedProject={selectedProject} projects={projects} user={user} />;
-        }}
-      />
+              );
+            }
+            if (tab === 'work') return <TasksBoardPage navigate={navigate} projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} addToast={addToast} user={user} />;
+            if (tab === 'technical') return <EnterpriseModulesView page="rfis" selectedProject={selectedProject} projects={projects} user={user} />;
+            if (tab === 'progress') return <ProjectUpdatesPage navigate={navigate} />;
+            return <EnterpriseModulesView page="change_orders" selectedProject={selectedProject} projects={projects} user={user} />;
+          }}
+        />
+
+        <MepAssistantDrawer
+          open={assistantOpen}
+          onClose={() => setAssistantOpen(false)}
+          projectId={selectedProject || undefined}
+          projects={projects}
+          onSelectProject={setSelectedProject}
+        />
+      </>
     );
   }
 
   if (role === 'Client') {
     return (
-      <ClientPortalLayout
-        user={user}
-        logout={logout}
-        selectedProject={selectedProject}
-        projects={projects}
-        onSelectProject={setSelectedProject}
-        renderContent={(tab) => (
-          <ClientPortalContent
-            tab={tab as 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications'}
-            projectId={selectedProject}
-          />
-        )}
-      />
+      <>
+        <ClientPortalLayout
+          user={user}
+          logout={logout}
+          selectedProject={selectedProject}
+          projects={projects}
+          onSelectProject={setSelectedProject}
+          onOpenAssistant={() => setAssistantOpen(true)}
+          renderContent={(tab) => (
+            <ClientPortalContent
+              tab={tab as 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications'}
+              projectId={selectedProject}
+            />
+          )}
+        />
+
+        <MepAssistantDrawer
+          open={assistantOpen}
+          onClose={() => setAssistantOpen(false)}
+          projectId={selectedProject || undefined}
+          projects={projects}
+          onSelectProject={setSelectedProject}
+        />
+      </>
     );
   }
 
@@ -528,6 +561,8 @@ function AppShell() {
         open={assistantOpen}
         onClose={() => setAssistantOpen(false)}
         projectId={selectedProject || undefined}
+        projects={projects}
+        onSelectProject={setSelectedProject}
       />
     </>
   );
@@ -2472,45 +2507,20 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
       </>
       )}
 
-      {/* Modal: New Project */}
-      <Modal open={showNewProjectModal} onClose={() => setShowNewProjectModal(false)} title="Create New Project" size="md">
-        <form onSubmit={handleCreateProject} className="space-y-4">
-          <FormField label="Project Name" required>
-            <input type="text" required value={newProjectData.name} onChange={e => setNewProjectData(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Al Wasl Tower MEP Package" className={inputCls} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Project Code">
-              <input type="text" value={newProjectData.code} onChange={e => setNewProjectData(d => ({ ...d, code: e.target.value }))} placeholder="e.g. PRJ-202" className={inputCls} />
-            </FormField>
-            <FormField label="Status">
-              <select value={newProjectData.status} onChange={e => setNewProjectData(d => ({ ...d, status: e.target.value }))} className={selectCls}>
-                <option value="Planning">Planning</option>
-                <option value="Active">Active</option>
-                <option value="Delayed">Delayed</option>
-                <option value="Completed">Completed</option>
-              </select>
-            </FormField>
-          </div>
-          <FormField label="Client / Employer" required>
-            <input type="text" required value={newProjectData.client} onChange={e => setNewProjectData(d => ({ ...d, client: e.target.value }))} placeholder="e.g. Emaar Properties / Dubai Holding" className={inputCls} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Total Budget (USD)">
-              <input type="number" value={newProjectData.budget} onChange={e => setNewProjectData(d => ({ ...d, budget: e.target.value }))} placeholder="e.g. 5000000" className={inputCls} />
-            </FormField>
-            <FormField label="Location">
-              <input type="text" value={newProjectData.location} onChange={e => setNewProjectData(d => ({ ...d, location: e.target.value }))} placeholder="e.g. Downtown Dubai, UAE" className={inputCls} />
-            </FormField>
-          </div>
-          <FormField label="Project Scope / Description">
-            <textarea rows={3} value={newProjectData.description} onChange={e => setNewProjectData(d => ({ ...d, description: e.target.value }))} placeholder="Brief summary of MEP scope (HVAC, Electrical, Plumbing, Fire Fighting)..." className={inputCls} />
-          </FormField>
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
-            <button type="button" onClick={() => setShowNewProjectModal(false)} className={btnSecondary}>Cancel</button>
-            <button type="submit" className={btnPrimary}><Plus size={14} /> Create Project</button>
-          </div>
-        </form>
-      </Modal>
+      {/* Modal: New Project with Document Upload & Auto-Fill */}
+      <CreateProjectModal
+        open={showNewProjectModal}
+        onClose={() => setShowNewProjectModal(false)}
+        onSuccess={(created) => {
+          addToast('success', `Project "${created?.name || 'New Project'}" created successfully with complete info!`);
+          reloadProjects();
+          loadData();
+          if (created?.id) {
+            setSelectedProject(created.id);
+            navigate('project-detail', created.id);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -2841,30 +2851,21 @@ function ProjectsPage({ navigate }: { navigate: (page: Page, param?: string) => 
         </div>
       )}
 
-      {/* Create / Edit Project Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editingProject ? 'Edit Project' : 'Create New Project'} size="md">
+      {/* Create Project Modal with Document Upload & Auto-Fill */}
+      <CreateProjectModal
+        open={showModal && !editingProject}
+        onClose={() => setShowModal(false)}
+        onSuccess={(created) => {
+          addToast('success', `Project "${created?.name || 'New Project'}" created successfully with complete info!`);
+          reloadGlobalProjects();
+          loadProjects();
+          if (created?.id) setSelectedProject(created.id);
+        }}
+      />
+
+      {/* Edit Project Modal */}
+      <Modal open={showModal && !!editingProject} onClose={() => setShowModal(false)} title="Edit Project" size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!editingProject && (
-            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Sparkles size={16} className="text-blue-600 flex-shrink-0" />
-                <div className="text-xs text-blue-900">
-                  <strong className="block font-bold">Have a contractor document?</strong>
-                  Auto-fill all fields, work packages, and milestones automatically.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowModal(false);
-                  setShowContractorDocModal(true);
-                }}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors whitespace-nowrap shadow-sm"
-              >
-                Auto-Fill
-              </button>
-            </div>
-          )}
           <FormField label="Project Name" required>
             <input type="text" required value={formData.name} onChange={e => setFormData(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Dubai Marina Mall HVAC Replacement" className={inputCls} />
           </FormField>
@@ -2974,12 +2975,13 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
   const { user } = useAuth();
   const { addToast } = useToast();
   const activeProjectId = projectId || selectedProject || (projects[0]?.id ?? '');
+  const isManager = ['Admin', 'ProjectManager'].includes(user?.role);
 
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<any | null>(null);
   const [feed, setFeed] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'feed' | 'tasks' | 'actions' | 'decisions' | 'team'>('master');
+  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'documents' | 'feed' | 'tasks' | 'actions' | 'decisions' | 'team'>('master');
   const [showRiskMatrix, setShowRiskMatrix] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -3116,6 +3118,20 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={loadProjectDetails} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
           <button
+            onClick={() => setActiveTab('documents')}
+            className={cn(btnSecondary, activeTab === 'documents' ? 'bg-blue-50 text-blue-700 border-blue-200' : '')}
+          >
+            <Folder size={14} className="text-blue-600" />
+            Documents &amp; Contract
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-copilot', { detail: { projectId: activeProjectId } }))}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-xs font-bold rounded-xl hover:from-amber-700 hover:to-amber-800 transition-all shadow-sm"
+          >
+            <Sparkles size={13} />
+            Ask Copilot
+          </button>
+          <button
             onClick={() => setShowContractorDocModal(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
           >
@@ -3173,6 +3189,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         {[
           { id: 'master', label: 'Project Master & Hierarchy', icon: Layers },
           { id: 'overview', label: 'Overview & KPIs', icon: Briefcase },
+          { id: 'documents', label: 'Documents & Contract', icon: Folder },
           { id: 'feed', label: `Live Feed & Updates (${feed.length})`, icon: TrendingUp },
           { id: 'tasks', label: `Tasks & Programme (${tasks.length})`, icon: CheckSquare },
           { id: 'actions', label: 'Project Actions', icon: AlertCircle },
@@ -3242,6 +3259,16 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
             </div>
           </Card>
         </div>
+      )}
+
+      {/* Tab: Documents & Contract */}
+      {activeTab === 'documents' && (
+        <ProjectDocumentsSection
+          projectId={activeProjectId}
+          projectName={p?.name}
+          onProjectUpdated={loadProjectDetails}
+          canManage={isManager}
+        />
       )}
 
       {/* Tab: Feed */}

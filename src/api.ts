@@ -41,10 +41,37 @@ async function request<T>(method: string, path: string, body?: any): Promise<T> 
     },
     ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
   });
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    let errMsg = `HTTP ${res.status}`;
+    if (isJson) {
+      const err = await res.json().catch(() => ({}));
+      errMsg = err.error || err.message || errMsg;
+    } else {
+      const text = await res.text().catch(() => '');
+      if (text.includes('<!doctype') || text.includes('<html')) {
+        errMsg = `Server returned HTML (${res.status}) instead of JSON for ${path}. Endpoint might not exist.`;
+      } else if (text) {
+        errMsg = text.slice(0, 150);
+      }
+    }
+    throw new Error(errMsg);
   }
+
+  if (!isJson) {
+    const text = await res.text().catch(() => '');
+    if (text.includes('<!doctype') || text.includes('<html')) {
+      throw new Error(`Server returned HTML instead of JSON for ${path}. Please verify server routes.`);
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error(`Expected JSON response from ${path}, received: ${text.slice(0, 80)}`);
+    }
+  }
+
   return res.json();
 }
 
@@ -194,6 +221,15 @@ export const projectsApi = {
     }),
 };
 
+// Documents
+export const documentsApi = {
+  list: (projectId?: string) => api.get<any[]>(`/api/documents${projectId ? `?project_id=${projectId}` : ''}`),
+  get: (id: string) => api.get<any>(`/api/documents/${id}`),
+  create: (data: any) => api.post<any>('/api/documents', data),
+  update: (id: string, data: any) => api.put<any>(`/api/documents/${id}`, data),
+  delete: (id: string) => api.delete<any>(`/api/documents/${id}`),
+};
+
 // Work Packages
 export const workPackagesApi = {
   list: (params?: Record<string, string>) => api.get<any[]>(`/api/work_packages${params ? '?' + new URLSearchParams(params).toString() : ''}`),
@@ -316,3 +352,26 @@ export const risksApi = {
   update: (id: string, data: any) => api.put<any>(`/api/risks/${id}`, data),
   delete: (id: string) => api.delete<any>(`/api/risks/${id}`),
 };
+
+// MEP Project Copilot Intelligence API
+export const copilotApi = {
+  chat: (data: {
+    question?: string;
+    message?: string;
+    messages?: Array<{ role: 'user' | 'assistant' | 'model'; content?: string; text?: string }>;
+    project_id?: string;
+    context?: any;
+    model_tier?: string;
+  }) => api.post<{
+    reply: string;
+    answer: string;
+    project_id?: string;
+    project_name?: string;
+    quick_facts?: any;
+    suggested_followups?: string[];
+    model_used?: string;
+  }>('/api/ai/chat', data),
+  getContext: (projectId?: string) =>
+    api.get<any>(`/api/ai/copilot/context${projectId ? `?project_id=${projectId}` : ''}`),
+};
+

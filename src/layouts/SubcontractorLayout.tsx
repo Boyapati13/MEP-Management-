@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, LogOut, HardHat, CheckSquare, FileText, TrendingUp, DollarSign } from 'lucide-react';
+import { Building2, LogOut, HardHat, CheckSquare, FileText, TrendingUp, DollarSign, Sparkles } from 'lucide-react';
 
 export type SubcontractorTab = 'home' | 'work' | 'technical' | 'progress' | 'commercial';
 
@@ -9,6 +9,7 @@ interface SubcontractorLayoutProps {
   selectedProject: string;
   projects: any[];
   onSelectProject: (id: string) => void;
+  onOpenAssistant?: () => void;
   renderContent: (tab: SubcontractorTab) => React.ReactNode;
 }
 
@@ -26,6 +27,7 @@ export function SubcontractorLayout({
   selectedProject,
   projects,
   onSelectProject,
+  onOpenAssistant,
   renderContent,
 }: SubcontractorLayoutProps) {
   const [activeTab, setActiveTab] = useState<SubcontractorTab>('home');
@@ -54,6 +56,16 @@ export function SubcontractorLayout({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {onOpenAssistant && (
+            <button
+              onClick={onOpenAssistant}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors flex-shrink-0"
+              title="Ask MEP AI Copilot about this project"
+            >
+              <Sparkles size={14} />
+              <span className="hidden sm:inline">Copilot</span>
+            </button>
+          )}
           <span className="text-xs text-slate-300 font-medium truncate max-w-[120px]">{user?.name || user?.username}</span>
           <button
             onClick={logout}
