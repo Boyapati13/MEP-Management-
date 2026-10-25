@@ -140,74 +140,97 @@
   .gantt-label{display:flex;align-items:baseline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   @media(max-width:980px){.today-grid{grid-template-columns:1fr;}}
 
-  /* Executive operations-console theme */
+  /* Blueprint Paper + Safety Amber Enterprise AEC Theme (from gathering-planner-hub) */
   :root{
-    --bg:#08111c;--card:#101c2b;--card-raised:#142437;--border:#263b52;
-    --text:#edf4f7;--muted:#91a6b8;--primary:#6fd3c1;--secondary:#1f8f86;
-    --accent:#f3b562;--danger:#ef6a63;--success:#6fd3a0;--warning:#f3b562;
-    --shadow:0 18px 45px rgba(0,0,0,.2);--hairline:rgba(215,232,238,.08);
+    --bg:#0b1523;--card:#111f31;--card-raised:#16283e;--border:#243952;
+    --text:#f1f5f9;--muted:#94a3b8;--primary:#38bdf8;--secondary:#0284c7;
+    --accent:#f59e0b;--danger:#ef4444;--success:#10b981;--warning:#f59e0b;
+    --shadow:0 4px 16px rgba(0,0,0,.18);--hairline:rgba(226,232,240,.09);
+    --panel:#111f31;
   }
-  body{font-family:'Aptos','Avenir Next','Trebuchet MS',sans-serif;letter-spacing:.01em;background-color:var(--bg);background-image:radial-gradient(circle at 82% -10%,rgba(111,211,193,.12),transparent 32%),radial-gradient(circle at 0% 100%,rgba(243,181,98,.07),transparent 28%),linear-gradient(135deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:auto,auto,38px 38px;}
-  body:before{content:'';position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(8,17,28,.22),transparent 18%,transparent 82%,rgba(8,17,28,.18));z-index:-1;}
-  #loginScreen{background:radial-gradient(circle at 18% 18%,rgba(111,211,193,.2),transparent 30%),radial-gradient(circle at 84% 84%,rgba(243,181,98,.12),transparent 26%),#08111c;background-image:linear-gradient(135deg,rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(45deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:38px 38px,38px 38px;}
-  .login-box{width:400px;background:rgba(16,28,43,.92);border:1px solid rgba(111,211,193,.25);border-radius:18px;padding:40px;box-shadow:0 26px 90px rgba(0,0,0,.48);backdrop-filter:blur(16px);animation:riseIn .45s ease both;}
+  body{font-family:'IBM Plex Sans','Inter','Segoe UI',system-ui,sans-serif;letter-spacing:0;background-color:var(--bg);background-image:linear-gradient(rgba(56,189,248,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.035) 1px,transparent 1px);background-size:24px 24px;}
+  body:before{display:none;}
+  .hazard-stripe{height:5px;width:100%;background:repeating-linear-gradient(-45deg,#f59e0b 0 10px,#1e3a5f 10px 20px);flex-shrink:0;}
+  #loginScreen{background:radial-gradient(circle at 20% 20%,rgba(245,158,11,.12),transparent 35%),#0b1523;background-image:linear-gradient(rgba(56,189,248,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.04) 1px,transparent 1px);background-size:24px 24px;}
+  .login-box{width:400px;background:#111f31;border:1px solid var(--border);border-top:4px solid #f59e0b;border-radius:8px;padding:34px 36px;box-shadow:0 20px 60px rgba(0,0,0,.45);animation:riseIn .3s ease both;}
   .login-box:before{display:none;}
-  .login-box h1{font-size:27px;letter-spacing:-.03em;line-height:1.1;}
-  .login-box p{font-size:13px;margin:9px 0 25px;line-height:1.5;}
-  .login-box label,.form-grid label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;}
-  .login-box select,.login-box input{padding:12px 13px;border-radius:8px;background:#0b1724;border-color:#2b455b;}
-  .login-box button{margin-top:24px;padding:13px;background:var(--primary);color:#07171a;border-radius:8px;box-shadow:0 8px 22px rgba(111,211,193,.18);}
-  #sidebar{width:258px;background:linear-gradient(180deg,rgba(14,28,43,.97),rgba(9,19,30,.97));border-right:1px solid var(--hairline);box-shadow:16px 0 45px rgba(0,0,0,.12);transition:width .22s ease;overflow-y:auto;overflow-x:hidden;}
-  .sidebar-brand{display:flex;align-items:flex-start;border-bottom:1px solid var(--hairline);}
-  #sidebar h1{flex:1;font-size:19px;padding:24px 10px 20px 21px;letter-spacing:-.02em;white-space:nowrap;}
-  #sidebar h1:before{content:'◆';color:var(--primary);font-size:12px;margin-right:9px;vertical-align:2px;}
-  #sidebar h1 span{font-size:10px;letter-spacing:.15em;text-transform:uppercase;margin:7px 0 0 23px;color:var(--accent);}
-  .sidebar-toggle{margin:20px 13px 0 0;width:28px;height:28px;border:1px solid var(--border);border-radius:7px;background:rgba(111,211,193,.08);color:var(--primary);font-size:23px;line-height:20px;cursor:pointer;}
-  .sidebar-toggle:hover{background:rgba(111,211,193,.17);}
-  .user-chip{padding:18px 21px;border-bottom:1px solid var(--hairline);background:rgba(111,211,193,.035);white-space:nowrap;display:flex;align-items:center;justify-content:space-between;gap:10px;}
-  .user-chip b{font-size:14px;}.user-chip span{font-size:11px;color:var(--primary);}
-  #notifBellBtn{position:relative;background:rgba(255,255,255,.04);border:1px solid var(--hairline);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s;}
+  .login-box h1{font-size:22px;letter-spacing:-.02em;line-height:1.15;font-weight:700;}
+  .login-box p{font-size:12px;margin:6px 0 20px;line-height:1.45;}
+  .login-box label,.form-grid label{font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted);}
+  .login-box select,.login-box input{padding:10px 12px;border-radius:6px;background:#0b1523;border-color:var(--border);}
+  .login-box button{margin-top:20px;padding:11px;background:#f59e0b;color:#111827;border-radius:6px;font-weight:700;}
+  #sidebar{width:264px;background:#0f1b2b;border-right:1px solid var(--border);transition:width .2s ease;overflow-y:auto;overflow-x:hidden;}
+  .sidebar-brand{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--hairline);}
+  .brand-logo-wrap{display:flex;align-items:center;gap:10px;min-width:0;}
+  .brand-badge{width:30px;height:30px;border-radius:6px;background:#f59e0b;color:#111827;font-weight:800;font-size:15px;display:grid;place-items:center;flex-shrink:0;}
+  #sidebar h1{flex:1;font-size:15px;font-weight:700;padding:0;letter-spacing:-.01em;white-space:nowrap;border:0;}
+  #sidebar h1:before{display:none;}
+  #sidebar h1 span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin:2px 0 0 0;color:var(--muted);font-weight:600;}
+  .sidebar-toggle{margin:0;width:26px;height:26px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.04);color:var(--muted);font-size:18px;line-height:18px;cursor:pointer;}
+  .sidebar-toggle:hover{background:rgba(255,255,255,.1);color:var(--text);}
+  .user-chip{padding:12px 16px;border-bottom:1px solid var(--hairline);background:rgba(255,255,255,.02);white-space:nowrap;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .user-chip b{font-size:13px;font-weight:600;}.user-chip span{font-size:11px;color:#f59e0b;font-weight:600;}
+  .sidebar-search-wrap{padding:10px 12px 6px;border-bottom:1px solid var(--hairline);}
+  .sidebar-search-input{width:100%;padding:7px 10px;font-size:12px;border-radius:6px;background:#09121e;border:1px solid var(--border);color:var(--text);}
+  .sidebar-search-input::placeholder{color:#64748b;}
+  #notifBellBtn{position:relative;background:rgba(255,255,255,.04);border:1px solid var(--hairline);color:var(--muted);cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s;}
   #notifBellBtn:hover{color:var(--text);border-color:var(--primary);}
   #notifBadge{display:none;position:absolute;top:-4px;right:-4px;background:var(--danger,#ef4444);color:#fff;border-radius:9px;font-size:9px;line-height:1;padding:3px 4px;font-weight:700;min-width:14px;text-align:center;}
-  #notifDropdown{display:none;position:fixed;top:140px;left:16px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:8px;max-width:320px;min-width:280px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
-  .nav-group{padding:13px 0 3px;border-bottom:1px solid rgba(215,232,238,.045);}.nav-group:last-of-type{border-bottom:0;}
-  .nav-group-label{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 21px 7px;border:0;background:transparent;color:#7892a5;font-family:inherit;font-size:9px;font-weight:700;letter-spacing:.16em;text-align:left;text-transform:uppercase;cursor:pointer;}
-  .nav-group-label span{font-size:14px;line-height:8px;color:var(--primary);transition:transform .2s;}.nav-group:not(.is-open) .nav-group-label span{transform:rotate(0deg);}
+  #notifDropdown{display:none;position:fixed;top:120px;left:16px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:6px;max-width:320px;min-width:280px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
+  .nav-group{padding:8px 0 4px;border-bottom:1px solid rgba(226,232,240,.04);}.nav-group:last-of-type{border-bottom:0;}
+  .nav-group-label{display:flex;justify-content:space-between;align-items:center;width:100%;padding:4px 14px;border:0;background:transparent;color:#94a3b8;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.08em;text-align:left;text-transform:uppercase;cursor:pointer;}
+  .nav-group-label:hover{color:var(--text);}
+  .nav-group-label span{font-size:12px;line-height:8px;color:var(--muted);transition:transform .2s;}.nav-group:not(.is-open) .nav-group-label span{transform:rotate(0deg);}
   .nav-group:not(.is-open) .nav-item{display:none;}
-  .nav-item{margin:2px 10px;padding:10px 13px;border-left:2px solid transparent;border-radius:7px;font-size:12px;letter-spacing:.025em;color:#91a6b8;transition:background .18s,color .18s,transform .18s;}
-  .nav-item:hover{background:rgba(111,211,193,.07);color:var(--text);transform:translateX(2px);}
-  .nav-item.active{background:linear-gradient(90deg,rgba(111,211,193,.17),rgba(111,211,193,.035));border-left-color:var(--primary);color:var(--text);box-shadow:inset 0 0 22px rgba(111,211,193,.035);}
-  #sidebar.sidebar-collapsed{width:72px;}#sidebar.sidebar-collapsed .sidebar-brand{justify-content:center;}#sidebar.sidebar-collapsed h1,#sidebar.sidebar-collapsed .user-chip,#sidebar.sidebar-collapsed .nav-group-label,#sidebar.sidebar-collapsed .nav-item,#sidebar.sidebar-collapsed #logoutLink{display:none;}#sidebar.sidebar-collapsed .sidebar-toggle{margin:20px auto;transform:rotate(180deg);}#sidebar.sidebar-collapsed .nav-group{border:0;padding:0;}
-  #main{padding:30px 34px;max-width:1700px;background:linear-gradient(180deg,rgba(9,18,29,.38),rgba(9,18,29,.1));}
-  .topbar{margin-bottom:27px;padding-bottom:18px;border-bottom:1px solid var(--hairline);}
-  .topbar h2{font-size:25px;letter-spacing:-.035em;line-height:1;}
-  #projectSelect{min-width:220px;}
-  #globalSearch{min-width:260px!important;background:rgba(10,23,36,.8);}
-  select,input,textarea{padding:10px 12px;border-radius:8px;background:#0b1724;border-color:#2b455b;color:var(--text);outline:none;transition:border-color .16s,box-shadow .16s;}
-  select:focus,input:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(111,211,193,.1);}
-  .btn{padding:10px 15px;border-radius:8px;background:var(--secondary);box-shadow:0 5px 15px rgba(0,0,0,.14);transition:transform .15s,filter .15s;}
-  .btn:hover{filter:brightness(1.12);transform:translateY(-1px);}.btn.accent{background:var(--accent);color:#281b08;}
-  .btn.ghost{border-color:#396077;color:var(--primary);background:rgba(111,211,193,.025);}
-  .stat-grid{gap:12px;margin-bottom:20px;}
-  .stat-card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(20,36,55,.95),rgba(15,27,42,.95));border-color:var(--hairline);border-radius:12px;padding:18px;box-shadow:0 12px 28px rgba(0,0,0,.12);}
-  .stat-card:after{content:'';position:absolute;right:-22px;bottom:-28px;width:86px;height:86px;border:1px solid rgba(111,211,193,.13);border-radius:50%;}
-  .stat-card .num{font-size:29px;color:var(--primary);letter-spacing:-.04em;}.stat-card .lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;}
-  .panel{background:linear-gradient(145deg,rgba(16,29,44,.97),rgba(13,24,38,.97));border-color:var(--hairline);border-radius:13px;padding:22px;box-shadow:var(--shadow);}
-  .panel h3{font-size:14px;letter-spacing:.01em;}.panel h3:before{content:'';display:inline-block;width:3px;height:14px;background:var(--primary);border-radius:3px;margin-right:9px;vertical-align:-2px;}
-  th{font-size:9px;letter-spacing:.12em;padding:12px 10px;color:#7690a5;border-bottom-color:var(--hairline);}
-  td{padding:12px 10px;border-bottom-color:var(--hairline);font-size:12px;} tr:hover td{background:rgba(111,211,193,.035);}
-  .badge{border-radius:5px;padding:4px 8px;font-size:9px;letter-spacing:.04em;text-transform:uppercase;}
-  .badge.open{background:rgba(239,106,99,.14);color:#ff9a91}.badge.progress{background:rgba(243,181,98,.14);color:#ffd18d}.badge.closed{background:rgba(111,211,160,.14);color:#96edbc}
-  .project-card{background:linear-gradient(145deg,#15283c,#102235);border-color:var(--hairline);border-radius:13px;padding:20px;box-shadow:0 12px 25px rgba(0,0,0,.12);}
-  .project-card:hover{border-color:rgba(111,211,193,.55);box-shadow:0 18px 35px rgba(0,0,0,.22);}.project-card h3{font-size:17px;letter-spacing:-.025em;}
-  .project-metrics b{font-size:15px;}.health{font-size:10px;letter-spacing:.14em;}
-  .modal-overlay{background:rgba(3,9,15,.78);backdrop-filter:blur(5px);}.modal{background:#122235;border-color:rgba(111,211,193,.22);border-radius:14px;padding:28px;box-shadow:0 25px 80px rgba(0,0,0,.48);}
-  .modal h3{font-size:18px;letter-spacing:-.02em;}.modal-actions{border-top:1px solid var(--hairline);padding-top:16px;}
-  .api-banner{border-radius:8px;background:rgba(243,181,98,.1);border-color:rgba(243,181,98,.45);}
-  @keyframes riseIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-  #viewContent{animation:riseIn .25s ease both;}
-  @media(max-width:850px){#app.show{display:block}#sidebar{width:100%;height:auto;max-height:290px;display:block;position:relative}#sidebar.sidebar-collapsed{width:100%;height:58px;min-height:58px}#sidebar h1{padding:16px}.sidebar-toggle{margin:13px 14px 0 0}.user-chip{display:inline-block;border:0;padding:10px 16px}.nav-group{display:block}.nav-item{display:block!important;margin:2px 10px;padding:8px 9px}.nav-group:not(.is-open) .nav-item{display:none!important}.nav-item[style*="display: none"]{display:none!important}#main{padding:20px 15px}.topbar{align-items:flex-start}.topbar>div{width:100%}#globalSearch{min-width:0!important;flex:1}.project-card{min-width:0}.panel{padding:15px;overflow-x:auto}table{min-width:650px}}
-  @media(max-height:700px){.login-box{padding:26px 32px;max-height:calc(100vh - 28px);overflow-y:auto}.login-box h1{font-size:23px}.login-box p{margin-bottom:14px}.login-box label{margin-top:9px}.login-box button{margin-top:15px}}
+  .nav-item{margin:1px 8px;padding:7px 11px;border-left:2px solid transparent;border-radius:5px;font-size:12.5px;color:#cbd5e1;transition:background .12s,color .12s;}
+  .nav-item:hover{background:rgba(255,255,255,.06);color:#fff;}
+  .nav-item.active{background:#f59e0b;border-left-color:#d97706;color:#111827;font-weight:700;}
+  #sidebar.sidebar-collapsed{width:64px;}#sidebar.sidebar-collapsed .sidebar-brand{justify-content:center;}#sidebar.sidebar-collapsed .brand-logo-wrap,#sidebar.sidebar-collapsed .user-chip,#sidebar.sidebar-collapsed .sidebar-search-wrap,#sidebar.sidebar-collapsed .nav-group-label,#sidebar.sidebar-collapsed .nav-item,#sidebar.sidebar-collapsed #logoutLink{display:none;}#sidebar.sidebar-collapsed .sidebar-toggle{margin:10px auto;transform:rotate(180deg);}#sidebar.sidebar-collapsed .nav-group{border:0;padding:0;}
+  #main{padding:22px 28px;max-width:1760px;background:transparent;}
+  .topbar{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+  .topbar h2{font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.1;}
+  #projectSelect{min-width:220px;font-weight:600;}
+  #globalSearch{min-width:240px!important;background:#09121e;}
+  select,input,textarea{padding:8px 11px;border-radius:6px;background:#09121e;border:1px solid var(--border);color:var(--text);outline:none;transition:border-color .15s;}
+  select:focus,input:focus,textarea:focus{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.15);}
+  .btn{padding:8px 13px;border-radius:6px;background:var(--secondary);font-size:12px;font-weight:600;transition:filter .15s;}
+  .btn:hover{filter:brightness(1.1);}.btn.accent{background:#f59e0b;color:#111827;font-weight:700;}
+  .btn.ghost{border:1px solid var(--border);color:var(--text);background:rgba(255,255,255,.03);}
+  .btn.ghost:hover{border-color:#f59e0b;color:#f59e0b;}
+  .stat-grid{gap:10px;margin-bottom:16px;}
+  .stat-card{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;box-shadow:var(--shadow);}
+  .stat-card:after{display:none;}
+  .stat-card .num{font-size:24px;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}.stat-card .lbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .panel h3{font-size:14px;font-weight:700;letter-spacing:0;}.panel h3:before{content:'';display:inline-block;width:3px;height:14px;background:#f59e0b;border-radius:2px;margin-right:8px;vertical-align:-2px;}
+  th{font-size:10px;letter-spacing:.08em;padding:10px;color:var(--muted);border-bottom:1px solid var(--border);background:rgba(0,0,0,.18);}
+  td{padding:10px;border-bottom:1px solid var(--hairline);font-size:12.5px;font-variant-numeric:tabular-nums;} tr:hover td{background:rgba(255,255,255,.025);}
+  .badge{border-radius:4px;padding:3px 7px;font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;}
+  .badge.open{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}.badge.progress{background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid rgba(245,158,11,.3)}.badge.closed{background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.3)}
+  .project-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;box-shadow:var(--shadow);}
+  .project-card:hover{border-color:#f59e0b;}.project-card h3{font-size:16px;letter-spacing:-.01em;}
+  .project-metrics b{font-size:14px;}.health{font-size:10px;letter-spacing:.1em;}
+  .modal-overlay{background:rgba(3,9,15,.78);backdrop-filter:blur(4px);}.modal{background:#111f31;border:1px solid var(--border);border-radius:8px;padding:24px;box-shadow:0 25px 80px rgba(0,0,0,.55);}
+  .modal h3{font-size:17px;letter-spacing:-.01em;}.modal-actions{border-top:1px solid var(--hairline);padding-top:14px;}
+  .api-banner{border-radius:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);}
+  /* Kanban Board & Discipline Chips */
+  .kanban-board{display:grid;grid-template-columns:repeat(4,minmax(250px,1fr));gap:12px;align-items:start;overflow-x:auto;padding-bottom:8px;}
+  .kanban-col{background:#0b1523;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;min-height:420px;max-height:74vh;}
+  .kanban-col-header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+  .kanban-col-body{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;}
+  .kanban-card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:11px;cursor:grab;transition:border-color .15s,transform .12s;display:flex;flex-direction:column;gap:7px;}
+  .kanban-card:hover{border-color:#f59e0b;transform:translateY(-1px);}
+  .kanban-card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.35;}
+  .disc-pill{display:inline-flex;align-items:center;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  .disc-HVAC{background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.3);}
+  .disc-Electrical{background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid rgba(245,158,11,.3);}
+  .disc-Plumbing{background:rgba(20,184,166,.15);color:#5eead4;border:1px solid rgba(20,184,166,.3);}
+  .disc-Fire{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3);}
+  .disc-BMS{background:rgba(168,85,247,.15);color:#d8b4fe;border:1px solid rgba(168,85,247,.3);}
+  @keyframes riseIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  #viewContent{animation:riseIn .2s ease both;}
+  @media(max-width:850px){#app.show{display:block}#sidebar{width:100%;height:auto;max-height:310px;display:block;position:relative}#sidebar.sidebar-collapsed{width:100%;height:54px;min-height:54px}.user-chip{display:inline-block;border:0;padding:10px 16px}.nav-group{display:block}.nav-item{display:block!important;margin:2px 10px;padding:7px 9px}.nav-group:not(.is-open) .nav-item{display:none!important}.nav-item[style*="display: none"]{display:none!important}#main{padding:16px 12px}.topbar{align-items:flex-start}.topbar>div{width:100%}#globalSearch{min-width:0!important;flex:1}.project-card{min-width:0}.panel{padding:14px;overflow-x:auto}table{min-width:650px}.kanban-board{grid-template-columns:1fr;}}
+  @media(max-height:700px){.login-box{padding:26px 32px;max-height:calc(100vh - 28px);overflow-y:auto}.login-box h1{font-size:21px}.login-box p{margin-bottom:14px}.login-box label{margin-top:9px}.login-box button{margin-top:15px}}
 
   /* Interactive Floor Plan styles */
   .punch-container { display: flex; flex-direction: column; gap: 16px; }
@@ -504,7 +527,14 @@
 
 <div id="app">
   <div id="sidebar">
-    <div class="sidebar-brand"><h1>MEP Project Manager<span>Full Stack Edition</span></h1><button id="sidebarToggle" class="sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button></div>
+    <div class="hazard-stripe"></div>
+    <div class="sidebar-brand">
+      <div class="brand-logo-wrap">
+        <div class="brand-badge">M</div>
+        <h1>MEP Manager<span>Project Controls</span></h1>
+      </div>
+      <button id="sidebarToggle" class="sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button>
+    </div>
     <div class="user-chip">
       <div>
         <b id="chipName">-</b><span id="chipRole">-</span>
@@ -514,69 +544,76 @@
         <span id="notifBadge"></span>
       </button>
     </div>
+    <div class="sidebar-search-wrap">
+      <input id="navRegisterSearch" class="sidebar-search-input" placeholder="Find a register...">
+    </div>
     <div id="notifDropdown"></div>
-    <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">AI & Logistics <span>⌃</span></button>
-      <div class="nav-item" data-view="gemini_chat">✨ Gemini MEP Advisor</div>
-      <div class="nav-item" data-view="maps_logistics">🗺️ Site Logistics & Maps</div>
-      <div class="nav-item" data-view="my_cloud_notes">☁️ Firestore Notes & Sync</div>
-    </div>
-    <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Google Workspace <span>⌃</span></button>
-      <div class="nav-item" data-view="workspace_gmail">📧 Gmail & Correspondence</div>
-      <div class="nav-item" data-view="workspace_calendar">📅 Google Calendar & Milestones</div>
-      <div class="nav-item" data-view="workspace_drive">📁 Google Drive & Drawings</div>
-    </div>
     <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Overview <span>⌃</span></button>
-      <div class="nav-item active" data-view="dashboard">Dashboard</div>
+      <div class="nav-item active" data-view="dashboard">Project Overview</div>
+      <div class="nav-item" data-view="projects">Project Portfolio</div>
       <div class="nav-item" data-view="client_dashboard">Client Portal</div>
-      <div class="nav-item" data-view="progress_reports">Progress Reports</div>
-      <div class="nav-item" data-view="site_today">Today on Site</div>
-      <div class="nav-item" data-view="calendar">Week Calendar</div>
-      <div class="nav-item" data-view="attendance">Worker Attendance</div>
-      <div class="nav-item" data-view="projects">Projects</div>
     </div>
-    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Plan & Deliver <span>⌄</span></button>
-      <div class="nav-item" data-view="tasks">Tasks</div>
+    <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Planning & Delivery <span>⌃</span></button>
+      <div class="nav-item" data-view="tasks">Tasks & Schedule</div>
       <div class="nav-item" data-view="gantt">Programme / Gantt</div>
-      <div class="nav-item" data-view="work_packages">Work Packages</div>
-      <div class="nav-item" data-view="progress_submissions">Subcontractor Claims</div>
-      <div class="nav-item" data-view="wbs_items">Work Breakdown</div>
+      <div class="nav-item" data-view="planner">Lookahead Planner</div>
+      <div class="nav-item" data-view="wbs_items">Work Breakdown (WBS)</div>
       <div class="nav-item" data-view="dependencies">Dependencies</div>
-      <div class="nav-item" data-view="procurement_items">Procurement</div>
-      <div class="nav-item" data-view="material_requests">Material Requests</div>
-      <div class="nav-item" data-view="purchase_orders">Purchase Orders</div>
+      <div class="nav-item" data-view="work_packages">Work Packages</div>
     </div>
-    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Technical & Commercial <span>⌄</span></button>
-      <div class="nav-item" data-view="clarifications">Clarifications Hub</div>
+    <div class="nav-group is-open"><button class="nav-group-label" type="button" aria-expanded="true">Commercial & Clients <span>⌃</span></button>
+      <div class="nav-item" data-view="boq_items">BOQ / Tender Register</div>
+      <div class="nav-item" data-view="costs">Budget & Costs</div>
+      <div class="nav-item" data-view="change_orders">Change Orders</div>
+      <div class="nav-item" data-view="progress_reports">Progress Reports</div>
+      <div class="nav-item" data-view="companies">Companies & Parties</div>
+    </div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Design & Documents <span>⌄</span></button>
+      <div class="nav-item" data-view="documents">Documents & Drawings</div>
       <div class="nav-item" data-view="rfis">RFIs</div>
       <div class="nav-item" data-view="submittals">Submittals</div>
-      <div class="nav-item" data-view="transmittals">Transmittals & Revisions</div>
-      <div class="nav-item" data-view="change_orders">Change Orders</div>
-      <div class="nav-item" data-view="costs">Budget & Costs</div>
-      <div class="nav-item" data-view="risks">Risk Register</div>
-      <div class="nav-item" data-view="boq_items">BOQ / Tender Import</div>
-      <div class="nav-item" data-view="documents">Documents</div>
-      <div class="nav-item" data-view="planner">Planner</div>
-    </div>
-    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Site & Quality <span>⌄</span></button>
-      <div class="nav-item" data-view="dailylogs">Daily Logs</div>
-      <div class="nav-item" data-view="punchlist">Punch List</div>
-      <div class="nav-item" data-view="inspections">Inspections</div>
-      <div class="nav-item" data-view="ncrs">NCRs</div>
-      <div class="nav-item" data-view="safety_incidents">Safety</div>
-      <div class="nav-item" data-view="equipment">Equipment</div>
-      <div class="nav-item" data-view="timesheets">Timesheets</div>
-    </div>
-    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Closeout <span>⌄</span></button>
-      <div class="nav-item" data-view="commissioning_tests">Commissioning</div>
-      <div class="nav-item" data-view="handover_items">Handover</div>
+      <div class="nav-item" data-view="clarifications">Clarifications</div>
+      <div class="nav-item" data-view="transmittals">Transmittals</div>
       <div class="nav-item" data-view="meeting_minutes">Meeting Minutes</div>
     </div>
-    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Governance <span>⌄</span></button>
-      <div class="nav-item" data-view="companies">Companies & Parties</div>
-      <div class="nav-item" data-view="audit">Audit Trail</div>
-      <div class="nav-item" data-view="users">Users & Roles (Admin)</div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Procurement <span>⌄</span></button>
+      <div class="nav-item" data-view="material_requests">Material Requests</div>
+      <div class="nav-item" data-view="procurement_items">Procurement Register</div>
+      <div class="nav-item" data-view="purchase_orders">Purchase Orders</div>
     </div>
-    <div style="margin-top:auto;padding:14px 16px;font-size:11px;color:var(--muted);"><a href="#" id="logoutLink" style="color:var(--accent);">Logout</a></div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Site Operations <span>⌄</span></button>
+      <div class="nav-item" data-view="site_today">Today on Site</div>
+      <div class="nav-item" data-view="dailylogs">Daily Logs</div>
+      <div class="nav-item" data-view="punchlist">Punch / Snag List</div>
+      <div class="nav-item" data-view="equipment">Equipment</div>
+      <div class="nav-item" data-view="progress_submissions">Subcontractor Claims</div>
+      <div class="nav-item" data-view="maps_logistics">Site Logistics & Maps</div>
+    </div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Quality & Safety <span>⌄</span></button>
+      <div class="nav-item" data-view="inspections">Inspections</div>
+      <div class="nav-item" data-view="ncrs">NCRs</div>
+      <div class="nav-item" data-view="safety_incidents">Safety Incidents</div>
+      <div class="nav-item" data-view="risks">Risk Register</div>
+    </div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Workforce <span>⌄</span></button>
+      <div class="nav-item" data-view="attendance">Worker Attendance</div>
+      <div class="nav-item" data-view="calendar">Week Calendar</div>
+      <div class="nav-item" data-view="timesheets">Timesheets</div>
+    </div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Commissioning & Handover <span>⌄</span></button>
+      <div class="nav-item" data-view="commissioning_tests">Commissioning</div>
+      <div class="nav-item" data-view="handover_items">Handover</div>
+    </div>
+    <div class="nav-group"><button class="nav-group-label" type="button" aria-expanded="false">Administration & Advisor <span>⌄</span></button>
+      <div class="nav-item" data-view="gemini_chat">Technical Advisor (AI)</div>
+      <div class="nav-item" data-view="users">Users & Roles</div>
+      <div class="nav-item" data-view="audit">Audit Log</div>
+      <div class="nav-item" data-view="my_cloud_notes">Cloud Notes & Sync</div>
+      <div class="nav-item" data-view="workspace_gmail">Correspondence</div>
+      <div class="nav-item" data-view="workspace_calendar">Milestone Sync</div>
+      <div class="nav-item" data-view="workspace_drive">Drive Repository</div>
+    </div>
+    <div style="margin-top:auto;padding:14px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--hairline);"><a href="#" id="logoutLink" style="color:#f59e0b;font-weight:600;text-decoration:none;">Sign out</a></div>
   </div>
   <div id="main">
     <div class="topbar">
@@ -867,7 +904,9 @@ function buildNav(){
   document.querySelectorAll('.nav-item').forEach(el=>{
     const v = el.dataset.view;
     const isAiOrCloud = ['gemini_chat', 'maps_logistics', 'my_cloud_notes', 'workspace_gmail', 'workspace_calendar', 'workspace_drive'].includes(v);
-    el.style.display = (isAiOrCloud || perms.view.includes(MODULE_PERMS[v] || v)) ? '' : 'none';
+    const allowed = (isAiOrCloud || perms.view.includes(MODULE_PERMS[v] || v));
+    el.dataset.roleAllowed = allowed ? '1' : '0';
+    el.style.display = allowed ? '' : 'none';
     el.onclick = ()=>{
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       el.classList.add('active');
@@ -876,13 +915,29 @@ function buildNav(){
       render();
     };
   });
-  // Hide a whole nav group (including its label) when none of its items are
-  // visible for this role - a curated role like Client should never see a
-  // row of empty section headers with nothing underneath them.
   document.querySelectorAll('.nav-group').forEach(group=>{
-    const hasVisibleItem = Array.from(group.querySelectorAll('.nav-item')).some(el => el.style.display !== 'none');
+    const hasVisibleItem = Array.from(group.querySelectorAll('.nav-item')).some(el => el.dataset.roleAllowed === '1');
     group.style.display = hasVisibleItem ? '' : 'none';
   });
+  const regSearch = document.getElementById('navRegisterSearch');
+  if(regSearch){
+    regSearch.oninput = ()=>{
+      const q = regSearch.value.trim().toLowerCase();
+      document.querySelectorAll('.nav-group').forEach(group=>{
+        const groupTitle = (group.querySelector('.nav-group-label')?.textContent || '').toLowerCase();
+        let anyMatch = false;
+        group.querySelectorAll('.nav-item').forEach(el=>{
+          if(el.dataset.roleAllowed !== '1'){ el.style.display = 'none'; return; }
+          const txt = el.textContent.toLowerCase();
+          const match = !q || txt.includes(q) || groupTitle.includes(q);
+          el.style.display = match ? '' : 'none';
+          if(match) anyMatch = true;
+        });
+        group.style.display = anyMatch ? '' : 'none';
+        if(q && anyMatch) group.classList.add('is-open');
+      });
+    };
+  }
   document.querySelectorAll('.mobile-nav-btn[data-mobile-view]').forEach(btn=>{
     btn.onclick = ()=>{
       currentView = btn.dataset.mobileView;
@@ -959,7 +1014,7 @@ async function render(){
   const content = document.getElementById('viewContent');
   content.innerHTML = '<div class="empty">Loading...</div>';
   const fns = {
-    dashboard: renderDashboard, client_dashboard: renderClientDashboard, site_today: renderSiteToday, calendar: renderCalendar, attendance: renderAttendance, tasks: ()=>renderCrud('tasks','Task',[['title','Task'],['trade','Trade'],['assignee','Assignee'],['start','Start'],['end','End'],['progress','Progress'],['status','Status']]),
+    dashboard: renderDashboard, client_dashboard: renderClientDashboard, site_today: renderSiteToday, calendar: renderCalendar, attendance: renderAttendance, tasks: renderTasksWorkspace,
     gantt: renderGantt,
     progress_reports: renderProgressReports,
     work_packages: renderWorkPackages,
@@ -1018,15 +1073,564 @@ document.getElementById('searchBtn').onclick = async ()=>{
 };
 document.getElementById('globalSearch').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('searchBtn').click(); });
 
+const BOQ_NON_MATERIAL_RE = /\b(labou?r|installation only|testing|commissioning|service fee|service contract|preliminary|preliminaries|provisional sum|daywork|attendance|dismantling|re-installation|retermination|training|as[- ]fitted drawings|operating manuals)\b/i;
+
+function disciplineClass(d){
+  const s = (d||'').toLowerCase();
+  if(s.includes('elec')) return 'disc-Electrical';
+  if(s.includes('plumb') || s.includes('hydr')) return 'disc-Plumbing';
+  if(s.includes('fire')) return 'disc-Fire';
+  if(s.includes('bms') || s.includes('elv') || s.includes('control')) return 'disc-BMS';
+  return 'disc-HVAC';
+}
+
+async function generateProgrammeFromBOQ(rows){
+  const projId = currentProjectId === 'ALL' ? (PROJECTS[0]?.id || '') : currentProjectId;
+  if(!projId){ alert('Select a project first.'); return; }
+  const boqRows = rows || await apiFetch(`/api/boq_items?project_id=${projId}`);
+  if(!boqRows.length){ alert('Import or add BOQ lines first before generating the programme.'); return; }
+  const existingTasks = await apiFetch(`/api/tasks?project_id=${projId}`);
+  const existingTitles = new Set(existingTasks.map(t => (t.title||'').toLowerCase()));
+  const groups = new Map();
+  for(const r of boqRows){
+    const disc = String(r.discipline || 'HVAC').trim();
+    const sys = String(r.system || 'General').trim();
+    const key = `${disc}|${sys}`.toLowerCase();
+    const g = groups.get(key) || { label: sys ? `${disc} · ${sys}` : disc, disc, rows: [], value: 0 };
+    g.rows.push(r);
+    g.value += Number(r.tender_amount || (Number(r.tender_quantity||0)*Number(r.tender_rate||0)) || 0);
+    groups.set(key, g);
+  }
+  const phases = [
+    { name: 'Procurement & Delivery', share: 0.3, offsetDays: 0 },
+    { name: 'Site Installation', share: 0.5, offsetDays: 7 },
+    { name: 'Testing & Commissioning', share: 0.2, offsetDays: 21 }
+  ];
+  const baseDate = new Date();
+  const iso = d => d.toISOString().slice(0,10);
+  const addDays = (d, n) => new Date(d.getTime() + n*86400000);
+  let created = 0;
+  let idx = 0;
+  for(const [, g] of groups.entries()){
+    const startOffset = idx * 3;
+    for(const p of phases){
+      const title = `${g.label} — ${p.name}`;
+      if(existingTitles.has(title.toLowerCase())) continue;
+      const sDate = addDays(baseDate, startOffset + p.offsetDays);
+      const eDate = addDays(sDate, Math.max(4, Math.round(14 * p.share)));
+      await apiFetch('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: projId,
+          title,
+          trade: g.disc,
+          assignee: 'Site Team',
+          start: iso(sDate),
+          end: iso(eDate),
+          progress: 0,
+          status: 'Not Started',
+          wbs_code: `BOQ-${idx+1}`
+        })
+      });
+      created++;
+    }
+    idx++;
+  }
+  return created;
+}
+
+async function generateMaterialListFromBOQ(rows){
+  const projId = currentProjectId === 'ALL' ? (PROJECTS[0]?.id || '') : currentProjectId;
+  if(!projId){ alert('Select a project first.'); return; }
+  const boqRows = rows || await apiFetch(`/api/boq_items?project_id=${projId}`);
+  if(!boqRows.length){ alert('Import or add BOQ lines first.'); return; }
+  const existingReqs = await apiFetch(`/api/material_requests?project_id=${projId}`);
+  const existingMats = new Set(existingReqs.map(m => (m.material||'').toLowerCase()));
+  const reqDate = new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
+  let created = 0;
+  for(const r of boqRows){
+    const desc = String(r.description || '').trim();
+    if(!desc || BOQ_NON_MATERIAL_RE.test(desc)) continue;
+    const matLabel = r.item_number ? `[${r.item_number}] ${desc}` : desc;
+    if(existingMats.has(matLabel.toLowerCase()) || existingMats.has(desc.toLowerCase())) continue;
+    await apiFetch('/api/material_requests', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: projId,
+        material: matLabel,
+        location: r.system || 'Site Wide',
+        discipline: r.discipline || 'HVAC',
+        quantity: Number(r.revised_quantity || r.tender_quantity || 1),
+        unit: r.unit || 'pcs',
+        required_date: reqDate,
+        status: 'Requested'
+      })
+    });
+    created++;
+  }
+  return created;
+}
+
+let tasksViewMode = 'board';
+let tasksFilterTrade = 'ALL';
+let tasksFilterStatus = 'ALL';
+let tasksSearchQuery = '';
+
+async function renderTasksWorkspace(){
+  const [rows, docs] = await Promise.all([
+    apiFetch(`/api/tasks?project_id=${currentProjectId}`),
+    apiFetch(`/api/documents?project_id=${currentProjectId}`).catch(()=>[])
+  ]);
+  const canEdit = ME.permissions.edit.includes('tasks');
+  const canDel = ME.permissions.delete && canEdit;
+
+  // Map task evidence photos from documents (Category = 'Site Photo' or 'Task Evidence' matching task ID or title)
+  const photoByTask = {};
+  for(const d of docs){
+    if(!d.attachment_data) continue;
+    for(const t of rows){
+      if(t.evidence_url) photoByTask[t.id] = t.evidence_url;
+      else if(d.name && (d.name.includes(`[TASK:${t.id}]`) || d.name.includes(`Task Evidence - ${t.title}`))){
+        photoByTask[t.id] = d.attachment_data;
+      }
+    }
+  }
+
+  const filtered = rows.filter(t => {
+    if(tasksFilterTrade !== 'ALL' && (t.trade||'') !== tasksFilterTrade) return false;
+    if(tasksFilterStatus !== 'ALL' && (t.status||'Not Started') !== tasksFilterStatus) return false;
+    if(tasksSearchQuery){
+      const q = tasksSearchQuery.toLowerCase();
+      const hay = `${t.title||''} ${t.trade||''} ${t.assignee||''} ${t.wbs_code||''}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const total = rows.length;
+  const doneCount = rows.filter(t => (t.status||'').toLowerCase() === 'completed').length;
+  const wipCount = rows.filter(t => (t.status||'').toLowerCase() === 'in progress').length;
+  const delayedCount = rows.filter(t => (t.status||'').toLowerCase() === 'delayed').length;
+  const photoCount = rows.filter(t => Boolean(photoByTask[t.id])).length;
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+
+  const columns = [
+    { key: 'Not Started', label: 'Not Started', color: '#94a3b8' },
+    { key: 'In Progress', label: 'In Progress', color: '#38bdf8' },
+    { key: 'Delayed', label: 'Delayed / Blocked', color: '#ef4444' },
+    { key: 'Completed', label: 'Completed / Done', color: '#10b981' }
+  ];
+
+  document.getElementById('viewContent').innerHTML = `
+    <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px;">
+      <div class="stat-card"><div class="num">${total}</div><div class="lbl">Total Tasks</div></div>
+      <div class="stat-card"><div class="num" style="color:#38bdf8;">${wipCount}</div><div class="lbl">In Progress</div></div>
+      <div class="stat-card"><div class="num" style="color:#10b981;">${doneCount}</div><div class="lbl">Completed (${pct}%)</div></div>
+      <div class="stat-card ${delayedCount>0?'warn':''}"><div class="num" style="color:${delayedCount>0?'#ef4444':'var(--text)'};">${delayedCount}</div><div class="lbl">Delayed / Blocked</div></div>
+      <div class="stat-card"><div class="num" style="color:#f59e0b;">${photoCount}</div><div class="lbl">With Evidence Photo</div></div>
+    </div>
+
+    <div class="panel" style="padding:14px 18px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="view-mode-toggle">
+            <button class="view-mode-btn ${tasksViewMode==='board'?'active':''}" id="tViewBoard">Kanban Board</button>
+            <button class="view-mode-btn ${tasksViewMode==='table'?'active':''}" id="tViewTable">Table Register</button>
+          </div>
+          <input id="tSearchInput" value="${escHtml(tasksSearchQuery)}" placeholder="Filter tasks, WBS, assignee..." style="min-width:200px;padding:6px 10px;font-size:12px;">
+          <select id="tFilterTrade" style="padding:6px 10px;font-size:12px;">
+            <option value="ALL">All Disciplines</option>
+            ${TRADES.map(tr => `<option value="${tr}" ${tasksFilterTrade===tr?'selected':''}>${tr}</option>`).join('')}
+          </select>
+          <select id="tFilterStatus" style="padding:6px 10px;font-size:12px;">
+            <option value="ALL">All Statuses</option>
+            ${columns.map(c => `<option value="${c.key}" ${tasksFilterStatus===c.key?'selected':''}>${c.label}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          ${canEdit && currentProjectId !== 'ALL' ? `<button class="btn ghost small" id="tPlanFromBoqBtn" title="Auto-generate programme tasks from BOQ sections">⚡ Programme from BOQ</button>` : ''}
+          ${canEdit ? `<button class="btn accent small" id="tAddTaskBtn">+ Add Task</button>` : ''}
+          <button class="btn ghost small" id="tExportCsvBtn">Export CSV</button>
+        </div>
+      </div>
+      <div class="api-banner" id="tasksResultBanner" style="margin-top:10px;margin-bottom:0;"></div>
+    </div>
+
+    ${tasksViewMode === 'board' ? `
+      <div class="kanban-board">
+        ${columns.map(col => {
+          const colTasks = filtered.filter(t => (t.status || 'Not Started') === col.key);
+          return `
+            <div class="kanban-col" data-kanban-col="${col.key}">
+              <div class="kanban-col-header" style="border-top:3px solid ${col.color};">
+                <span>${col.label}</span>
+                <span class="badge" style="background:rgba(255,255,255,.08);color:var(--text);">${colTasks.length}</span>
+              </div>
+              <div class="kanban-col-body" data-drop-status="${col.key}">
+                ${colTasks.length ? colTasks.map(t => {
+                  const photo = photoByTask[t.id];
+                  const isDone = (t.status || '') === 'Completed';
+                  return `
+                    <div class="kanban-card" draggable="${canEdit?'true':'false'}" data-task-card="${t.id}">
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+                        <span class="disc-pill ${disciplineClass(t.trade)}">${escHtml(t.trade||'General')}</span>
+                        ${t.wbs_code ? `<span style="font-family:monospace;font-size:10px;color:var(--muted);">${escHtml(t.wbs_code)}</span>` : ''}
+                      </div>
+                      <div class="kanban-card-title">${escHtml(t.title)}</div>
+                      <div style="font-size:11px;color:var(--muted);display:flex;justify-content:space-between;">
+                        <span>${escHtml(t.assignee||'Unassigned')}</span>
+                        <span>${escHtml(t.end||'')}</span>
+                      </div>
+                      <div class="prog-bar-container">
+                        <div class="prog-bar-fill ${isDone?'success':''}" style="width:${Math.max(0,Math.min(100,t.progress||0))}%;"></div>
+                      </div>
+                      ${photo ? `
+                        <div data-view-evidence="${t.id}" style="margin-top:4px;position:relative;border-radius:5px;overflow:hidden;border:1px solid rgba(16,185,129,.4);cursor:pointer;">
+                          <img src="${photo}" alt="Completion Evidence" style="width:100%;height:78px;object-fit:cover;display:block;">
+                          <span style="position:absolute;bottom:4px;left:4px;background:rgba(6,78,59,.9);color:#6ee7b7;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;">✓ EVIDENCE PHOTO</span>
+                        </div>
+                      ` : ''}
+                      ${canEdit ? `
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:4px;padding-top:6px;border-top:1px solid var(--hairline);">
+                          ${!isDone ? `
+                            <button class="btn accent small" data-complete-task="${t.id}" style="padding:4px 8px;font-size:11px;flex:1;">✓ Done + Photo</button>
+                          ` : `
+                            <button class="btn ghost small" data-complete-task="${t.id}" style="padding:4px 8px;font-size:10px;flex:1;">+ Update Photo</button>
+                          `}
+                          ${t.status === 'Not Started' ? `<button class="btn ghost small" data-quick-status="${t.id}" data-target-status="In Progress" style="padding:4px 7px;font-size:10px;" title="Start Work">Start</button>` : ''}
+                          <button class="icon-btn edit" data-edit-task="${t.id}" title="Edit Task">✎</button>
+                          ${canDel ? `<button class="icon-btn" data-del-task="${t.id}" title="Delete Task">✕</button>` : ''}
+                        </div>
+                      ` : ''}
+                    </div>
+                  `;
+                }).join('') : `<div class="empty" style="font-size:11px;padding:28px 8px;">No tasks in ${col.label}</div>`}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    ` : `
+      <div class="panel">
+        ${filtered.length ? `
+          <table>
+            <thead>
+              <tr>
+                <th>WBS</th>
+                <th>Task Description</th>
+                <th>Discipline</th>
+                <th>Assignee</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Progress</th>
+                <th>Status</th>
+                <th>Evidence</th>
+                ${canEdit ? '<th>Actions</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(t => {
+                const photo = photoByTask[t.id];
+                const isDone = (t.status || '') === 'Completed';
+                return `
+                  <tr>
+                    <td style="font-family:monospace;font-size:11px;color:var(--muted);">${escHtml(t.wbs_code||'—')}</td>
+                    <td><b>${escHtml(t.title)}</b></td>
+                    <td><span class="disc-pill ${disciplineClass(t.trade)}">${escHtml(t.trade||'General')}</span></td>
+                    <td>${escHtml(t.assignee||'—')}</td>
+                    <td>${escHtml(t.start||'—')}</td>
+                    <td>${escHtml(t.end||'—')}</td>
+                    <td>${t.progress||0}%</td>
+                    <td><span class="badge ${badgeClass(t.status)}">${escHtml(t.status||'Not Started')}</span></td>
+                    <td>
+                      ${photo ? `<button class="btn ghost small" data-view-evidence="${t.id}" style="padding:2px 7px;font-size:10px;border-color:#10b981;color:#6ee7b7;">View Photo</button>` : '<span style="color:var(--muted);font-size:11px;">—</span>'}
+                    </td>
+                    ${canEdit ? `
+                      <td class="row-actions">
+                        ${!isDone ? `<button class="btn accent small" data-complete-task="${t.id}" style="padding:3px 8px;font-size:10px;margin-right:4px;">✓ Done + Photo</button>` : `<button class="btn ghost small" data-complete-task="${t.id}" style="padding:3px 7px;font-size:10px;margin-right:4px;">Photo</button>`}
+                        <button class="icon-btn edit" data-edit-task="${t.id}" title="Edit">✎</button>
+                        ${canDel ? `<button class="icon-btn" data-del-task="${t.id}" title="Delete">✕</button>` : ''}
+                      </td>
+                    ` : ''}
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : `<div class="empty">No matching tasks found. Use "+ Add Task" or "Programme from BOQ" to schedule work.</div>`}
+      </div>
+    `}
+  `;
+
+  document.getElementById('tViewBoard').onclick = () => { tasksViewMode = 'board'; renderTasksWorkspace(); };
+  document.getElementById('tViewTable').onclick = () => { tasksViewMode = 'table'; renderTasksWorkspace(); };
+  const searchEl = document.getElementById('tSearchInput');
+  searchEl.oninput = (e) => { tasksSearchQuery = e.target.value; renderTasksWorkspace(); };
+  document.getElementById('tFilterTrade').onchange = (e) => { tasksFilterTrade = e.target.value; renderTasksWorkspace(); };
+  document.getElementById('tFilterStatus').onchange = (e) => { tasksFilterStatus = e.target.value; renderTasksWorkspace(); };
+  document.getElementById('tExportCsvBtn').onclick = () => exportCsv('tasks');
+
+  if(document.getElementById('tAddTaskBtn')){
+    document.getElementById('tAddTaskBtn').onclick = () => openAddModal('tasks', 'Task', [['title','Task'],['trade','Trade'],['assignee','Assignee'],['start','Start'],['end','End'],['progress','Progress'],['status','Status']]);
+  }
+  if(document.getElementById('tPlanFromBoqBtn')){
+    document.getElementById('tPlanFromBoqBtn').onclick = async () => {
+      const banner = document.getElementById('tasksResultBanner');
+      banner.textContent = 'Generating construction programme from BOQ systems...';
+      banner.classList.add('show');
+      const count = await generateProgrammeFromBOQ();
+      if(count !== undefined){
+        banner.textContent = count > 0 ? `✓ Generated ${count} scheduled programme tasks from BOQ.` : 'All BOQ discipline groups are already scheduled in Tasks.';
+        setTimeout(() => renderTasksWorkspace(), 700);
+      }
+    };
+  }
+
+  document.querySelectorAll('[data-edit-task]').forEach(btn => {
+    btn.onclick = () => {
+      const t = rows.find(x => x.id === btn.dataset.editTask);
+      if(t) openEditModal('tasks', 'Task', t);
+    };
+  });
+  document.querySelectorAll('[data-del-task]').forEach(btn => {
+    btn.onclick = async () => {
+      const ok = await confirmAction('Delete this task? This cannot be undone.');
+      if(!ok) return;
+      await apiFetch(`/api/tasks/${btn.dataset.delTask}`, { method: 'DELETE' });
+      renderTasksWorkspace();
+    };
+  });
+  document.querySelectorAll('[data-quick-status]').forEach(btn => {
+    btn.onclick = async () => {
+      const t = rows.find(x => x.id === btn.dataset.quickStatus);
+      if(!t) return;
+      const nextSt = btn.dataset.targetStatus;
+      await apiFetch(`/api/tasks/${t.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...t, status: nextSt, progress: nextSt === 'In Progress' ? Math.max(25, t.progress||0) : t.progress })
+      });
+      renderTasksWorkspace();
+    };
+  });
+  document.querySelectorAll('[data-complete-task]').forEach(btn => {
+    btn.onclick = () => {
+      const t = rows.find(x => x.id === btn.dataset.completeTask);
+      if(t) openCompleteTaskWithEvidenceModal(t, photoByTask[t.id]);
+    };
+  });
+  document.querySelectorAll('[data-view-evidence]').forEach(el => {
+    el.onclick = () => {
+      const t = rows.find(x => x.id === el.dataset.viewEvidence);
+      const photo = photoByTask[el.dataset.viewEvidence];
+      if(t && photo) openPhotoLightbox(`Evidence Photo — ${t.title}`, photo);
+    };
+  });
+
+  // Drag and drop between Kanban columns
+  if(canEdit && tasksViewMode === 'board'){
+    let draggedId = null;
+    document.querySelectorAll('[data-task-card]').forEach(card => {
+      card.addEventListener('dragstart', e => {
+        draggedId = card.dataset.taskCard;
+        e.dataTransfer.setData('text/plain', draggedId);
+        card.style.opacity = '0.45';
+      });
+      card.addEventListener('dragend', () => {
+        card.style.opacity = '1';
+      });
+    });
+    document.querySelectorAll('[data-drop-status]').forEach(zone => {
+      zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.style.background = 'rgba(245,158,11,.06)';
+      });
+      zone.addEventListener('dragleave', () => {
+        zone.style.background = '';
+      });
+      zone.addEventListener('drop', async e => {
+        e.preventDefault();
+        zone.style.background = '';
+        const taskId = e.dataTransfer.getData('text/plain') || draggedId;
+        const targetStatus = zone.dataset.dropStatus;
+        const task = rows.find(x => x.id === taskId);
+        if(!task || task.status === targetStatus) return;
+        if(targetStatus === 'Completed'){
+          openCompleteTaskWithEvidenceModal(task, photoByTask[task.id]);
+        } else {
+          const newProg = targetStatus === 'Not Started' ? 0 : (targetStatus === 'In Progress' ? Math.max(25, task.progress||0) : task.progress);
+          await apiFetch(`/api/tasks/${task.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ ...task, status: targetStatus, progress: newProg })
+          });
+          renderTasksWorkspace();
+        }
+      });
+    });
+  }
+}
+
+function openCompleteTaskWithEvidenceModal(task, existingPhoto){
+  let selectedPhotoData = existingPhoto || '';
+  const html = `
+    <div class="form-grid">
+      <div class="full">
+        <label>Task Moving to Done / Completed</label>
+        <input value="${escHtml(task.title)}" disabled style="font-weight:700;opacity:0.9;">
+      </div>
+      <div>
+        <label>Discipline</label>
+        <input value="${escHtml(task.trade||'General')}" disabled>
+      </div>
+      <div>
+        <label>Completion Progress (%)</label>
+        <input type="number" id="f_comp_progress" value="100" min="0" max="100">
+      </div>
+      <div class="full">
+        <label>Site Completion & QA Notes</label>
+        <textarea id="f_comp_notes" rows="2" placeholder="Record installation details, test readings, or QA sign-off notes...">${escHtml(task.evidence_notes||'')}</textarea>
+      </div>
+      <div class="full">
+        <label>Completion Evidence Photo (Required for QA / Handover)</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+          <button type="button" class="btn accent small" id="btnTaskCaptureCam">📷 Capture with Camera</button>
+          <button type="button" class="btn ghost small" id="btnTaskUploadFile">Upload Photo File</button>
+          <input type="file" id="inpTaskEvidenceFile" accept="image/*" style="display:none;">
+        </div>
+        <div id="taskEvidencePreviewWrap" style="margin-top:10px;${selectedPhotoData?'':'display:none;'}">
+          <img id="taskEvidencePreviewImg" src="${selectedPhotoData}" style="max-height:200px;width:100%;object-fit:contain;border-radius:6px;border:1px solid var(--border);background:#09121e;">
+        </div>
+      </div>
+    </div>
+  `;
+  openModal('Complete Task & Attach Evidence Photo', html, async () => {
+    const prog = Number(document.getElementById('f_comp_progress').value || 100);
+    const notes = document.getElementById('f_comp_notes').value.trim();
+    const projId = task.project_id || (currentProjectId === 'ALL' ? (PROJECTS[0]?.id || '') : currentProjectId);
+
+    await apiFetch(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...task,
+        status: 'Completed',
+        progress: prog,
+        evidence_url: selectedPhotoData || task.evidence_url || undefined,
+        evidence_notes: notes || undefined
+      })
+    });
+
+    if(selectedPhotoData && selectedPhotoData !== existingPhoto){
+      await apiFetch('/api/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: projId,
+          name: `[TASK:${task.id}] Task Evidence - ${task.title}${notes ? ' ('+notes.slice(0,40)+')' : ''}`,
+          category: 'Site Photo',
+          revision: 'Final',
+          date_added: new Date().toISOString().slice(0,10),
+          attachment_name: `task_evidence_${task.id}_${Date.now()}.jpg`,
+          attachment_data: selectedPhotoData
+        })
+      });
+    }
+  });
+
+  setTimeout(() => {
+    const fileInp = document.getElementById('inpTaskEvidenceFile');
+    const uploadBtn = document.getElementById('btnTaskUploadFile');
+    const camBtn = document.getElementById('btnTaskCaptureCam');
+    const previewWrap = document.getElementById('taskEvidencePreviewWrap');
+    const previewImg = document.getElementById('taskEvidencePreviewImg');
+
+    if(uploadBtn && fileInp){
+      uploadBtn.onclick = () => fileInp.click();
+      fileInp.onchange = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if(!file) return;
+        selectedPhotoData = await compressImageFile(file);
+        previewImg.src = selectedPhotoData;
+        previewWrap.style.display = 'block';
+      };
+    }
+    if(camBtn){
+      camBtn.onclick = () => {
+        openCameraCaptureModal({
+          context: 'task_evidence',
+          selectedDate: new Date().toISOString().slice(0,10),
+          onCaptured: (dataUrl) => {
+            selectedPhotoData = dataUrl;
+            openCompleteTaskWithEvidenceModal(task, selectedPhotoData);
+          }
+        });
+      };
+    }
+  }, 50);
+}
+
 async function renderBOQ(){
   const rows = await apiFetch(`/api/boq_items?project_id=${currentProjectId}`);
   const canImport = ME.permissions.edit.includes('budget') && currentProjectId !== 'ALL';
   const canSchedule = ME.permissions.edit.includes('tasks') && currentProjectId !== 'ALL';
+  const canMat = ME.permissions.edit.includes('material_requests') && currentProjectId !== 'ALL';
   const canEditBOQ = ME.permissions.edit.includes('budget') && currentProjectId !== 'ALL';
-  document.getElementById('viewContent').innerHTML = `<div class="panel"><h3><span>BOQ / Tender Register</span><span>${canImport?'<button class="btn accent small" id="boqUploadBtn">Import CSV / XLSX / PDF</button>':'<span style="font-size:11px;color:var(--muted);">Select one project to import</span>'}<button class="btn ghost small" id="boqExportBtn" style="margin-left:8px;">Export CSV</button></span></h3><div class="api-banner" id="boqResult"></div>${rows.length?`<table><thead><tr><th>Item</th><th>Description</th><th>Discipline</th><th>System</th><th>Unit</th><th>Tender qty</th><th>Installed</th><th>Claimed</th><th>Certified</th><th>Rate</th><th>Amount</th>${canSchedule||canEditBOQ?'<th>Work</th>':''}</tr></thead><tbody>${rows.map(row=>`<tr><td>${escHtml(row.item_number)}</td><td>${escHtml(row.description)}</td><td>${escHtml(row.discipline)}</td><td>${escHtml(row.system)}</td><td>${escHtml(row.unit)}</td><td>${row.tender_quantity||0}</td><td>${row.installed_quantity||0}</td><td>${row.claimed_quantity||0}</td><td>${row.certified_quantity||0}</td><td>${fmtCurrency(row.tender_rate)}</td><td>${fmtCurrency(row.tender_amount)}</td>${canSchedule||canEditBOQ?`<td>${canEditBOQ?`<button class="btn ghost small" data-edit-boq="${row.id}">Update</button>`:''}${canSchedule?` <button class="btn ghost small" data-schedule-boq="${row.id}">Schedule</button>`:''}</td>`:''}</tr>`).join('')}</tbody></table>`:'<div class="empty">No BOQ lines imported for this project.</div>'}</div>`;
+
+  const totalTender = rows.reduce((s, r) => s + Number(r.tender_amount || (Number(r.tender_quantity||0)*Number(r.tender_rate||0)) || 0), 0);
+  const totalInstalledVal = rows.reduce((s, r) => s + (Number(r.installed_quantity||0) * Number(r.tender_rate||0)), 0);
+  const totalCertifiedVal = rows.reduce((s, r) => s + (Number(r.certified_quantity||0) * Number(r.tender_rate||0)), 0);
+  const systemsCount = new Set(rows.map(r => r.system).filter(Boolean)).size;
+
+  document.getElementById('viewContent').innerHTML = `
+    <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:14px;">
+      <div class="stat-card"><div class="num">${rows.length}</div><div class="lbl">BOQ Line Items (${systemsCount} Systems)</div></div>
+      <div class="stat-card"><div class="num">${fmtCurrency(totalTender)}</div><div class="lbl">Total Tender Value</div></div>
+      <div class="stat-card"><div class="num" style="color:#38bdf8;">${fmtCurrency(totalInstalledVal)}</div><div class="lbl">Installed Work Value</div></div>
+      <div class="stat-card"><div class="num" style="color:#10b981;">${fmtCurrency(totalCertifiedVal)}</div><div class="lbl">Certified Value</div></div>
+    </div>
+    <div class="panel">
+      <h3>
+        <span>BOQ / Tender Register</span>
+        <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${canSchedule ? '<button class="btn ghost small" id="boqGenProgrammeBtn" title="Generate 3-phase construction tasks from BOQ systems">⚡ Programme from BOQ</button>' : ''}
+          ${canMat ? '<button class="btn ghost small" id="boqGenMaterialsBtn" title="Generate Material Requests for all BOQ supply lines">📦 Material List from BOQ</button>' : ''}
+          ${canImport ? '<button class="btn accent small" id="boqUploadBtn">Import CSV / XLSX / PDF</button>' : '<span style="font-size:11px;color:var(--muted);">Select one project to import</span>'}
+          <button class="btn ghost small" id="boqExportBtn">Export CSV</button>
+        </span>
+      </h3>
+      <div class="api-banner" id="boqResult"></div>
+      ${rows.length?`<table><thead><tr><th>Item</th><th>Description</th><th>Discipline</th><th>System</th><th>Unit</th><th>Tender qty</th><th>Installed</th><th>Claimed</th><th>Certified</th><th>Rate</th><th>Amount</th>${canSchedule||canEditBOQ?'<th>Execution</th>':''}</tr></thead><tbody>${rows.map(row=>`<tr><td style="font-family:monospace;">${escHtml(row.item_number)}</td><td><b>${escHtml(row.description)}</b></td><td><span class="disc-pill ${disciplineClass(row.discipline)}">${escHtml(row.discipline||'MEP')}</span></td><td>${escHtml(row.system)}</td><td>${escHtml(row.unit)}</td><td>${row.tender_quantity||0}</td><td>${row.installed_quantity||0}</td><td>${row.claimed_quantity||0}</td><td>${row.certified_quantity||0}</td><td>${fmtCurrency(row.tender_rate)}</td><td><b>${fmtCurrency(row.tender_amount)}</b></td>${canSchedule||canEditBOQ?`<td class="row-actions">${canEditBOQ?`<button class="btn ghost small" data-edit-boq="${row.id}">Qty</button>`:''}${canSchedule?` <button class="btn accent small" data-schedule-boq="${row.id}">+ Plan Task</button>`:''}</td>`:''}</tr>`).join('')}</tbody></table>`:'<div class="empty">No BOQ lines imported for this project. Import a CSV, XLSX, or PDF tender schedule to generate tasks and material lists.</div>'}
+    </div>`;
   document.getElementById('boqExportBtn').onclick = ()=>exportCsv('boq_items');
   document.querySelectorAll('[data-schedule-boq]').forEach(btn=>btn.onclick=()=>openBOQTaskModal(rows.find(row=>row.id===btn.dataset.scheduleBoq)));
   document.querySelectorAll('[data-edit-boq]').forEach(btn=>btn.onclick=()=>openBOQEditModal(rows.find(row=>row.id===btn.dataset.editBoq)));
+  if(document.getElementById('boqGenProgrammeBtn')){
+    document.getElementById('boqGenProgrammeBtn').onclick = async ()=>{
+      const result = document.getElementById('boqResult');
+      result.textContent = 'Generating construction programme from BOQ systems...';
+      result.classList.add('show');
+      try{
+        const count = await generateProgrammeFromBOQ(rows);
+        result.innerHTML = count > 0
+          ? `✓ Added <b>${count} programme tasks</b> to Tasks & Schedule. <a href="#" id="goTasksAfterBoq" style="color:#f59e0b;font-weight:700;margin-left:8px;">Open Tasks Board →</a>`
+          : `All BOQ discipline groups are already in the Tasks & Schedule board. <a href="#" id="goTasksAfterBoq" style="color:#f59e0b;font-weight:700;margin-left:8px;">Open Tasks Board →</a>`;
+        const link = document.getElementById('goTasksAfterBoq');
+        if(link) link.onclick = (e)=>{ e.preventDefault(); currentView='tasks'; document.getElementById('viewTitle').textContent='Tasks & Schedule'; render(); };
+      }catch(err){ result.textContent = err.message; }
+    };
+  }
+  if(document.getElementById('boqGenMaterialsBtn')){
+    document.getElementById('boqGenMaterialsBtn').onclick = async ()=>{
+      const result = document.getElementById('boqResult');
+      result.textContent = 'Extracting supply items from BOQ into Material Requests...';
+      result.classList.add('show');
+      try{
+        const count = await generateMaterialListFromBOQ(rows);
+        result.innerHTML = count > 0
+          ? `✓ Created <b>${count} Material Requests</b> from BOQ supply lines. <a href="#" id="goMatAfterBoq" style="color:#f59e0b;font-weight:700;margin-left:8px;">Open Material Requests →</a>`
+          : `All BOQ supply lines already have Material Requests.`;
+        const link = document.getElementById('goMatAfterBoq');
+        if(link) link.onclick = (e)=>{ e.preventDefault(); currentView='material_requests'; document.getElementById('viewTitle').textContent='Material Requests'; render(); };
+      }catch(err){ result.textContent = err.message; }
+    };
+  }
   if(canImport) document.getElementById('boqUploadBtn').onclick = async ()=>{
     const input = document.createElement('input'); input.type='file'; input.accept='.csv,.xlsx,.pdf';
     input.onchange = async ()=>{
