@@ -172,6 +172,117 @@ const btnDanger = 'inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-whit
 const btnGreen = 'inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors';
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
+function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
+  const { setUser } = useAuth();
+  const { addToast } = useToast();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  async function signIn(e: FormEvent) {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const response: any = await authApi.login(username, password);
+      const token = response.token;
+      const signedInUser = response.user || response;
+      if (!token) throw new Error('Missing authentication token');
+      setToken(token);
+      setUser(signedInUser);
+      addToast('success', `Welcome back, ${signedInUser.name || 'team member'}!`);
+    } catch {
+      setError('Unable to sign in. Check your credentials and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const capabilities = [
+    { icon: Calendar, label: 'Project Planning' },
+    { icon: Layers, label: 'BIM & Drawings' },
+    { icon: HardHat, label: 'Site Execution' },
+    { icon: Shield, label: 'Quality & Inspections' },
+    { icon: Package, label: 'Procurement & Materials' },
+    { icon: BarChart3, label: 'Cost Control' },
+    { icon: CheckCircle, label: 'Testing & Commissioning' },
+    { icon: FileText, label: 'Handover & O&M' },
+  ];
+  const featureCards = [
+    { title: 'MEP Engineering', detail: 'Drawings, RFIs, Submittals', image: 'https://images.unsplash.com/photo-1581092335878-2d9ff86ca2bf?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
+    { title: 'Site Execution', detail: 'Tasks, Progress, Daily Reports', image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
+    { title: 'Quality & Commissioning', detail: 'Inspections, Testing, Snags', image: 'https://images.unsplash.com/photo-1581093458791-9d15482442f5?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
+    { title: 'Commercial Control', detail: 'BOQ, Procurement, Costs, Variations', image: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
+  ];
+
+  return (
+    <main id="home" className="min-h-screen bg-[#0c1724] text-white">
+      <section className="relative isolate overflow-hidden">
+        <div aria-hidden="true" className="absolute inset-0 -z-20 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=2000&q=85')] bg-cover bg-center" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#081523]/95 via-[#0b192b]/80 to-[#081523]/65" />
+        <header className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-5 py-6 sm:px-9 lg:px-12">
+          <a href="#home" className="flex items-center gap-3" aria-label="MEP FieldHub home">
+            <span className="rounded-xl border border-sky-400/40 bg-blue-600/80 p-3"><Layers size={30} /></span>
+            <span><span className="block text-2xl font-extrabold tracking-tight sm:text-3xl"><span className="text-sky-400">MEP</span> FieldHub</span><span className="block text-[10px] font-semibold uppercase tracking-[.22em] text-slate-200">Plan · Build · Track · Deliver</span></span>
+          </a>
+          <button type="button" className="rounded-lg border border-white/30 p-2 lg:hidden" aria-label="Toggle navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(!mobileMenuOpen)}><Menu size={22}/></button>
+          <nav aria-label="Homepage navigation" className={`${mobileMenuOpen ? 'flex' : 'hidden'} w-full flex-col gap-4 text-sm font-semibold lg:flex lg:w-auto lg:flex-row lg:items-center lg:gap-8`}>
+            {[['Home','#home'],['Solutions','#solutions'],['Features','#features'],['Industries','#industries'],['About us','#about'],['Contact','#contact']].map(([label,href]) => <a key={label} href={href} onClick={() => setMobileMenuOpen(false)} className="text-slate-100 hover:text-sky-300 focus-visible:underline">{label}</a>)}
+          </nav>
+        </header>
+
+        <div className="mx-auto grid max-w-[1600px] gap-10 px-5 pb-12 pt-8 sm:px-9 lg:grid-cols-[minmax(0,1.55fr)_minmax(360px,.85fr)] lg:items-center lg:gap-12 lg:px-12 lg:pb-16 lg:pt-12">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold uppercase tracking-[.13em] text-slate-100">Complete MEP project management platform</p>
+            <h1 className="mt-5 max-w-4xl text-4xl font-extrabold leading-[1.12] tracking-tight sm:text-5xl xl:text-6xl">From <span className="text-sky-400">Design</span> to <span className="text-sky-400">Handover</span><span className="block">All in One Platform</span></h1>
+            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-100 sm:text-lg">Plan, coordinate, execute and deliver Mechanical, Electrical, Plumbing and Fire Protection projects through one connected workspace.</p>
+            <div id="features" className="mt-10 grid grid-cols-2 gap-5 sm:grid-cols-4 xl:grid-cols-8">
+              {capabilities.map(({ icon: Icon, label }) => <div key={label} className="text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/25 bg-[#0c1a2c]/85 text-sky-300 shadow-lg"><Icon size={24}/></span><span className="mt-3 block text-xs font-semibold leading-5 text-white">{label}</span></div>)}
+            </div>
+            <div id="about" className="mt-10 rounded-2xl border border-white/15 bg-[#081523]/75 p-5 backdrop-blur-sm">
+              <p className="text-xs font-bold uppercase tracking-[.15em] text-sky-300">One workspace for the full project lifecycle</p>
+              <p className="mt-2 text-sm leading-6 text-slate-200">Engineering coordination · Work packages · Site reporting · Procurement · Quality · Commercial management</p>
+            </div>
+          </div>
+
+          <section aria-label="Sign in to MEP FieldHub" className="rounded-[22px] border border-slate-200 bg-white px-5 py-8 text-slate-900 shadow-2xl sm:px-9 sm:py-10">
+            <div className="mb-9 flex items-center justify-center gap-3">
+              <span className="rounded-xl bg-blue-600 p-2.5 text-white"><Layers size={28}/></span>
+              <div><p className="text-xl font-extrabold tracking-tight"><span className="text-blue-600">MEP</span> FieldHub</p><p className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">Plan · Build · Track · Deliver</p></div>
+            </div>
+            <h2 className="text-3xl font-extrabold tracking-tight">Welcome Back</h2>
+            <p className="mt-2 text-sm text-slate-600">Sign in to access your MEP project workspace</p>
+            <form onSubmit={signIn} aria-busy={loading} className="mt-7 space-y-4">
+              {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+              <div><label htmlFor="home-login-username" className="mb-1.5 block text-sm font-semibold">Username</label><input id="home-login-username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required disabled={loading} placeholder="Email or username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/></div>
+              <div><label htmlFor="home-login-password" className="mb-1.5 block text-sm font-semibold">Password</label><div className="relative"><input id="home-login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={loading} placeholder="Password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 pr-12 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 text-xs font-semibold text-blue-700">{showPassword ? 'Hide' : 'Show'}</button></div></div>
+              <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-4 py-3.5 font-bold text-white shadow-md hover:bg-blue-700 disabled:opacity-60">{loading ? 'Signing in…' : 'Sign In'} <ChevronRight size={18}/></button>
+            </form>
+            <p className="mt-5 text-center text-xs leading-6 text-slate-500">Access is provided by your project administrator. Contact your administrator if you need an account or password assistance.</p>
+          </section>
+        </div>
+      </section>
+
+      <section id="solutions" aria-labelledby="solutions-heading" className="mx-auto max-w-[1600px] px-5 py-9 sm:px-9 lg:px-12">
+        <h2 id="solutions-heading" className="sr-only">Explore MEP FieldHub solutions</h2>
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {featureCards.map(({ title, detail, image, href }) => <a key={title} href={href} className="group relative isolate flex min-h-[235px] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-slate-800 shadow-xl">
+            <div aria-hidden="true" className="absolute inset-0 -z-20 bg-cover bg-center transition-transform duration-300 group-hover:scale-105" style={{ backgroundImage: `url("${image}")` }}/>
+            <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-[#07121e] via-[#07121e]/45 to-transparent"/>
+            <div className="flex items-end justify-between gap-3 p-5"><div><h3 className="text-lg font-bold">{title}</h3><p className="mt-1 text-sm text-slate-200">{detail}</p></div><ChevronRight className="shrink-0 rounded-full border border-white/70 p-1" size={30}/></div>
+          </a>)}
+        </div>
+      </section>
+      <section id="industries" className="mx-auto max-w-[1600px] px-5 pb-12 sm:px-9 lg:px-12"><h2 className="text-2xl font-bold">Built for MEP project delivery</h2><p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">Mechanical, electrical, plumbing, fire protection and commissioning teams can coordinate work within their assigned projects and workspaces.</p></section>
+      <footer id="contact" className="border-t border-white/10 bg-[#08111d] px-5 py-7 text-center text-xs text-slate-400">MEP FieldHub · Plan · Build · Track · Deliver</footer>
+    </main>
+  );
+}
+
 function LoginPage() {
   const { setUser } = useAuth();
   const { addToast } = useToast();
@@ -3876,6 +3987,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [showSignIn, setShowSignIn] = useState(false);
   const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<any[]>([]);
@@ -3923,7 +4035,7 @@ export default function App() {
     <ToastProvider>
       <AuthContext.Provider value={{ user, setUser, logout }}>
         <ProjectContext.Provider value={{ projects, selectedProject, setSelectedProject, reload: loadProjects }}>
-          {user ? <AppShell /> : <LoginPage />}
+          {user ? <AppShell /> : showSignIn ? <LoginPage /> : <PublicLandingPage onSignIn={() => setShowSignIn(true)} />}
         </ProjectContext.Provider>
       </AuthContext.Provider>
     </ToastProvider>
