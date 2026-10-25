@@ -41,6 +41,7 @@ import { ClientPortalContent } from './components/ClientPortalContent';
 import { MepAssistantDrawer } from './components/MepAssistantDrawer';
 import { ContractorDocUploadModal } from './components/ContractorDocUploadModal';
 import { CompleteTaskModal } from './components/CompleteTaskModal';
+import { OctoInbox } from './components/OctoInbox';
 import { TasksBoardPage } from './components/TasksBoardPage';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
@@ -252,7 +253,7 @@ function NavGroup({ icon: Icon, label, children, defaultOpen }: { icon: any; lab
 // ─── Main App Shell ───────────────────────────────────────────────────────────
 type Page =
   | 'dashboard' | 'projects' | 'project-detail' | 'tasks' | 'updates'
-  | 'actions' | 'decisions'
+  | 'actions' | 'decisions' | 'octo-inbox'
   | 'rfis' | 'submittals' | 'documents'
   | 'ncrs' | 'inspections' | 'commissioning' | 'handover' | 'progress'
   | 'clarifications' | 'change_orders' | 'boq' | 'procurement' | 'risks'
@@ -311,6 +312,7 @@ function AppShell() {
       case 'procurement-risk': return <div className="space-y-6"><ProcurementProgrammeRiskView projectId={selectedProject} /></div>;
       case 'actions': return <div className="space-y-6"><ProjectActionsRegister projectId={selectedProject} /></div>;
       case 'decisions': return <div className="space-y-6"><ProjectDecisionsRegister projectId={selectedProject} /></div>;
+      case 'octo-inbox': return <OctoInbox projectId={selectedProject} isAdmin={user?.role === 'Admin'} />;
       case 'updates': return <ProjectUpdatesPage navigate={navigate} />;
       case 'progress': return <ProjectUpdatesPage navigate={navigate} />;
       case 'workforce': return <WorkforceDashboardPage />;

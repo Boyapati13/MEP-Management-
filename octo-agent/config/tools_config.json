@@ -1,0 +1,21 @@
+{
+  "enabled": [
+    "browser",
+    "code_execution",
+    "cronjob",
+    "deep_research",
+    "deerflow",
+    "delegation",
+    "file",
+    "homeassistant",
+    "image_gen",
+    "memory",
+    "messaging",
+    "skills",
+    "terminal",
+    "todo",
+    "tts",
+    "vision",
+    "web"
+  ]
+}

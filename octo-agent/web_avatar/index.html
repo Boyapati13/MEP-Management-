@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCTO 3D Motion Avatar</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: transparent !important;
+            background-color: transparent !important;
+            user-select: none;
+            width: 100vw;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #canvas-container, canvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #8ffcff;
+            font-weight: bold;
+            font-size: 14px;
+            letter-spacing: 2px;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            text-align: center;
+        }
+        .progress-bar {
+            width: 150px;
+            height: 2px;
+            background: #0d3347;
+            margin: 10px auto 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: #00d4ff;
+            transition: width 0.1s ease;
+        }
+    </style>
+    <!-- Include Three.js and GLTFLoader from standard robust CDN -->
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <div id="loading">
+        🐙 ESTABLISHING NEURAL LINK
+        <div class="progress-bar">
+            <div class="progress-bar-fill" id="progress"></div>
+        </div>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script>
+        let scene, camera, renderer, model;
+        let mouthOpenTarget = 0;
+        let mouthOpenCurrent = 0;
+        let morphTargetIndex = -1;
+        let mouthMesh = null;
+
+        // Skeletal Animation Bone references
+        let leftArmBone = null;
+        let rightArmBone = null;
+        let leftForeArmBone = null;
+        let rightForeArmBone = null;
+        let neckBone = null;
+        let spineBone = null;
+        let headBone = null;
+
+        const container = document.getElementById('canvas-container');
+        const loadingEl = document.getElementById('loading');
+        const progressEl = document.getElementById('progress');
+
+        function init() {
+            // 1. Create Scene & Atmospheric Fog (matches station primary background color)
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x060b18, 0.04);
+
+            // 2. Camera Configuration
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.45, 1.15); // Will be dynamically calibrated on load
+
+            // 3. WebGL Renderer configuration with Alpha support for true transparency
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25)); // Cap high-DPI scaling for fluid FPS
+            renderer.setClearColor(0x000000, 0); // Clear to fully transparent
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            // 4. Premium Cyberpunk Studio Lighting
+            const ambientLight = new THREE.AmbientLight(0x0a2233, 1.4);
+            scene.add(ambientLight);
+
+            // Bright front face spotlight
+            const frontSpotLight = new THREE.SpotLight(0x00d4ff, 5.0);
+            frontSpotLight.position.set(0, 2.5, 3.5);
+            frontSpotLight.angle = Math.PI / 4;
+            frontSpotLight.penumbra = 0.8;
+            scene.add(frontSpotLight);
+
+            // Neon Pink rim light (Cyber aesthetic highlight)
+            const leftRimLight = new THREE.DirectionalLight(0xff3355, 2.5);
+            leftRimLight.position.set(-3, 1.8, -2.5);
+            scene.add(leftRimLight);
+
+            // Cyber Green rim light
+            const rightRimLight = new THREE.DirectionalLight(0x00ff88, 2.2);
+            rightRimLight.position.set(3, 1.8, -2.5);
+            scene.add(rightRimLight);
+
+            // 5. Load dynamic Rigged GLB Model from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const modelParam = urlParams.get('model') || 'avatar.glb';
+            
+            const loader = new THREE.GLTFLoader();
+            const glbPath = modelParam;
+
+            loader.load(
+                glbPath,
+                function (gltf) {
+                    model = gltf.scene;
+                    
+                    // Center and Frame the mesh
+                    const box = new THREE.Box3().setFromObject(model);
+                    const size = box.getSize(new THREE.Vector3());
+                    const center = box.getCenter(new THREE.Vector3());
+                    
+                    // Center model along X and Z axes
+                    model.position.x += (model.position.x - center.x);
+                    model.position.z += (model.position.z - center.z);
+                    
+                    scene.add(model);
+
+                    // Dynamically position the camera in front of the face for a premium talking bust view
+                    const headHeight = center.y + (size.y * 0.35); // Estimate head elevation
+                    camera.position.set(0, headHeight, size.y * 0.58);
+                    camera.lookAt(new THREE.Vector3(0, headHeight + 0.05, 0));
+
+                    // Scan the model hierarchy for morph targets (blendshapes) and skeletal bones
+                    model.traverse((child) => {
+                        // Blendshape scanning
+                        if (child.isMesh && child.morphTargetDictionary) {
+                            const speechKeys = ['jawOpen', 'mouthOpen', 'Mouth_Open', 'mouth_open', 'viseme_sil'];
+                            for (let key of speechKeys) {
+                                if (child.morphTargetDictionary[key] !== undefined) {
+                                    mouthMesh = child;
+                                    morphTargetIndex = child.morphTargetDictionary[key];
+                                    break;
+                                }
+                            }
+                            
+                            if (morphTargetIndex === -1) {
+                                for (let key in child.morphTargetDictionary) {
+                                    if (key.toLowerCase().includes('open') || key.toLowerCase().includes('jaw')) {
+                                        mouthMesh = child;
+                                        morphTargetIndex = child.morphTargetDictionary[key];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Skeletal Bone scanning (traverses standard Ready Player Me / Mixamo naming conventions)
+                        if (child.isBone) {
+                            const name = child.name.toLowerCase();
+                            if (name.includes('leftarm') || name.includes('leftupperarm') || name.includes('arm_l') || name.includes('l_uparm')) {
+                                leftArmBone = child;
+                            } else if (name.includes('rightarm') || name.includes('rightupperarm') || name.includes('arm_r') || name.includes('r_uparm')) {
+                                rightArmBone = child;
+                            } else if (name.includes('leftforearm') || name.includes('forearm_l') || name.includes('l_forearm')) {
+                                leftForeArmBone = child;
+                            } else if (name.includes('rightforearm') || name.includes('forearm_r') || name.includes('r_forearm')) {
+                                rightForeArmBone = child;
+                            } else if (name.includes('neck')) {
+                                neckBone = child;
+                            } else if (name.includes('spine') && !spineBone) {
+                                spineBone = child;
+                            } else if (name.includes('head')) {
+                                headBone = child;
+                            }
+                        }
+                    });
+
+                    // Calibrate standard bones to transition out of T-pose immediately on load
+                    if (leftArmBone) leftArmBone.rotation.z = -1.35; // Lower arm to side
+                    if (rightArmBone) rightArmBone.rotation.z = 1.35; // Lower arm to side
+                    if (leftForeArmBone) leftForeArmBone.rotation.y = -0.25; // Fold slightly forward
+                    if (rightForeArmBone) rightForeArmBone.rotation.y = 0.25; // Fold slightly forward
+
+                    // Hide loading indicator
+                    loadingEl.style.opacity = '0';
+                    setTimeout(() => { loadingEl.style.display = 'none'; }, 500);
+                },
+                function (xhr) {
+                    if (xhr.total > 0) {
+                        const pct = Math.round((xhr.loaded / xhr.total) * 100);
+                        progressEl.style.width = pct + '%';
+                    }
+                },
+                function (error) {
+                    console.error('GLTF loading error:', error);
+                    loadingEl.innerHTML = '<span style="color:#ff3355;">⚠️ NEURAL LINK FAILED: GLB ERROR</span>';
+                }
+            );
+
+            window.addEventListener('resize', onWindowResize, false);
+            
+            animate();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Driven by PyQt6 to trigger talking
+        window.setMouthOpen = function(val) {
+            mouthOpenTarget = Math.max(0.0, Math.min(1.0, val));
+        };
+
+        // Render Frame Animation Loop (60 FPS)
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Smooth lip-sync interpolation
+            mouthOpenCurrent = THREE.MathUtils.lerp(mouthOpenCurrent, mouthOpenTarget, 0.45);
+            if (mouthMesh && morphTargetIndex !== -1 && mouthMesh.morphTargetInfluences) {
+                mouthMesh.morphTargetInfluences[morphTargetIndex] = mouthOpenCurrent;
+            }
+
+            // Continuous skeletal idle animations (Breathing, swaying, looking around)
+            if (model) {
+                const time = Date.now() * 0.0016;
+
+                // 1. Organic Spine breathing motion
+                if (spineBone) {
+                    spineBone.rotation.x = Math.sin(time) * 0.016;
+                    spineBone.rotation.z = Math.cos(time * 0.5) * 0.008;
+                }
+
+                // 2. Slow natural head turns and nods
+                if (headBone) {
+                    headBone.rotation.y = Math.sin(time * 0.35) * 0.08;
+                    headBone.rotation.x = Math.cos(time * 0.28) * 0.02;
+                } else if (neckBone) {
+                    neckBone.rotation.y = Math.sin(time * 0.35) * 0.08;
+                }
+
+                // 3. Subtle arm sway from breathing
+                if (leftArmBone) {
+                    leftArmBone.rotation.x = Math.sin(time) * 0.015;
+                    leftArmBone.rotation.z = -1.38 + Math.cos(time) * 0.01;
+                }
+                if (rightArmBone) {
+                    rightArmBone.rotation.x = Math.sin(time) * 0.015;
+                    rightArmBone.rotation.z = 1.38 - Math.cos(time) * 0.01;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

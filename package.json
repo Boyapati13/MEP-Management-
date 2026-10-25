@@ -28,7 +28,8 @@
     "mobile:sync": "cap sync",
     "mobile:android": "cap open android",
     "mobile:build:android": "node scripts/build_android.cjs",
-    "mobile:ios": "cap open ios"
+    "mobile:ios": "cap open ios",
+    "test:octo": "node --import tsx test_octo_integration.ts && node --test octo-agent/scripts/whatsapp-bridge/bridge.test.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

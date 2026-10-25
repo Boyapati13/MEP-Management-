@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+config/api_keys.json
+config/gateway.json
+config/watchlist.json
+.deer-flow/
+debug_monolith_warmup.py
+.fcc/
+*.db
+*.sqlite
+logs/
+agent_workspace/
+.venv/
+venv/
+
+# graphify
+graphify-out/manifest.json
+graphify-out/cost.json
+

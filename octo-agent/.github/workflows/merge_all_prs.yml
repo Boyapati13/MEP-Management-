@@ -1,0 +1,32 @@
+name: Merge All Open PRs
+on:
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  merge_prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Merge all open pull requests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching open PRs..."
+          PR_LIST=$(gh pr list --state open --json number --jq '.[].number')
+          
+          if [ -z "$PR_LIST" ]; then
+            echo "No open PRs found."
+            exit 0
+          fi
+
+          for PR in $PR_LIST; do
+            echo "Merging PR #$PR..."
+            # Try to merge the PR
+            gh pr merge $PR --merge --admin || echo "Failed to merge PR #$PR. It might have conflicts."
+          done

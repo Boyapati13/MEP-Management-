@@ -1,0 +1,4 @@
+7. Download completed! Size: 29690822 bytes
+8. Extracting ZIP contents...
+9. Extraction completed successfully!
+10. Extracted directories: ['ECC-main']

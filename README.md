@@ -1,4 +1,7 @@
-# MEP Project Manager
+# MEP Project Manager + Octo
+
+This is the combined master repository. See [Combined application setup](OCTO-INTEGRATION.md) for WhatsApp pairing, project inbox review and the scope of the imported Octo agent.
+
 
 A full-stack **Mechanical, Electrical & Plumbing (MEP) project management system** for construction and fit-out contractors. It covers the full delivery lifecycle of an MEP contract — schedule, RFIs, submittals, snagging, daily logs, BOQ/commercial control, procurement, safety, quality (NCRs), commissioning and handover — behind an 8-role permission system, with an embedded AI technical advisor for standards-based engineering guidance.
 
