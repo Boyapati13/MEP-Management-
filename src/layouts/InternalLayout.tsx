@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building2, LogOut, Sparkles, ChevronRight, Calendar, DollarSign, ShieldCheck,
-  Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers
+  Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers, Palette
 } from 'lucide-react';
 import {
   DOMAINS, ROUTE_ITEMS, NavigationDomain
@@ -33,6 +33,23 @@ export function InternalLayout({
   children,
 }: InternalLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [workspaceTheme, setWorkspaceTheme] = useState(() => {
+    try { return localStorage.getItem('mep-workspace-theme') || 'blueprint'; } catch { return 'blueprint'; }
+  });
+  const [gridEnabled, setGridEnabled] = useState(() => {
+    try { return localStorage.getItem('mep-workspace-grid') !== 'off'; } catch { return true; }
+  });
+  const [gridStrength, setGridStrength] = useState(() => {
+    try { return localStorage.getItem('mep-workspace-grid-strength') || 'subtle'; } catch { return 'subtle'; }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('mep-workspace-theme', workspaceTheme);
+      localStorage.setItem('mep-workspace-grid', gridEnabled ? 'on' : 'off');
+      localStorage.setItem('mep-workspace-grid-strength', gridStrength);
+    } catch { /* browser storage may be unavailable */ }
+  }, [workspaceTheme, gridEnabled, gridStrength]);
   const role = user?.role || 'Worker';
   const visibleDomains = DOMAINS.filter(
     (d) => !d.allowedRoles || d.allowedRoles.includes(role)
@@ -55,7 +72,7 @@ export function InternalLayout({
   };
 
   return (
-    <div className="min-h-screen blueprint-surface flex flex-col lg:flex-row text-[#14171f] relative">
+    <div className="min-h-screen workspace-surface flex flex-col lg:flex-row text-[#14171f] relative" data-workspace-theme={workspaceTheme} data-workspace-grid={gridEnabled ? gridStrength : "off"}>
       {/* Mobile Backdrop Overlay */}
       {mobileMenuOpen && (
         <div
@@ -143,6 +160,39 @@ export function InternalLayout({
           })}
         </nav>
 
+        {/* Appearance lives in the shared sidebar, not duplicated per module. */}
+        <div className="px-3 pb-2 border-t border-slate-800 pt-2">
+          <button type="button" onClick={() => setAppearanceOpen(!appearanceOpen)}
+            aria-expanded={appearanceOpen} aria-controls="workspace-appearance"
+            className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white">
+            <span className="flex items-center gap-2"><Palette size={17}/> Appearance</span>
+            <ChevronRight size={14} className={appearanceOpen ? 'rotate-90' : ''}/>
+          </button>
+          {appearanceOpen && (
+            <div id="workspace-appearance" className="mt-2 p-3 bg-slate-800/80 rounded-xl space-y-3">
+              <label htmlFor="workspace-theme" className="block text-xs font-medium text-slate-200">Graph paper colour</label>
+              <select id="workspace-theme" value={workspaceTheme} onChange={e => setWorkspaceTheme(e.target.value)}
+                className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-sm text-white">
+                <option value="blueprint">Blueprint Blue</option>
+                <option value="slate">Slate Grey</option>
+                <option value="sage">Sage Green</option>
+                <option value="sand">Warm Sand</option>
+                <option value="dark">Dark Blueprint</option>
+              </select>
+              <label className="flex items-center gap-2 text-xs text-slate-200">
+                <input type="checkbox" checked={gridEnabled} onChange={e => setGridEnabled(e.target.checked)}/>
+                Show background grid
+              </label>
+              <label htmlFor="workspace-grid-strength" className="block text-xs text-slate-200">Grid intensity</label>
+              <select id="workspace-grid-strength" value={gridStrength} onChange={e => setGridStrength(e.target.value)}
+                disabled={!gridEnabled} className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-sm text-white disabled:opacity-50">
+                <option value="subtle">Subtle</option>
+                <option value="standard">Standard</option>
+              </select>
+              <p className="text-[11px] text-slate-400">Saved on this device. Does not change project data.</p>
+            </div>
+          )}
+        </div>
         {/* User Identity Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2">
           <div className="min-w-0">
