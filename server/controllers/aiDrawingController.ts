@@ -290,6 +290,7 @@ export function registerAiDrawingController(app: Express): void {
       );
 
       let imported = 0;
+      let skippedInvalidQuantity = 0;
       let totalAmount = 0.0;
       const disciplines = new Set<string>();
       const systems = new Set<string>();
@@ -314,6 +315,7 @@ export function registerAiDrawingController(app: Express): void {
         const rawQty = r.tenderquantity ?? r.quantity ?? r.qty;
         const qty = parseImportNumber(rawQty);
         if (rawQty === undefined || rawQty === null || String(rawQty).trim() === '' || !Number.isFinite(qty) || qty <= 0) {
+          skippedInvalidQuantity++;
           continue;
         }
         const rate = parseImportNumber(r.tenderrate ?? r.rate ?? r.unitrate ?? r.price);
@@ -510,6 +512,8 @@ export function registerAiDrawingController(app: Express): void {
         filename,
         imported,
         imported_lines: imported,
+        skipped_invalid_quantity: skippedInvalidQuantity,
+        requires_review: skippedInvalidQuantity > 0,
         tender_amount: totalAmount,
         disciplines: Array.from(disciplines).sort(),
         systems: systems.size,
