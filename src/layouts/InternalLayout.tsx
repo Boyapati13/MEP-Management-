@@ -42,7 +42,7 @@ export function InternalLayout({
       r.domain === activeDomain &&
       (!r.allowedRoles || r.allowedRoles.includes(role))
   );
-  const activeProject = projects.find((p: any) => p.id === selectedProject) || projects[0] || null;
+  const activeProject = selectedProject ? projects.find((p: any) => p.id === selectedProject) || null : null;
 
   const handleDomainSelect = (domainId: NavigationDomain, defaultRoute: string) => {
     const routes = ROUTE_ITEMS.filter(
