@@ -425,28 +425,16 @@ export function registerAiDrawingController(app: Express): void {
       }
 
       // Auto-fill Programme Tasks & Material Requests from imported BOQ
-      const existingTasks = new Set(
-        (db.prepare("SELECT LOWER(title) as t FROM tasks WHERE project_id=?").all(projectId) as any[]).map(r => r.t)
-      );
       const existingMats = new Set(
         (db.prepare("SELECT LOWER(COALESCE(material, item, description, '')) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
       );
       let tasksCreated = 0;
       let matsCreated = 0;
-      const baseStart = extractedMeta.startDate || today;
-      for (const s of systems) {
-        const [d, sys] = s.split(":");
-        const title = `${sys || d} — Supply, Installation & Testing`;
-        if (!existingTasks.has(title.toLowerCase())) {
-          const endIso = new Date(Date.now() + (14 + tasksCreated * 7) * 86400000).toISOString().split("T")[0];
-          const wpId = wpByDisc.get((d || "").toUpperCase()) || allProjectWps[0]?.id || null;
-          db.prepare(`
-            INSERT INTO tasks (id, project_id, title, trade, assignee, start, end, progress, status, wbs_code, priority, work_package_id, description)
-            VALUES (?, ?, ?, ?, 'MEP Site Team', ?, ?, 0, 'Not Started', ?, 'High', ?, ?)
-          `).run(crypto.randomUUID(), projectId, title, d || "MEP", baseStart, endIso, `BOQ-${tasksCreated + 1}`, wpId, `Auto-generated from BOQ system: ${sys}`);
-          existingTasks.add(title.toLowerCase());
-          tasksCreated++;
-        }
+      const createTask = db.prepare("INSERT INTO tasks (id, project_id, title, trade, start, end, progress, status, wbs_code, priority, work_package_id, description, boq_ref, boq_item_id) VALUES (?, ?, ?, ?, NULL, NULL, 0, 'Not Started', ?, 'Medium', ?, ?, ?, ?)");
+      for (const row of createdBoqRows) {
+        const wpId = wpByDisc.get((row.disc || "").toUpperCase()) || null;
+        createTask.run(crypto.randomUUID(), projectId, "Install " + row.desc + " — " + row.area, row.disc || "MEP", row.code, wpId, "Draft BOQ activity. Quantity: " + row.qty + " " + row.unit + ". Source BOQ item: " + row.code + ". Planner must verify sequence, dates, location and drawings.", row.code, row.id);
+        tasksCreated++;
       }
 
       const insertMatReq = db.prepare(`
