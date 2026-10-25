@@ -133,48 +133,34 @@ function syncRfiTaskBlocker(rfiRow: any): void {
 }
 
 function syncInspectionVerifiedProgress(inspRow: any, userName: string): void {
-  if (!inspRow || !inspRow.project_id) return;
-  try {
-    const isPassed =
-      ["pass", "passed", "approved"].includes(String(inspRow.result || "").toLowerCase()) ||
-      ["pass", "passed", "approved", "completed"].includes(String(inspRow.status || "").toLowerCase());
-    if (!isPassed) return;
+  if (!inspRow?.project_id) return;
+  const isPassed =
+    ["pass", "passed", "approved"].includes(String(inspRow.result || "").toLowerCase()) ||
+    ["pass", "passed", "approved"].includes(String(inspRow.status || "").toLowerCase());
+  if (!isPassed) return;
 
-    const now = new Date().toISOString();
-    const verifiedPct = inspRow.verified_progress !== undefined && inspRow.verified_progress !== null
-      ? Number(inspRow.verified_progress)
-      : 100;
+  // Passing an inspection is not equivalent to certifying the entire work package
+  // or its BOQ quantities. Those require separately approved measurements.
+  // Only an explicitly measured percentage may update the linked task.
+  if (!inspRow.task_id || inspRow.verified_progress === null ||
+      inspRow.verified_progress === undefined || inspRow.verified_progress === "") return;
+  const verifiedPct = Number(inspRow.verified_progress);
+  if (!Number.isFinite(verifiedPct) || verifiedPct < 0 || verifiedPct > 100) {
+    throw new Error("Inspection verified_progress must be between 0 and 100");
+  }
+  const task = db.prepare(
+    "SELECT id, project_id, progress FROM tasks WHERE id = ? AND project_id = ?"
+  ).get(inspRow.task_id, inspRow.project_id) as any;
+  if (!task) throw new Error("Inspection task does not belong to this project");
 
-    if (inspRow.task_id) {
-      const nextStatus = verifiedPct >= 100 ? "Completed" : "In Progress";
-      db.prepare(`
-        UPDATE tasks
-        SET progress = MAX(COALESCE(progress, 0), ?),
-            status = ?,
-            verified_by = ?,
-            verified_at = ?
-        WHERE id = ?
-      `).run(verifiedPct, nextStatus, userName, now, inspRow.task_id);
-      recalculateProjectProgress(inspRow.project_id);
-    } else if (inspRow.work_package_id) {
-      db.prepare(`
-        UPDATE tasks
-        SET progress = MAX(COALESCE(progress, 0), ?),
-            verified_by = ?,
-            verified_at = ?
-        WHERE work_package_id = ? AND status != 'Completed'
-      `).run(verifiedPct, userName, now, inspRow.work_package_id);
-      recalculateProjectProgress(inspRow.project_id);
-    }
-
-    if (inspRow.boq_item_id) {
-      db.prepare(`
-        UPDATE boq_items
-        SET certified_quantity = CASE WHEN COALESCE(installed_quantity, 0) > 0 THEN installed_quantity ELSE tender_quantity END
-        WHERE id = ?
-      `).run(inspRow.boq_item_id);
-    }
-  } catch {}
+  const now = new Date().toISOString();
+  const newProgress = Math.max(Number(task.progress) || 0, verifiedPct);
+  db.prepare(`
+    UPDATE tasks SET progress = ?, status = ?, verified_by = ?, verified_at = ?
+    WHERE id = ? AND project_id = ?
+  `).run(newProgress, newProgress >= 100 ? "Completed" : "In Progress",
+    userName, now, task.id, inspRow.project_id);
+  recalculateProjectProgress(inspRow.project_id);
 }
 
 function syncBoqToMaterialRequestAndCosts(boqRow: any, userId: string): void {
