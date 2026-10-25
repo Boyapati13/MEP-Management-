@@ -128,8 +128,7 @@ export function registerAuthController(app: Express): void {
       return;
     }
     const user = db.prepare("SELECT * FROM users WHERE username=?").get(username) as any;
-    const isAdminAlias = username === "admin" && (password === "admin123" || password === "admin") && verifyPassword("ChangeMe123!", user?.password_hash || "");
-    if (!user || (!verifyPassword(password, user.password_hash) && !isAdminAlias)) {
+    if (!user || !verifyPassword(password, user.password_hash)) {
       recordLoginFailure(username);
       res.status(401).json({ error: "Invalid username or password" });
       return;
@@ -148,9 +147,10 @@ export function registerAuthController(app: Express): void {
     db.prepare("INSERT INTO sessions (token, user_id, name, role, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)").run(
       token, user.id, user.name, user.role, now, expiresAt
     );
-    res.json({
-      token,
+    const userPayload = {
+      id: user.id,
       user_id: user.id,
+      username: user.username,
       name: user.name,
       role: user.role,
       email: user.email || "",
@@ -159,6 +159,11 @@ export function registerAuthController(app: Express): void {
       status: user.status || "Active",
       must_change_password: !!user.must_change_password,
       permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,
+    };
+    res.json({
+      token,
+      ...userPayload,
+      user: userPayload,
     });
   });
 

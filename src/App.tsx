@@ -43,6 +43,7 @@ import { ContractorDocUploadModal } from './components/ContractorDocUploadModal'
 import { CompleteTaskModal } from './components/CompleteTaskModal';
 import { OctoInbox } from './components/OctoInbox';
 import { TasksBoardPage } from './components/TasksBoardPage';
+import { EnterpriseModulesView } from './components/EnterpriseModulesView';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -180,7 +181,7 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { token, user } = await authApi.login(username, password);
+      const res: any = await authApi.login(username, password); const token = res.token; const user = res.user || res;
       setToken(token);
       setUser(user);
       addToast('success', `Welcome back, ${user.name}!`);
@@ -216,7 +217,7 @@ function LoginPage() {
             </button>
           </form>
         </Card>
-        <p className="text-center text-blue-400/60 text-xs mt-6">MEP Management Platform v1.2 — Enterprise Edition</p>
+        <p className="text-center text-amber-400/80 text-xs mt-6">MEP FieldHub v1.5.0 — Enterprise Construction Edition</p>
       </div>
     </div>
   );
@@ -272,7 +273,7 @@ type Page =
 
 function AppShell() {
   const { user, logout } = useAuth();
-  const { projects, selectedProject, setSelectedProject } = useProject();
+  const { projects, selectedProject, setSelectedProject, reload } = useProject();
   const [page, setPage] = useState<Page>('dashboard');
   const [pageParam, setPageParam] = useState<string>('');
   const [activeDomain, setActiveDomain] = useState<NavigationDomain>('dashboard');
@@ -333,8 +334,8 @@ function AppShell() {
       case 'payroll-detail': return <PayrollPeriodDetailPage periodId={pageParam} navigate={navigate} />;
       case 'punch-clock': return <PunchClockPage />;
       case 'setup-checklist': return <div className="space-y-6"><AdminSetupChecklist projectId={selectedProject} onNavigate={(r) => navigate(r as Page)} /></div>;
-      case 'site-quality': return <GenericPage page="ncrs" />;
-      default: return <GenericPage page={page} />;
+      case 'site-quality': return <EnterpriseModulesView page="inspections" selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
+      default: return <EnterpriseModulesView page={page} selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
     }
   }
 
@@ -362,9 +363,9 @@ function AppShell() {
             );
           }
           if (tab === 'work') return <TasksBoardPage navigate={navigate} projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} addToast={addToast} user={user} />;
-          if (tab === 'technical') return <GenericPage page="RFIs, submittals and drawings" />;
+          if (tab === 'technical') return <EnterpriseModulesView page="rfis" selectedProject={selectedProject} projects={projects} user={user} />;
           if (tab === 'progress') return <ProjectUpdatesPage navigate={navigate} />;
-          return <GenericPage page="My claims and variations" />;
+          return <EnterpriseModulesView page="change_orders" selectedProject={selectedProject} projects={projects} user={user} />;
         }}
       />
     );
@@ -3374,7 +3375,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
 
 // ─── Project Updates Page (Live Feed) ──────────────────────────────────────────
 function ProjectUpdatesPage({ navigate }: { navigate: (page: Page, param?: string) => void }) {
-  const { projects, selectedProject, setSelectedProject } = useProject();
+  const { projects, selectedProject, setSelectedProject, reload } = useProject();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [updates, setUpdates] = useState<any[]>([]);

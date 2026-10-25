@@ -1232,27 +1232,16 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         }
       }
 
-      // Automatically apply contractor intelligence across Project Master, Work Packages,
-      // Tasks, Companies, and Documents, then run verification checklist.
-      const b64 = (primaryDoc.attachment_data || "").replace(/^data:.*?;base64,/, "");
-      const primaryBuffer = Buffer.from(b64, "base64");
-      const verifiedResult = applyContractorIntelligenceAndVerify(
-        db,
-        extracted,
-        {
-          name: primaryDoc.attachment_name || primaryDoc.name || "Contractor Document",
-          buffer: primaryBuffer,
-          mimeType: "application/pdf"
-        },
-        projectId,
-        req.user!.user_id
-      );
+      // Build structured suggestions list by combining rule-engine fallback with contractor intelligence
+      const fallbackList = fallbackProjectSetupSuggestions(sources);
+      const suggestionMap = new Map<string, ProjectSetupSuggestion>();
+      for (const item of fallbackList) {
+        suggestionMap.set(item.field, item);
+      }
 
-      // Build structured suggestions list for compatibility
-      const suggestions: ProjectSetupSuggestion[] = [];
       const firstSource = sources[0];
-      if (extracted.projectName) {
-        suggestions.push({
+      if (extracted.projectName && !suggestionMap.has("name")) {
+        suggestionMap.set("name", {
           field: "name",
           value: extracted.projectName,
           confidence: "High",
@@ -1261,8 +1250,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           source_excerpt: extracted.sourceExcerpts?.projectName || `Project: ${extracted.projectName}`
         });
       }
-      if (extracted.client) {
-        suggestions.push({
+      if (extracted.client && !suggestionMap.has("client")) {
+        suggestionMap.set("client", {
           field: "client",
           value: extracted.client,
           confidence: "High",
@@ -1271,8 +1260,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           source_excerpt: extracted.sourceExcerpts?.client || `Client: ${extracted.client}`
         });
       }
-      if (extracted.startDate) {
-        suggestions.push({
+      if (extracted.startDate && !suggestionMap.has("start_date")) {
+        suggestionMap.set("start_date", {
           field: "start_date",
           value: extracted.startDate,
           confidence: "High",
@@ -1281,8 +1270,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           source_excerpt: extracted.sourceExcerpts?.startDate || `Start Date: ${extracted.startDate}`
         });
       }
-      if (extracted.endDate) {
-        suggestions.push({
+      if (extracted.endDate && !suggestionMap.has("end_date")) {
+        suggestionMap.set("end_date", {
           field: "end_date",
           value: extracted.endDate,
           confidence: "High",
@@ -1291,8 +1280,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           source_excerpt: extracted.sourceExcerpts?.endDate || `End Date: ${extracted.endDate}`
         });
       }
-      if (extracted.budget) {
-        suggestions.push({
+      if (extracted.budget && !suggestionMap.has("budget")) {
+        suggestionMap.set("budget", {
           field: "budget",
           value: extracted.budget,
           confidence: "High",
@@ -1300,6 +1289,33 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           source_document_name: firstSource.name,
           source_excerpt: extracted.sourceExcerpts?.budget || `Budget: ${extracted.budget} ${extracted.currency}`
         });
+      }
+
+      // Sync extracted object with fallback suggestions if missing
+      if (!extracted.projectName && suggestionMap.has("name")) extracted.projectName = String(suggestionMap.get("name")!.value);
+      if (!extracted.client && suggestionMap.has("client")) extracted.client = String(suggestionMap.get("client")!.value);
+      if (!extracted.startDate && suggestionMap.has("start_date")) extracted.startDate = String(suggestionMap.get("start_date")!.value);
+      if (!extracted.endDate && suggestionMap.has("end_date")) extracted.endDate = String(suggestionMap.get("end_date")!.value);
+      if (!extracted.budget && suggestionMap.has("budget")) extracted.budget = Number(suggestionMap.get("budget")!.value);
+
+      const suggestions = Array.from(suggestionMap.values());
+      const shouldAutoApply = req.body?.auto_apply === true;
+      let verifiedResult: any = null;
+
+      if (shouldAutoApply) {
+        const b64 = (primaryDoc.attachment_data || "").replace(/^data:.*?;base64,/, "");
+        const primaryBuffer = Buffer.from(b64, "base64");
+        verifiedResult = applyContractorIntelligenceAndVerify(
+          db,
+          extracted,
+          {
+            name: primaryDoc.attachment_name || primaryDoc.name || "Contractor Document",
+            buffer: primaryBuffer,
+            mimeType: "application/pdf"
+          },
+          projectId,
+          req.user!.user_id
+        );
       }
 
       writeAudit(
@@ -1313,19 +1329,20 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           document_ids: sources.map(s => s.id),
           fields_found: suggestions.map(s => s.field),
           extraction_source: source,
-          auto_updated: true,
-          report: verifiedResult.report
+          auto_updated: shouldAutoApply,
+          report: verifiedResult?.report || null
         }
       );
 
+      const existingProject = db.prepare("SELECT * FROM projects WHERE id=?").get(projectId) as any;
       res.json({
         success: true,
-        auto_updated: true,
+        auto_updated: shouldAutoApply,
         project_id: projectId,
-        project: verifiedResult.project,
-        report: verifiedResult.report,
-        work_packages: verifiedResult.workPackages,
-        tasks: verifiedResult.tasks,
+        project: verifiedResult?.project || existingProject,
+        report: verifiedResult?.report || null,
+        work_packages: verifiedResult?.workPackages || [],
+        tasks: verifiedResult?.tasks || [],
         extracted,
         source,
         analyzed_documents: sources.map(s => ({ id: s.id, name: s.name })),

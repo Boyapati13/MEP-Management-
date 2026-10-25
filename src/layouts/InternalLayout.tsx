@@ -1,37 +1,25 @@
-/**
- * MEP Management Platform — V1.4.1 Internal Main Contractor Workspace
- * Full 6-Domain Operational Navigation with Role Scoping and Enterprise Consolidation.
- */
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  HardHat,
-  ChevronDown,
-  ChevronUp,
-  ChevronRight,
-  LogOut,
-  Bell,
-  Search,
-  SlidersHorizontal,
-  FolderOpen,
-  Sparkles
+  Building2, LogOut, Sparkles, ChevronRight, Calendar, DollarSign, ShieldCheck
 } from 'lucide-react';
-import { DOMAINS, ROUTE_ITEMS, NavigationDomain, RouteItem } from '../app/routes';
-import { canShowDomain, canShowRoute, UserSession } from '../app/permissions';
+import {
+  DOMAINS, ROUTE_ITEMS, NavigationDomain
+} from '../app/routes';
 
 interface InternalLayoutProps {
-  user: UserSession;
+  user: any;
   logout: () => void;
   selectedProject: string;
   projects: any[];
-  onSelectProject: (id: string) => void;
+  onSelectProject: (projectId: string) => void;
   activeDomain: NavigationDomain;
   activeRoute: string;
-  onNavigate: (domain: NavigationDomain, routeId: string) => void;
+  onNavigate: (domain: NavigationDomain, route: string) => void;
   onOpenAssistant?: () => void;
   children: React.ReactNode;
 }
 
-export const InternalLayout: React.FC<InternalLayoutProps> = ({
+export function InternalLayout({
   user,
   logout,
   selectedProject,
@@ -41,182 +29,169 @@ export const InternalLayout: React.FC<InternalLayoutProps> = ({
   activeRoute,
   onNavigate,
   onOpenAssistant,
-  children
-}) => {
-  const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({
-    [activeDomain]: true,
-    delivery: true,
-    site: true
-  });
-
-  const toggleDomain = (domainId: string) => {
-    setExpandedDomains(prev => ({
-      ...prev,
-      [domainId]: !prev[domainId]
-    }));
-  };
-
-  const visibleDomains = DOMAINS.filter(d => canShowDomain(user, d.id));
-  const currentProject = projects.find(p => p.id === selectedProject);
+  children,
+}: InternalLayoutProps) {
+  const role = user?.role || 'Worker';
+  const visibleDomains = DOMAINS.filter(
+    (d) => !d.allowedRoles || d.allowedRoles.includes(role)
+  );
+  const subRoutes = ROUTE_ITEMS.filter(
+    (r) =>
+      r.domain === activeDomain &&
+      (!r.allowedRoles || r.allowedRoles.includes(role))
+  );
+  const activeProject = projects.find((p: any) => p.id === selectedProject) || projects[0] || null;
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
-      {/* Primary Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
-        {/* Branding & Version */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-sm">
-              <HardHat size={20} />
-            </div>
-            <div>
-              <h1 className="font-bold text-sm text-gray-900 leading-tight">MEP Platform</h1>
-              <span className="text-[10px] font-semibold text-gray-400">
-                v1.4.1 Enterprise
+    <div className="min-h-screen blueprint-surface flex text-[#14171f]">
+      {/* Deep Slate Architectural Sidebar */}
+      <aside className="w-64 bg-[#0f172a] border-r border-slate-800 flex flex-col text-slate-200 shadow-xl">
+        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-900/30">
+            <Building2 size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <div className="font-bold text-white leading-tight tracking-tight">MEP FieldHub</div>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                v1.5.0
               </span>
             </div>
+            <div className="text-[11px] text-slate-400">Construction Operations</div>
           </div>
         </div>
 
-        {/* Project Selector Context */}
-        <div className="p-3 border-b border-gray-100 bg-gray-50/50">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-            Active Project
+        {/* Project Switcher */}
+        <div className="p-3 border-b border-slate-800/80 bg-slate-900/50">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-400/90 mb-1.5">
+            Active Job Context
           </label>
           <select
             value={selectedProject}
-            onChange={e => onSelectProject(e.target.value)}
-            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded-lg p-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => onSelectProject(e.target.value)}
+            className="w-full text-xs font-semibold border border-slate-700 rounded-xl px-2.5 py-2 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+            <option value="">All Assigned Projects</option>
+            {projects.map((p: any) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
           </select>
         </div>
 
-        {/* Domain & Route Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {visibleDomains.map(domain => {
-            const DomainIcon = domain.icon;
-            const isDomainActive = activeDomain === domain.id;
-            const isExpanded = expandedDomains[domain.id] ?? false;
-            const items = ROUTE_ITEMS.filter(r => r.domain === domain.id && canShowRoute(user, r.id));
-
-            if (items.length === 1 && items[0].id === domain.defaultRoute) {
-              // Single-item domain (like Dashboard)
-              const singleItem = items[0];
-              const isSelected = activeRoute === singleItem.id;
-              return (
-                <button
-                  key={domain.id}
-                  onClick={() => onNavigate(domain.id, singleItem.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isSelected
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                  <DomainIcon size={16} />
-                  <span>{domain.label}</span>
-                </button>
-              );
-            }
-
+        {/* Domain Navigation */}
+        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
+          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Operational Domains
+          </div>
+          {visibleDomains.map((domain) => {
+            const Icon = domain.icon;
+            const isActive = domain.id === activeDomain;
             return (
-              <div key={domain.id} className="pt-1">
-                <button
-                  onClick={() => toggleDomain(domain.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                    isDomainActive
-                      ? 'text-blue-600 bg-blue-50/60'
-                      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <DomainIcon size={15} />
-                    <span>{domain.label}</span>
-                  </div>
-                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-
-                {isExpanded && (
-                  <div className="pl-6 pr-1 pt-1 space-y-0.5">
-                    {items.map(item => {
-                      const SubIcon = item.icon;
-                      const isSelected = activeRoute === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => onNavigate(domain.id, item.id)}
-                          className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            isSelected
-                              ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                          }`}
-                        >
-                          <SubIcon size={13} />
-                          <span className="truncate">{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <button
+                key={domain.id}
+                onClick={() => {
+                  const routes = ROUTE_ITEMS.filter(
+                    (r) =>
+                      r.domain === domain.id &&
+                      (!r.allowedRoles || r.allowedRoles.includes(role))
+                  );
+                  onNavigate(domain.id, routes[0]?.id || domain.defaultRoute);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  isActive
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Icon size={17} />
+                  <span>{domain.label}</span>
+                </span>
+                <ChevronRight size={14} className={isActive ? 'text-amber-100' : 'text-slate-600'} />
+              </button>
             );
           })}
         </nav>
 
-        {/* User Card & Logout */}
-        <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-          <div className="truncate mr-2">
-            <p className="text-xs font-bold text-gray-900 truncate">{user.name || 'User'}</p>
-            <p className="text-[10px] text-gray-500 truncate">{user.role}</p>
+        {/* User Identity Footer */}
+        <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-white truncate">{user?.name || user?.username}</div>
+            <div className="text-[11px] text-amber-400 font-medium truncate">{role}</div>
           </div>
           <button
             onClick={logout}
-            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-            title="Sign Out"
+            className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors"
+            title="Sign out"
           >
             <LogOut size={16} />
           </button>
         </div>
       </aside>
 
-      {/* Main Execution Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Operational Bar */}
-        <header className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="font-semibold text-gray-800">{currentProject?.name || 'Project'}</span>
-            <ChevronRight size={14} />
-            <span className="capitalize font-medium text-gray-600">{activeDomain}</span>
-            <ChevronRight size={14} />
-            <span className="capitalize font-semibold text-blue-600">
-              {ROUTE_ITEMS.find(r => r.id === activeRoute)?.label || activeRoute}
-            </span>
-          </div>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Buildertrend Top Job Context Ribbon */}
+        <header className="bg-white/95 backdrop-blur border-b border-[#e5e0d5] px-6 py-3 sticky top-0 z-20 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {subRoutes.map((r) => {
+                const active = r.id === activeRoute;
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => onNavigate(activeDomain, r.id)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      active
+                        ? 'bg-[#0f172a] text-white shadow-xs'
+                        : 'text-slate-600 hover:bg-stone-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
 
-          <div className="flex items-center gap-2">
-            {onOpenAssistant && (
-              <button
-                onClick={onOpenAssistant}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-              >
-                <Sparkles size={14} />
-                MEP Assistant
-              </button>
-            )}
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-              Role: {user.role}
-            </span>
+            <div className="flex items-center gap-3">
+              {activeProject && (
+                <div className="hidden xl:flex items-center gap-4 px-3.5 py-1.5 rounded-xl bg-[#f6f4ee] border border-[#e5e0d5] text-xs">
+                  <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-amber-600" />
+                    {activeProject.name}
+                  </span>
+                  {activeProject.budget !== undefined && (
+                    <span className="font-mono font-semibold text-emerald-800 flex items-center gap-0.5">
+                      <DollarSign size={12} />
+                      {Number(activeProject.budget || 0).toLocaleString()}
+                    </span>
+                  )}
+                  {activeProject.end_date && (
+                    <span className="font-mono text-slate-500 flex items-center gap-1">
+                      <Calendar size={12} />
+                      Target: {activeProject.end_date}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {onOpenAssistant && (
+                <button
+                  onClick={onOpenAssistant}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors"
+                >
+                  <Sparkles size={14} />
+                  MEP AI Copilot
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
-        {/* Content Container */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {children}
-        </div>
-      </main>
+        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
-};
+}

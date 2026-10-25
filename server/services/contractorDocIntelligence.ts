@@ -915,7 +915,7 @@ export function applyContractorIntelligenceAndVerify(
     (db.prepare("SELECT LOWER(description) as d FROM boq_items WHERE project_id=?").all(projectId) as any[]).map(r => r.d)
   );
   const existingMatItems = new Set(
-    (db.prepare("SELECT LOWER(item) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
+    (db.prepare("SELECT LOWER(COALESCE(material, description, '')) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
   );
   const existingCostDesc = new Set(
     (db.prepare("SELECT LOWER(description) as d FROM costs WHERE project_id=?").all(projectId) as any[]).map(r => r.d)
@@ -925,8 +925,8 @@ export function applyContractorIntelligenceAndVerify(
   const insertCostStmt = db.prepare("INSERT INTO costs VALUES (?, ?, ?, ?, ?, ?, ?)");
   const insertMatStmt = db.prepare(`
     INSERT INTO material_requests (
-      id, project_id, item, spec, quantity, unit, required_date, supplier, status, boq_item_id, wbs_code
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, project_id, location, discipline, system, material, description, quantity, unit, required_date, boq_reference, requested_by, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const todayIso = now.split("T")[0];
@@ -975,15 +975,17 @@ export function applyContractorIntelligenceAndVerify(
         insertMatStmt.run(
           crypto.randomUUID(),
           projectId,
+          bItem.area || "Site-Wide",
+          bItem.discipline || "MEP",
+          bItem.system || "General",
           bItem.description,
           `${bItem.discipline} — ${bItem.system} (BOQ #${bItem.item_number})`,
           bItem.tender_quantity,
           bItem.unit,
           reqDateIso,
-          companyName || "Approved MEP Vendor",
-          "Draft",
-          bId,
-          bItem.item_number
+          bItem.item_number,
+          userId,
+          "Draft"
         );
         existingMatItems.add(bItem.description.toLowerCase());
       }

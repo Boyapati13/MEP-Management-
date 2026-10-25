@@ -1,31 +1,11 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import fs from 'fs';
 import path from 'path';
-import {defineConfig, Plugin} from 'vite';
-
-function syncModularFrontendPlugin(): Plugin {
-  const copyRecursive = (src: string, dest: string) => {
-    if (!fs.existsSync(src)) return;
-    fs.mkdirSync(dest, { recursive: true });
-    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-      const s = path.join(src, entry.name);
-      const d = path.join(dest, entry.name);
-      if (entry.isDirectory()) copyRecursive(s, d);
-      else fs.copyFileSync(s, d);
-    }
-  };
-  return {
-    name: 'sync-modular-frontend',
-    buildStart() {
-      copyRecursive(path.resolve(__dirname, 'frontend'), path.resolve(__dirname, 'public', 'frontend'));
-    },
-  };
-}
+import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [syncModularFrontendPlugin(), react(), tailwindcss()],
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

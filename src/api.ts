@@ -182,6 +182,16 @@ export const projectsApi = {
     const endpoint = projectId ? `/api/projects/${projectId}/upload-contractor-doc` : '/api/projects/upload-contractor-doc';
     return api.post<any>(endpoint, fd);
   },
+  parseDocument: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post<any>('/api/projects/parse-document', fd);
+  },
+  extractSetupData: (projectId: string, documentIds?: string[], autoApply: boolean = false) =>
+    api.post<any>(`/api/projects/${projectId}/extract-setup-data`, {
+      document_ids: documentIds,
+      auto_apply: autoApply,
+    }),
 };
 
 // Work Packages

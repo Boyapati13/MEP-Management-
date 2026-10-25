@@ -1,25 +1,7 @@
-/**
- * MEP Management Platform — V1.4.1 Subcontractor Isolated Workspace Layout
- * Strict isolation to assigned work packages, zero leakage of commercial margins or competitor data.
- */
-import React, { useState, useEffect } from 'react';
-import {
-  Layers,
-  CalendarCheck,
-  FileCheck,
-  HelpCircle,
-  Coins,
-  LogOut,
-  HardHat,
-  Briefcase,
-  AlertCircle,
-  ExternalLink,
-  ChevronRight,
-  Shield,
-  FileText
-} from 'lucide-react';
-import { api } from '../api';
-import { WorkPackageCommandCenterModal } from '../components/WorkPackageCommandCenterModal';
+import React, { useState } from 'react';
+import { Building2, LogOut, HardHat, CheckSquare, FileText, TrendingUp, DollarSign } from 'lucide-react';
+
+export type SubcontractorTab = 'home' | 'work' | 'technical' | 'progress' | 'commercial';
 
 interface SubcontractorLayoutProps {
   user: any;
@@ -27,181 +9,84 @@ interface SubcontractorLayoutProps {
   selectedProject: string;
   projects: any[];
   onSelectProject: (id: string) => void;
-  renderContent: (currentTab: string, workPackageId?: string) => React.ReactNode;
+  renderContent: (tab: SubcontractorTab) => React.ReactNode;
 }
 
-export const SubcontractorLayout: React.FC<SubcontractorLayoutProps> = ({
+const TABS: { id: SubcontractorTab; label: string; icon: React.ComponentType<any> }[] = [
+  { id: 'home', label: 'My Project', icon: HardHat },
+  { id: 'work', label: 'My Work Packages', icon: CheckSquare },
+  { id: 'technical', label: 'RFIs & Submittals', icon: FileText },
+  { id: 'progress', label: 'Site Progress', icon: TrendingUp },
+  { id: 'commercial', label: 'Variations & Claims', icon: DollarSign },
+];
+
+export function SubcontractorLayout({
   user,
   logout,
   selectedProject,
   projects,
   onSelectProject,
-  renderContent
-}) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'work' | 'technical' | 'progress' | 'commercial'>('home');
-  const [myPackages, setMyPackages] = useState<any[]>([]);
-  const [selectedWpId, setSelectedWpId] = useState<string>('');
-  const [loadingPackages, setLoadingPackages] = useState(true);
-  const [commandCenterWpId, setCommandCenterWpId] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadWorkPackages() {
-      if (!selectedProject) return;
-      try {
-        setLoadingPackages(true);
-        const res = await api.get(`/api/work_packages?project_id=${selectedProject}`);
-        const packages = Array.isArray(res) ? res : [];
-        setMyPackages(packages);
-        if (packages.length > 0 && !selectedWpId) {
-          setSelectedWpId(packages[0].id);
-        }
-      } catch {
-        setMyPackages([]);
-      } finally {
-        setLoadingPackages(false);
-      }
-    }
-    loadWorkPackages();
-  }, [selectedProject]);
-
-  const navItems = [
-    { id: 'home', label: 'Home', icon: HardHat },
-    { id: 'work', label: 'My Work', icon: CalendarCheck },
-    { id: 'technical', label: 'Technical', icon: FileCheck },
-    { id: 'progress', label: 'Progress', icon: Layers },
-    { id: 'commercial', label: 'Commercial', icon: Coins }
-  ] as const;
-
-  const currentProject = projects.find(p => p.id === selectedProject);
+  renderContent,
+}: SubcontractorLayoutProps) {
+  const [activeTab, setActiveTab] = useState<SubcontractorTab>('home');
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
-        {/* Branding */}
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-sm">
-            <HardHat size={20} />
+    <div className="min-h-screen blueprint-surface flex flex-col text-[#14171f]">
+      <header className="bg-[#0f172a] border-b border-slate-800 px-6 py-3.5 flex items-center justify-between gap-4 text-white">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center">
+            <Building2 size={18} />
           </div>
           <div>
-            <h1 className="font-bold text-sm text-gray-900 leading-tight">MEP Platform</h1>
-            <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-              Subcontractor Portal
-            </span>
+            <div className="font-bold text-white text-sm">MEP FieldHub — Subcontractor Portal</div>
+            <div className="text-xs text-amber-400">{user?.trade || 'Trade Partner'} • Work-Package Scoped Access</div>
           </div>
         </div>
 
-        {/* Project & Scope Context */}
-        <div className="p-3 border-b border-gray-100 bg-gray-50/50">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-            Active Project
-          </label>
+        <div className="flex items-center gap-3">
           <select
             value={selectedProject}
-            onChange={e => onSelectProject(e.target.value)}
-            className="w-full text-xs font-semibold bg-white border border-gray-200 rounded-lg p-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => onSelectProject(e.target.value)}
+            className="text-xs font-semibold border border-slate-700 rounded-xl px-3 py-1.5 bg-slate-800 text-white"
           >
-            {projects.map(p => (
+            <option value="">Select Assigned Project</option>
+            {projects.map((p: any) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-
-          {myPackages.length > 0 && (
-            <div className="mt-2.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                Active Package
-              </label>
-              <select
-                value={selectedWpId}
-                onChange={e => setSelectedWpId(e.target.value)}
-                className="w-full text-xs bg-white border border-gray-200 rounded-lg p-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {myPackages.map(wp => (
-                  <option key={wp.id} value={wp.id}>
-                    {wp.code ? `[${wp.code}] ` : ''}{wp.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* Navigation items */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map(item => {
-            const Icon = item.icon;
-            const active = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <Icon size={16} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User Card & Logout */}
-        <div className="p-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-          <div className="truncate mr-2">
-            <p className="text-xs font-bold text-gray-900 truncate">{user.name || 'Subcontractor'}</p>
-            <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
-            <span className="inline-block mt-0.5 text-[9px] font-mono text-gray-400 bg-gray-200/60 px-1 rounded">
-              Scope: {user.access_scope || 'work_package'}
-            </span>
-          </div>
+          <span className="text-xs text-slate-300 font-medium">{user?.name || user?.username}</span>
           <button
             onClick={logout}
-            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-            title="Sign Out"
+            className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800"
+            title="Sign out"
           >
             <LogOut size={16} />
           </button>
         </div>
-      </aside>
+      </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="font-semibold text-gray-800">{currentProject?.name || 'Project'}</span>
-            <ChevronRight size={14} />
-            <span className="capitalize">{activeTab.replace('-', ' ')}</span>
-          </div>
-
-          {selectedWpId && (
+      <div className="bg-white/95 border-b border-[#e5e0d5] px-6 py-2.5 flex items-center gap-2 overflow-x-auto">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const active = t.id === activeTab;
+          return (
             <button
-              onClick={() => setCommandCenterWpId(selectedWpId)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
+                active
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-stone-100'
+              }`}
             >
-              <ExternalLink size={13} />
-              Open Work Package
+              <Icon size={14} />
+              <span>{t.label}</span>
             </button>
-          )}
-        </header>
+          );
+        })}
+      </div>
 
-        {/* Dynamic content view */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {renderContent(activeTab, selectedWpId)}
-        </div>
-      </main>
-
-      {/* Work Package Command Center Modal */}
-      {commandCenterWpId && (
-        <WorkPackageCommandCenterModal
-          open={Boolean(commandCenterWpId)}
-          workPackageId={commandCenterWpId}
-          onClose={() => setCommandCenterWpId(null)}
-        />
-      )}
+      <main className="flex-1 p-6 max-w-6xl w-full mx-auto">{renderContent(activeTab)}</main>
     </div>
   );
-};
+}
