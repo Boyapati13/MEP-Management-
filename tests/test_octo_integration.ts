@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import express from 'express';
 import { DatabaseSync } from 'node:sqlite';
-import { registerOctoRoutes } from './server/routes/octoRoutes';
+import { registerOctoRoutes } from '../server/routes/octoRoutes';
 
 const db = new DatabaseSync(':memory:');
 db.exec(`CREATE TABLE projects(id TEXT PRIMARY KEY); INSERT INTO projects VALUES ('p1'),('p2');
