@@ -90,7 +90,15 @@ export function canAccessWorkPackage(user: AuthenticatedUser, workPackageId?: st
   if (projectId && !canAccessProject(user, projectId)) return false;
 
   if (user.role === "Subcontractor") {
-    if (!user.work_package_id) return false;
+    // Package access must never be inferred from company membership alone.
+    if (user.access_scope === 'explicit_packages') {
+      const ids = Array.isArray(user.allowed_work_package_ids)
+        ? user.allowed_work_package_ids
+        : typeof user.allowed_work_package_ids === 'string'
+          ? user.allowed_work_package_ids.split(',').map(id => id.trim())
+          : [];
+      return ids.includes(workPackageId);
+    }
     return user.work_package_id === workPackageId;
   }
   return true;
