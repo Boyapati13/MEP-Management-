@@ -1,0 +1,3 @@
+## 2025-08-11 - Database Indexing for High-Concurrency Control Tower Queries
+**Learning:** High-concurrency Control Tower & 2-Week Lookahead endpoints execute multi-table joins and filtered queries against `tasks`, `dependencies`, `site_instructions`, `worker_assignments`, `leave_requests`, and `attendance`. Without targeted SQLite indexes on `(project_id, status)` and `task_id`, SQLite defaults to full table scans, increasing latency as table size grows under load.
+**Action:** Always verify query execution plans or add compound/single-column indexes on foreign keys and filter columns (`project_id`, `status`, `task_id`, `work_date`) when adding aggregated control tower or schedule lookahead endpoints.
