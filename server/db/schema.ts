@@ -835,8 +835,9 @@ export function initDb() {
 
   // Performance Optimization (⚡ Bolt): Indexes on high-frequency query columns.
   // Converts linear O(N) table scans during project scoping, subcontractor access checks,
-  // and per-record authorization evaluations in canAccessProject/canAccessRecord to O(log N) index lookups.
+  // control tower attention engine scans, and lookahead dependency mappings to O(log N) index lookups.
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_project_companies_proj_comp ON project_companies(project_id, company_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_record_owners_mod_user ON record_owners(module, user_id);");
@@ -844,6 +845,11 @@ export function initDb() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_submittals_project_id ON submittals(project_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_punchlist_project_id ON punchlist(project_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_work_packages_project_id ON work_packages(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_task_id ON dependencies(task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_site_instructions_proj ON site_instructions(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_worker_assignments_proj_status ON worker_assignments(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_leave_requests_proj_status ON leave_requests(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_attendance_proj_date ON attendance(project_id, work_date);");
 
   // V1.2 Workforce: site/assignment columns on tasks
   try { db.exec("ALTER TABLE tasks ADD COLUMN site_id TEXT;"); } catch {}
