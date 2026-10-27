@@ -915,6 +915,14 @@ export function initDb() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_po_task ON purchase_orders(task_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_mr_task ON material_requests(task_id);");
 
+  // Performance Optimization (⚡ Bolt): Indexes on high-frequency query columns in Control Tower and Lookahead Schedule.
+  // Optimizes lookahead schedule dependency filtering from O(N) full table scan to O(log N) indexed B-tree lookup.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_task_id ON dependencies(task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_project_id ON dependencies(project_id);");
+  // Optimizes Control Tower deterministic attention engine query filters on site instructions & leave requests.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_site_instructions_proj ON site_instructions(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_leave_requests_proj ON leave_requests(project_id, status);");
+
   seedUsers();
   seedLeaveTypes();
   seedData();
