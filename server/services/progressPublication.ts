@@ -132,10 +132,10 @@ export function createReportRevision(
 
     db.prepare(`
       INSERT INTO progress_reports (
-        id, project_id, report_no, title, period_start, period_end,
+        id, project_id, report_number, report_no, title, period_start, period_end,
         executive_summary, status, revision_no, supersedes_report_id,
         created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Draft', ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?, ?, ?, ?)
     `).run(
       newId,
       original.project_id,

@@ -16,12 +16,13 @@ export function registerProgressRoutes(app: any, db: DatabaseSync, authRequired:
         const reportNo = `PR-${Date.now().toString().slice(-4)}`;
         db.prepare(`
           INSERT INTO progress_reports (
-            id, project_id, report_no, title, period_start, period_end,
+            id, project_id, report_number, report_no, title, period_start, period_end,
             executive_summary, status, revision_no, created_by, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Draft', 0, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Draft', 0, ?, ?)
         `).run(
           newId,
           req.body.project_id,
+          reportNo,
           reportNo,
           req.body.title || `Progress Report ${reportNo}`,
           req.body.period_start || req.body.period_date || now.slice(0, 10),

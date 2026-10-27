@@ -592,14 +592,17 @@ async function runFullDataflowAudit() {
     title: "Monthly Executive Progress Report — May 2026",
     executive_summary: "HVAC Chiller Plant 100% installed and hydrotested; LV Switchgear on order.",
   });
+  if (pubReportRes.status !== 200) {
+    console.error("  [DEBUG] pubReportRes failed:", pubReportRes.status, pubReportRes.data);
+  }
   assert(
     pubReportRes.status === 200 && pubReportRes.data.status === "Published",
-    `Published Progress Report (${pubReportRes.data.report_no}) to Client Portal with frozen progress=${pubReportRes.data.overall_progress}%`
+    `Published Progress Report (${pubReportRes.data?.report_no}) to Client Portal with frozen progress=${pubReportRes.data?.overall_progress_percent ?? pubReportRes.data?.overall_progress}%`
   );
 
   const clientReportsRes = await apiJson("GET", `/api/progress_reports?project_id=${projectId}`, clientAuth.token);
   assert(
-    clientReportsRes.status === 200 && clientReportsRes.data.some((r: any) => r.id === pubReportRes.data.id),
+    clientReportsRes.status === 200 && clientReportsRes.data.some((r: any) => r.id === pubReportRes.data?.id),
     "Client Portal sees Published Progress Report"
   );
 
@@ -607,26 +610,50 @@ async function runFullDataflowAudit() {
   // STEP 8: CONNECTION 10 — WHATSAPP -> OCTO -> PROJECT RECORDS
   // ---------------------------------------------------------------------------
   console.log("\n--- [8] Connection 10: WhatsApp -> Octo -> Project Records & Audit Trail ---");
-  const octoIdentityRes = await apiJson("POST", "/api/octo/identities", token, {
-    user_id: adminAuth.user.user_id || adminAuth.user.id,
-    whatsapp_number: `+97150${runId}`,
-    default_project_id: projectId,
-    verified: 1,
+  const octoToken = process.env.OCTO_INGEST_TOKEN || "integration-test-secret-01234567890123456789";
+  process.env.OCTO_INGEST_TOKEN = octoToken;
+
+  const octoGroupId = `${runId.slice(0, 8)}@g.us`;
+  const octoGroupRes = await apiJson("PUT", "/api/octo/groups", token, {
+    group_id: octoGroupId,
+    project_id: projectId,
+    name: "Marina Bay MEP Site Updates",
+    active: true,
   });
   assert(
-    octoIdentityRes.status === 201 || octoIdentityRes.status === 200,
-    `Bound WhatsApp identity (+97150${runId}) to test project`
+    octoGroupRes.status === 200,
+    `Bound WhatsApp Group (${octoGroupId}) to test project`
   );
 
-  const octoLogWebhook = await apiJson("POST", "/api/octo/webhook", token, {
-    from: `+97150${runId}`,
-    message_id: `wamid.audit.${Date.now()}`,
-    text: `daily log: Installed 2 centrifugal chillers and completed 15 bar hydrotest in Basement B2 | crew: 18 | trade: HVAC`,
-    project_id: projectId,
+  const octoMsgRes = await fetch(`${BASE}/api/integrations/octo/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${octoToken}`,
+    },
+    body: JSON.stringify({
+      group_id: octoGroupId,
+      message_id: `wamid.${runId}.${Date.now()}`,
+      sender: "SiteSupervisor",
+      body: "Chillers hydrotested at 15 bar successfully. Daily progress log recorded.",
+      sent_at: new Date().toISOString(),
+    }),
+  });
+  const octoMsgData = (await octoMsgRes.json().catch(() => ({}))) as any;
+  assert(
+    (octoMsgRes.status === 201 || octoMsgRes.status === 200) && octoMsgData.id,
+    `WhatsApp -> Octo webhook ingested site message into inbox (id: ${octoMsgData.id})`
+  );
+
+  // Review & approve from inbox into daily log
+  const reviewRes = await apiJson("POST", `/api/octo/inbox/${octoMsgData.id}/review`, pmAuth.token, {
+    action: "approve",
+    record_type: "dailylog",
+    text: "Site update verified: 2 Chillers hydrotested at 15 bar in Basement B2",
   });
   assert(
-    octoLogWebhook.status === 200 && octoLogWebhook.data.status === "EXECUTED",
-    `WhatsApp -> Octo webhook executed daily log creation (record_id: ${octoLogWebhook.data.record_id})`
+    reviewRes.status === 200 && reviewRes.data.record_id,
+    `Project Manager approved Octo message into official Daily Log (record_id: ${reviewRes.data.record_id})`
   );
 
   // ---------------------------------------------------------------------------

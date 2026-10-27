@@ -7,6 +7,11 @@ import { registerCommercialController } from "../controllers/commercialControlle
 import { registerWorkforceController } from "../controllers/workforceController";
 import { registerControlTowerController } from "../controllers/controlTowerController";
 import { registerCrudController } from "../controllers/crudController";
+import { registerProgressRoutes } from "./progressRoutes";
+import { registerOctoRoutes } from "./octoRoutes";
+import { db } from "../db/connection";
+import { authRequired, hasProjectAccess } from "../middleware/auth";
+import { writeAudit } from "../services/auditService";
 
 export function registerAllServerRoutes(app: Express): void {
   registerAuthController(app);
@@ -17,4 +22,7 @@ export function registerAllServerRoutes(app: Express): void {
   registerWorkforceController(app);
   registerControlTowerController(app);
   registerCrudController(app);
+  registerProgressRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
+  registerOctoRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
 }
+

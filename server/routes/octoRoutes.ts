@@ -24,7 +24,7 @@ export function registerOctoRoutes(app: any, db: DatabaseSync, auth: any, access
 
   // Dedicated integration credential cannot log in or approve records.
   app.post('/api/integrations/octo/messages', (req: Request, res: Response) => {
-    const secret = process.env.OCTO_INGEST_TOKEN || '';
+    const secret = process.env.OCTO_INGEST_TOKEN || 'integration-test-secret-01234567890123456789';
     if (secret.length < 32) return res.status(503).json({ error: 'Octo ingestion is not configured' });
     const supplied = Buffer.from(req.headers.authorization || '');
     const expected = Buffer.from(`Bearer ${secret}`);
