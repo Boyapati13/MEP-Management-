@@ -139,15 +139,16 @@ export function createReportRevision(
     `).run(
       newId,
       original.project_id,
-      newReportNo,
-      `${original.title} (Rev ${nextRev})`,
-      original.period_start,
-      original.period_end,
-      original.executive_summary,
-      nextRev,
-      originalReportId,
-      user.user_id,
-      now
+      newReportNo, // report_number
+      newReportNo, // report_no
+      `${original.title} (Rev ${nextRev})`, // title
+      original.period_start, // period_start
+      original.period_end, // period_end
+      original.executive_summary, // executive_summary
+      nextRev, // revision_no
+      originalReportId, // supersedes_report_id
+      user.user_id, // created_by
+      now // created_at
     );
 
     const newReport = db.prepare('SELECT * FROM progress_reports WHERE id = ?').get(newId);
