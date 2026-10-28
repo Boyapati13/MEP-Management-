@@ -12,11 +12,15 @@ export function verifyPassword(password: string, storedHash: string): boolean {
   try {
     if (storedHash.includes(":")) {
       const [salt, hash] = storedHash.split(":");
-      const check = crypto.scryptSync(password, salt, 32).toString("hex");
-      return check === hash;
+      const checkBuf = crypto.scryptSync(password, salt, 32);
+      const hashBuf = Buffer.from(hash, "hex");
+      // Performance Optimization (⚡ Bolt): Constant-time buffer comparison via timingSafeEqual
+      // Prevents timing side-channel attacks and avoids redundant string allocation.
+      return checkBuf.length === hashBuf.length && crypto.timingSafeEqual(checkBuf, hashBuf);
     }
-    const legacyHash = crypto.scryptSync(password, "mep_salt_secure", 32).toString("hex");
-    return legacyHash === storedHash;
+    const checkBuf = crypto.scryptSync(password, "mep_salt_secure", 32);
+    const hashBuf = Buffer.from(storedHash, "hex");
+    return checkBuf.length === hashBuf.length && crypto.timingSafeEqual(checkBuf, hashBuf);
   } catch {
     return false;
   }
