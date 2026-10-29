@@ -140,6 +140,7 @@ export function createReportRevision(
       newId,
       original.project_id,
       newReportNo,
+      newReportNo,
       `${original.title} (Rev ${nextRev})`,
       original.period_start,
       original.period_end,
