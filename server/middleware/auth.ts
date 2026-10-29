@@ -26,10 +26,17 @@ declare global {
   }
 }
 
-// Lazy-initialized prepared statements for fast authorization checks
+// Performance Optimization (⚡ Bolt): Lazy-initialized prepared statements for authentication
+// and authorization checks to eliminate SQL statement compilation overhead on every HTTP request.
 let stmtMemberAccess: any = null;
 let stmtCompStatus: any = null;
 let stmtCompProjAccess: any = null;
+let stmtGetSession: any = null;
+let stmtDeleteSession: any = null;
+let stmtGetUser: any = null;
+let stmtGetCompanyStatusAuth: any = null;
+let stmtRecordOwner: any = null;
+let stmtRecordOwnerDoc: any = null;
 
 // Performance Optimization: Memoizes project authorization checks per request to avoid
 // redundant database query execution during batch record filtering on list endpoints.
@@ -261,10 +268,15 @@ export function canAccessRecord(
     const isSpecialAllowed = (module === "documents" || module === "drawings" || module === "clarifications" || module === "progress_submissions") && user.role === "Subcontractor";
     if (!isSpecialAllowed) return false;
   }
+  if (!stmtRecordOwner) {
+    stmtRecordOwner = db.prepare("SELECT 1 FROM record_owners WHERE module=? AND record_id=? AND user_id=?");
+    stmtRecordOwnerDoc = db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?");
+  }
+
   if (action === "delete" && !canDelete(user)) {
     const isOwnDoc = (module === "documents" || module === "drawings") && user.role === "Subcontractor" &&
       (record.subcontractor_id === user.user_id ||
-       Boolean(db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(record.id, user.user_id)));
+       Boolean(stmtRecordOwnerDoc.get(record.id, user.user_id)));
     if (!isOwnDoc) return false;
   }
 
@@ -315,7 +327,7 @@ export function canAccessRecord(
     // If user is bound to a work package or company, restrict generic unassigned records
     if (user.work_package_id || user.company_id) {
       if (!record.work_package_id && !record.company_id) {
-        const isOwner = Boolean(db.prepare("SELECT 1 FROM record_owners WHERE module=? AND record_id=? AND user_id=?").get(module, record.id, user.user_id));
+        const isOwner = Boolean(stmtRecordOwner.get(module, record.id, user.user_id));
         const isAssigned = (record.subcontractor_id === user.user_id) || (record.assignee === user.name) || (user.company && record.contractor === user.company);
         if (!isOwner && !isAssigned) return false;
       }
@@ -325,7 +337,7 @@ export function canAccessRecord(
     if (module === "documents" || module === "drawings") {
       const isOwner = record.subcontractor_id === user.user_id;
       const isRecordOwner = Boolean(
-        db.prepare("SELECT 1 FROM record_owners WHERE module='documents' AND record_id=? AND user_id=?").get(record.id, user.user_id)
+        stmtRecordOwnerDoc.get(record.id, user.user_id)
       );
       const isWpMatch = Boolean(user.work_package_id && record.work_package_id === user.work_package_id);
       const isCoMatch = Boolean(user.company_id && record.company_id === user.company_id);
@@ -345,23 +357,30 @@ export function getCurrentUser(req: Request): AuthenticatedUser | null {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!token) return null;
 
-  const session = db.prepare("SELECT * FROM sessions WHERE token=?").get(token) as any;
+  if (!stmtGetSession) {
+    stmtGetSession = db.prepare("SELECT * FROM sessions WHERE token=?");
+    stmtDeleteSession = db.prepare("DELETE FROM sessions WHERE token=?");
+    stmtGetUser = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id, worker_id, access_scope, allowed_work_package_ids FROM users WHERE id=?");
+    stmtGetCompanyStatusAuth = db.prepare("SELECT status FROM companies WHERE id=?");
+  }
+
+  const session = stmtGetSession.get(token) as any;
   if (!session) return null;
 
   if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    stmtDeleteSession.run(token);
     return null;
   }
   // Re-fetch current live user and verify active status on every request (P1 session revocation)
-  const userRow = db.prepare("SELECT id, username, name, role, status, email, phone, company_id, company, trade, work_package_id, worker_id, access_scope, allowed_work_package_ids FROM users WHERE id=?").get(session.user_id) as any;
+  const userRow = stmtGetUser.get(session.user_id) as any;
   if (!userRow || userRow.status !== "Active") {
-    db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+    stmtDeleteSession.run(token);
     return null;
   }
   if (userRow.company_id) {
-    const comp = db.prepare("SELECT status FROM companies WHERE id=?").get(userRow.company_id) as any;
+    const comp = stmtGetCompanyStatusAuth.get(userRow.company_id) as any;
     if (comp && comp.status === "Inactive") {
-      db.prepare("DELETE FROM sessions WHERE token=?").run(token);
+      stmtDeleteSession.run(token);
       return null;
     }
   }
