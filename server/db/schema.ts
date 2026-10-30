@@ -915,6 +915,18 @@ export function initDb() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_po_task ON purchase_orders(task_id);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_mr_task ON material_requests(task_id);");
 
+  // Performance Optimization (⚡ Bolt): High-frequency query indexes for dependency checks, workforce radar, and work package scoping
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_task ON dependencies(task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_pred ON dependencies(predecessor_task_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_proj ON dependencies(project_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_attendance_proj_date ON attendance(project_id, work_date);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_site_instructions_proj_status ON site_instructions(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_leave_requests_proj_status ON leave_requests(project_id, status);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_work_package ON tasks(work_package_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_submittals_work_package ON submittals(work_package_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_rfis_work_package ON rfis(work_package_id);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_punchlist_work_package ON punchlist(work_package_id);");
+
   seedUsers();
   seedLeaveTypes();
   seedData();
