@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CalendarDays, CheckCircle2, FileText, Loader2, Milestone, RefreshCw, TrendingUp } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, FileText, Loader2, Milestone, RefreshCw, TrendingUp, Printer } from 'lucide-react';
 import { api } from '../api';
 
 type ClientTab = 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications';

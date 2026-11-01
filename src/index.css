@@ -65,3 +65,46 @@ h1, h2, h3, .font-display {
     linear-gradient(to bottom, color-mix(in srgb, var(--workspace-line) 70%, transparent) 1px, transparent 1px);
 }
 .workspace-surface[data-workspace-grid="off"] { background-image: none; }
+
+
+/* ==========================================================================
+   ENTERPRISE PRINT & PDF EXPORT STYLES (Chromium Headless / Browser Print)
+   ========================================================================== */
+@media print {
+  body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+  }
+  
+  /* Hide interactive chrome: navigation, sidebars, buttons, copilot drawer */
+  header, aside, nav, button, select, .no-print, [aria-label="Open MEP AI Copilot"] {
+    display: none !important;
+  }
+
+  /* Expand main content container to full printed page */
+  .min-h-screen, .flex-1, main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Prevent awkward page splits inside key tables and cards */
+  tr, .rounded-2xl, .bg-white {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Clean print borders */
+  .border, .border-stone-200, .border-slate-200 {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Force print background colors for badges & header ribbons */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
