@@ -99,8 +99,9 @@ h1, h2, h3, .font-display {
 }
 .workspace-surface[data-workspace-theme="dark"] .text-slate-600,
 .workspace-surface[data-workspace-theme="dark"] .text-gray-600 {
-  color: #94a3b8 !important;
+  color: #cbd5e1 !important;
 }
+.workspace-surface[data-workspace-theme="dark"] .text-slate-500,
 .workspace-surface[data-workspace-theme="dark"] .text-gray-500 {
   color: #94a3b8 !important;
 }
@@ -108,9 +109,79 @@ h1, h2, h3, .font-display {
 .workspace-surface[data-workspace-theme="dark"] .border-gray-200,
 .workspace-surface[data-workspace-theme="dark"] .border-gray-300,
 .workspace-surface[data-workspace-theme="dark"] .border-stone-200,
+.workspace-surface[data-workspace-theme="dark"] .border-slate-100,
 .workspace-surface[data-workspace-theme="dark"] .border-slate-200,
+.workspace-surface[data-workspace-theme="dark"] .border-slate-300,
 .workspace-surface[data-workspace-theme="dark"] .border-slate-700 {
   border-color: #334155 !important;
+}
+
+/* Dark mode alert / status background overrides to eliminate murky beige contrast issues */
+.workspace-surface[data-workspace-theme="dark"] .bg-amber-50,
+.workspace-surface[data-workspace-theme="dark"] [class*="bg-amber-50"],
+.workspace-surface[data-workspace-theme="dark"] .bg-yellow-50 {
+  background-color: rgba(120, 53, 15, 0.28) !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-rose-50,
+.workspace-surface[data-workspace-theme="dark"] [class*="bg-rose-50"],
+.workspace-surface[data-workspace-theme="dark"] .bg-red-50 {
+  background-color: rgba(136, 19, 55, 0.28) !important;
+  border-color: rgba(244, 63, 94, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-emerald-50,
+.workspace-surface[data-workspace-theme="dark"] [class*="bg-emerald-50"],
+.workspace-surface[data-workspace-theme="dark"] .bg-green-50 {
+  background-color: rgba(6, 78, 59, 0.28) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-blue-50,
+.workspace-surface[data-workspace-theme="dark"] [class*="bg-blue-50"],
+.workspace-surface[data-workspace-theme="dark"] .bg-sky-50 {
+  background-color: rgba(30, 58, 138, 0.28) !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-indigo-50,
+.workspace-surface[data-workspace-theme="dark"] [class*="bg-indigo-50"] {
+  background-color: rgba(49, 46, 129, 0.28) !important;
+  border-color: rgba(99, 102, 241, 0.45) !important;
+}
+
+/* Badges and pills in dark mode */
+.workspace-surface[data-workspace-theme="dark"] .bg-amber-100,
+.workspace-surface[data-workspace-theme="dark"] .bg-amber-200 {
+  background-color: rgba(245, 158, 11, 0.25) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-rose-100,
+.workspace-surface[data-workspace-theme="dark"] .bg-rose-200,
+.workspace-surface[data-workspace-theme="dark"] .bg-red-100,
+.workspace-surface[data-workspace-theme="dark"] .bg-red-200 {
+  background-color: rgba(244, 63, 94, 0.25) !important;
+  color: #fb7185 !important;
+  border-color: rgba(244, 63, 94, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-emerald-100,
+.workspace-surface[data-workspace-theme="dark"] .bg-emerald-200 {
+  background-color: rgba(16, 185, 129, 0.25) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-blue-100,
+.workspace-surface[data-workspace-theme="dark"] .bg-blue-200 {
+  background-color: rgba(59, 130, 246, 0.25) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+}
+
+/* Button contrast inside dark mode cards */
+.workspace-surface[data-workspace-theme="dark"] .bg-slate-900:not(header):not(aside):not([class*="bg-gradient"]) {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-slate-900:not(header):not(aside):not([class*="bg-gradient"]):hover {
+  background-color: #1d4ed8 !important;
 }
 
 /* Universal Form Controls Dark Theme - Fixes invisible white-on-white inputs */
