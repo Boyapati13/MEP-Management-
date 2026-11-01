@@ -47,6 +47,7 @@ import { EnterpriseModulesView } from './components/EnterpriseModulesView';
 import { CreateProjectModal } from './components/CreateProjectModal';
 import { ProjectDocumentsSection } from './components/ProjectDocumentsSection';
 import { SelectionsManagerView } from './components/SelectionsManagerView';
+import { ProjectMessagesPage } from './components/ProjectMessagesPage';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -634,6 +635,7 @@ function AppShell() {
       case 'work-packages': return <ProjectsPage navigate={navigate} />;
       case 'project-detail': return <ProjectDetailPage projectId={pageParam} navigate={navigate} />;
       case 'tasks': return <TasksBoardPage navigate={navigate} projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} addToast={addToast} user={user} />;
+      case 'messages': return <ProjectMessagesPage projectId={selectedProject} navigate={navigate} addToast={addToast} user={user} />;
       case 'selections': return <SelectionsManagerView projectId={selectedProject} addToast={addToast} user={user} />;
       case 'procurement-risk': return <div className="space-y-6"><ProcurementProgrammeRiskView projectId={selectedProject} /></div>;
       case 'actions': return <div className="space-y-6"><ProjectActionsRegister projectId={selectedProject} /></div>;

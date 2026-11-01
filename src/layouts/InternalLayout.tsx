@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2, LogOut, Sparkles, ChevronRight, Calendar, DollarSign, ShieldCheck,
   Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers, Palette, Check,
-  RotateCcw, Sliders
+  RotateCcw, Sliders, MessageSquare
 } from 'lucide-react';
 import {
   DOMAINS, ROUTE_ITEMS, NavigationDomain
@@ -502,6 +502,19 @@ export function InternalLayout({
                     )}
                   </div>
                 )}
+
+                {/* Quick Messages Button in Header */}
+                <button
+                  type="button"
+                  onClick={() => onNavigate('delivery', 'messages')}
+                  className="relative inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-stone-200 dark:border-slate-700 transition-colors touch-manipulation"
+                  title="Project Messages & Discussions"
+                  aria-label="Project Messages & Discussions"
+                >
+                  <MessageSquare size={14} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                  <span className="hidden md:inline">Messages</span>
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                </button>
 
                 {/* Quick Appearance Customizer Button in Header */}
                 <button

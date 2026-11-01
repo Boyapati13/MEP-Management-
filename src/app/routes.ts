@@ -33,7 +33,8 @@ import {
   MapPinned,
   ClipboardList,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  MessageSquare
 } from 'lucide-react';
 
 export type NavigationDomain =
@@ -128,6 +129,7 @@ export const ROUTE_ITEMS: RouteItem[] = [
 
   // Pillar 2: Field & Site Operations
   { id: 'tasks', label: 'Gantt & Kanban Programme', icon: CalendarCheck, domain: 'delivery' },
+  { id: 'messages', label: 'Project Messages', icon: MessageSquare, domain: 'delivery', badgeKey: 'unread_messages' },
   { id: 'project-detail', label: 'Work Packages', icon: Layers, domain: 'delivery' },
   { id: 'progress', label: 'Progress Reports', icon: TrendingUp, domain: 'delivery' },
   { id: 'workforce', label: 'Workforce & Attendance', icon: Users, domain: 'delivery' },

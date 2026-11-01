@@ -399,3 +399,29 @@ export const selectionsApi = {
     api.post<any>(`/api/projects/${projectId}/selections/seed-defaults${force ? '?force=true' : ''}`, {}),
 };
 
+// Buildertrend Project Messages & Communication Hub API
+export const messagesApi = {
+  list: (projectId: string, params?: { channel?: string; search?: string; linked_item_type?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.channel) sp.set('channel', params.channel);
+    if (params?.search) sp.set('search', params.search);
+    if (params?.linked_item_type) sp.set('linked_item_type', params.linked_item_type);
+    const qs = sp.toString();
+    return api.get<any[]>(`/api/projects/${projectId}/messages${qs ? `?${qs}` : ''}`);
+  },
+  getReplies: (projectId: string, messageId: string) =>
+    api.get<{ parent: any; replies: any[] }>(`/api/projects/${projectId}/messages/${messageId}/replies`),
+  create: (projectId: string, data: any) =>
+    api.post<any>(`/api/projects/${projectId}/messages`, data),
+  reply: (projectId: string, messageId: string, data: { body: string; attachment_name?: string; attachment_url?: string; attachment_type?: string }) =>
+    api.post<any>(`/api/projects/${projectId}/messages/${messageId}/replies`, data),
+  markRead: (projectId: string, messageId: string) =>
+    api.patch<any>(`/api/projects/${projectId}/messages/${messageId}/read`, {}),
+  togglePin: (projectId: string, messageId: string) =>
+    api.patch<any>(`/api/projects/${projectId}/messages/${messageId}/pin`, {}),
+  getStats: (projectId: string) =>
+    api.get<{ total: number; unread: number; byChannel: { client: number; subcontractor: number; team: number } }>(`/api/projects/${projectId}/messages/stats`),
+  delete: (projectId: string, messageId: string) =>
+    api.delete<any>(`/api/projects/${projectId}/messages/${messageId}`),
+};
+

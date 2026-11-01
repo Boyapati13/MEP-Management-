@@ -399,6 +399,35 @@ export function initDb() {
       created_at TEXT
     );
     -- =====================================================
+    -- BUILDERTREND PROJECT MESSAGES & COMMUNICATIONS
+    -- =====================================================
+    CREATE TABLE IF NOT EXISTS project_messages (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'team',
+      parent_id TEXT,
+      subject TEXT,
+      body TEXT NOT NULL,
+      sender_id TEXT,
+      sender_name TEXT NOT NULL,
+      sender_role TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'Normal',
+      linked_item_type TEXT,
+      linked_item_id TEXT,
+      linked_item_label TEXT,
+      attachment_name TEXT,
+      attachment_url TEXT,
+      attachment_type TEXT,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      is_unread INTEGER NOT NULL DEFAULT 1,
+      reply_count INTEGER NOT NULL DEFAULT 0,
+      last_reply_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_messages_proj_channel ON project_messages(project_id, channel, created_at);
+    CREATE INDEX IF NOT EXISTS idx_project_messages_parent ON project_messages(parent_id);
+    -- =====================================================
     -- WORKFORCE MODULE TABLES (V1.2)
     -- =====================================================
     CREATE TABLE IF NOT EXISTS sites (
