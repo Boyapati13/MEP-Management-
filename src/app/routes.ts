@@ -122,6 +122,7 @@ export const ROUTE_ITEMS: RouteItem[] = [
 
   // Pillar 1: Commercial & Financial Control
   { id: 'boq', label: 'BOQ & Job Costing', icon: FileSpreadsheet, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
+  { id: 'selections', label: 'Selections & Allowances', icon: Sliders, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager', 'SiteEngineer'] },
   { id: 'procurement', label: 'Procurement & POs', icon: Package, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager', 'SiteEngineer'] },
   { id: 'change_orders', label: 'Variations & Claims', icon: Receipt, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
 

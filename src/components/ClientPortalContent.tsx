@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, CalendarDays, CheckCircle2, FileText, Loader2, Milestone, RefreshCw, TrendingUp, Printer } from 'lucide-react';
 import { api } from '../api';
+import { SelectionsManagerView } from './SelectionsManagerView';
 
-type ClientTab = 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications';
+type ClientTab = 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications' | 'selections';
 
 interface Props {
   tab: ClientTab;
@@ -145,6 +146,10 @@ export function ClientPortalContent({ tab, projectId }: Props) {
         </Panel>
       </div>
     );
+  }
+
+  if (tab === 'selections') {
+    return <SelectionsManagerView projectId={projectId} addToast={(type, msg) => alert(msg)} />;
   }
 
   if (tab === 'documents') {

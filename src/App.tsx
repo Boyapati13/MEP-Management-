@@ -46,6 +46,7 @@ import { TasksBoardPage } from './components/TasksBoardPage';
 import { EnterpriseModulesView } from './components/EnterpriseModulesView';
 import { CreateProjectModal } from './components/CreateProjectModal';
 import { ProjectDocumentsSection } from './components/ProjectDocumentsSection';
+import { SelectionsManagerView } from './components/SelectionsManagerView';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -571,7 +572,7 @@ type Page =
   | 'actions' | 'decisions' | 'octo-inbox'
   | 'rfis' | 'submittals' | 'documents'
   | 'ncrs' | 'inspections' | 'commissioning' | 'handover' | 'progress'
-  | 'clarifications' | 'change_orders' | 'boq' | 'procurement' | 'risks'
+  | 'clarifications' | 'change_orders' | 'boq' | 'selections' | 'procurement' | 'risks'
   | 'punchlist' | 'dailylogs' | 'timesheets' | 'attendance' | 'equipment'
   | 'companies' | 'users' | 'audit'
   // Workforce pages
@@ -633,6 +634,7 @@ function AppShell() {
       case 'work-packages': return <ProjectsPage navigate={navigate} />;
       case 'project-detail': return <ProjectDetailPage projectId={pageParam} navigate={navigate} />;
       case 'tasks': return <TasksBoardPage navigate={navigate} projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} addToast={addToast} user={user} />;
+      case 'selections': return <SelectionsManagerView projectId={selectedProject} addToast={addToast} user={user} />;
       case 'procurement-risk': return <div className="space-y-6"><ProcurementProgrammeRiskView projectId={selectedProject} /></div>;
       case 'actions': return <div className="space-y-6"><ProjectActionsRegister projectId={selectedProject} /></div>;
       case 'decisions': return <div className="space-y-6"><ProjectDecisionsRegister projectId={selectedProject} /></div>;
@@ -717,7 +719,7 @@ function AppShell() {
           onOpenAssistant={() => setAssistantOpen(true)}
           renderContent={(tab) => (
             <ClientPortalContent
-              tab={tab as 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications'}
+              tab={tab as 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications' | 'selections'}
               projectId={selectedProject}
             />
           )}

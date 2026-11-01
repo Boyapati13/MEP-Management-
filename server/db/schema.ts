@@ -360,6 +360,45 @@ export function initDb() {
       created_at TEXT
     );
     -- =====================================================
+    -- BUILDERTREND SELECTIONS & ALLOWANCES MODULE
+    -- =====================================================
+    CREATE TABLE IF NOT EXISTS selection_categories (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      trade TEXT NOT NULL,
+      allowance_amount REAL NOT NULL DEFAULT 0,
+      cutoff_date TEXT,
+      status TEXT DEFAULT 'Pending Client Choice',
+      selected_choice_id TEXT,
+      approved_by TEXT,
+      approved_at TEXT,
+      approval_notes TEXT,
+      signature_token TEXT,
+      boq_ref TEXT,
+      task_id TEXT,
+      change_order_id TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS selection_choices (
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      manufacturer TEXT,
+      model_number TEXT,
+      unit_price REAL NOT NULL DEFAULT 0,
+      quantity REAL NOT NULL DEFAULT 1,
+      total_price REAL NOT NULL DEFAULT 0,
+      lead_time_weeks INTEGER DEFAULT 2,
+      is_baseline INTEGER DEFAULT 0,
+      image_url TEXT,
+      spec_sheet_url TEXT,
+      description TEXT,
+      technical_specs TEXT,
+      created_at TEXT
+    );
+    -- =====================================================
     -- WORKFORCE MODULE TABLES (V1.2)
     -- =====================================================
     CREATE TABLE IF NOT EXISTS sites (

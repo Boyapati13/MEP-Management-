@@ -375,3 +375,27 @@ export const copilotApi = {
     api.get<any>(`/api/ai/copilot/context${projectId ? `?project_id=${projectId}` : ''}`),
 };
 
+// Buildertrend Selections & Allowances Management API
+export const selectionsApi = {
+  getProjectSelections: (projectId: string) =>
+    api.get<{ categories: any[]; metrics: any }>(`/api/projects/${projectId}/selections`),
+  createCategory: (projectId: string, data: any) =>
+    api.post<any>(`/api/projects/${projectId}/selections/categories`, data),
+  updateCategory: (categoryId: string, data: any) =>
+    api.put<any>(`/api/selections/categories/${categoryId}`, data),
+  deleteCategory: (categoryId: string) =>
+    api.delete<any>(`/api/selections/categories/${categoryId}`),
+  addChoice: (categoryId: string, data: any) =>
+    api.post<any>(`/api/selections/categories/${categoryId}/choices`, data),
+  updateChoice: (choiceId: string, data: any) =>
+    api.put<any>(`/api/selections/choices/${choiceId}`, data),
+  deleteChoice: (choiceId: string) =>
+    api.delete<any>(`/api/selections/choices/${choiceId}`),
+  selectChoice: (categoryId: string, data: { choice_id: string; approved_by?: string; approval_notes?: string; signature_token?: string; lock_approval?: boolean }) =>
+    api.post<any>(`/api/selections/categories/${categoryId}/select`, data),
+  createVariation: (categoryId: string) =>
+    api.post<any>(`/api/selections/categories/${categoryId}/create-variation`, {}),
+  seedDefaults: (projectId: string, force?: boolean) =>
+    api.post<any>(`/api/projects/${projectId}/selections/seed-defaults${force ? '?force=true' : ''}`, {}),
+};
+

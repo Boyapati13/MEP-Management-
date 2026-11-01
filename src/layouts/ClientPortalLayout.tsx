@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Building2, LogOut, Eye, Calendar, TrendingUp, FileText, MessageSquare, Sparkles } from 'lucide-react';
+import { Building2, LogOut, Eye, Calendar, TrendingUp, FileText, MessageSquare, Sparkles, Sliders } from 'lucide-react';
 
-export type ClientTab = 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications';
+export type ClientTab = 'overview' | 'programme' | 'progress' | 'documents' | 'clarifications' | 'selections';
 
 interface ClientPortalLayoutProps {
   user: any;
@@ -15,6 +15,7 @@ interface ClientPortalLayoutProps {
 
 const TABS: { id: ClientTab; label: string; icon: React.ComponentType<any> }[] = [
   { id: 'overview', label: 'Executive Summary', icon: Eye },
+  { id: 'selections', label: 'Selections & Approvals', icon: Sliders },
   { id: 'programme', label: 'Master Programme', icon: Calendar },
   { id: 'progress', label: 'Site Progress', icon: TrendingUp },
   { id: 'documents', label: 'Published Documents', icon: FileText },
