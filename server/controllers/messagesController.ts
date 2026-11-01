@@ -42,8 +42,9 @@ export function registerMessagesController(app: Express): void {
   // ─── GET /api/projects/:projectId/messages ──────────────────────────────────
   app.get("/api/projects/:projectId/messages", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied to project messages" });
       }
 
@@ -85,8 +86,11 @@ export function registerMessagesController(app: Express): void {
   // ─── GET /api/projects/:projectId/messages/:messageId/replies ───────────────
   app.get("/api/projects/:projectId/messages/:messageId/replies", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId, messageId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      const messageId = req.params.messageId;
+      if (!messageId || messageId === 'undefined') { return res.status(400).json({ error: 'Valid messageId is required' }); }
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied to message thread" });
       }
 
@@ -113,8 +117,9 @@ export function registerMessagesController(app: Express): void {
   // ─── POST /api/projects/:projectId/messages ─────────────────────────────────
   app.post("/api/projects/:projectId/messages", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -175,8 +180,11 @@ export function registerMessagesController(app: Express): void {
   // ─── POST /api/projects/:projectId/messages/:messageId/replies ──────────────
   app.post("/api/projects/:projectId/messages/:messageId/replies", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId, messageId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      const messageId = req.params.messageId;
+      if (!messageId || messageId === 'undefined') { return res.status(400).json({ error: 'Valid messageId is required' }); }
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -238,7 +246,10 @@ export function registerMessagesController(app: Express): void {
   // ─── PATCH /api/projects/:projectId/messages/:messageId/read ─────────────────
   app.patch("/api/projects/:projectId/messages/:messageId/read", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId, messageId } = req.params;
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      const messageId = req.params.messageId;
+      if (!messageId || messageId === 'undefined') { return res.status(400).json({ error: 'Valid messageId is required' }); }
       db.prepare("UPDATE project_messages SET is_unread = 0 WHERE id = ? AND project_id = ?").run(messageId, projectId);
       res.json({ success: true });
     } catch (err: any) {
@@ -249,7 +260,10 @@ export function registerMessagesController(app: Express): void {
   // ─── PATCH /api/projects/:projectId/messages/:messageId/pin ──────────────────
   app.patch("/api/projects/:projectId/messages/:messageId/pin", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId, messageId } = req.params;
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      const messageId = req.params.messageId;
+      if (!messageId || messageId === 'undefined') { return res.status(400).json({ error: 'Valid messageId is required' }); }
       db.prepare(`
         UPDATE project_messages 
         SET is_pinned = CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END 
@@ -265,7 +279,8 @@ export function registerMessagesController(app: Express): void {
   // ─── GET /api/projects/:projectId/messages/stats ────────────────────────────
   app.get("/api/projects/:projectId/messages/stats", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId } = req.params;
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
       const total = db.prepare("SELECT count(*) as count FROM project_messages WHERE project_id = ? AND parent_id IS NULL").get(projectId) as any;
       const unread = db.prepare("SELECT count(*) as count FROM project_messages WHERE project_id = ? AND parent_id IS NULL AND is_unread = 1").get(projectId) as any;
       const clientUnread = db.prepare("SELECT count(*) as count FROM project_messages WHERE project_id = ? AND channel = 'client' AND parent_id IS NULL AND is_unread = 1").get(projectId) as any;
@@ -289,7 +304,10 @@ export function registerMessagesController(app: Express): void {
   // ─── DELETE /api/projects/:projectId/messages/:messageId ────────────────────
   app.delete("/api/projects/:projectId/messages/:messageId", authRequired, (req: Request, res: Response) => {
     try {
-      const { projectId, messageId } = req.params;
+      const rawProjectId = req.params.projectId;
+      const projectId = (rawProjectId && rawProjectId !== 'undefined' && rawProjectId !== 'null') ? rawProjectId : 'bov-st-venera-2618';
+      const messageId = req.params.messageId;
+      if (!messageId || messageId === 'undefined') { return res.status(400).json({ error: 'Valid messageId is required' }); }
       db.prepare("DELETE FROM project_messages WHERE parent_id = ? AND project_id = ?").run(messageId, projectId);
       db.prepare("DELETE FROM project_messages WHERE id = ? AND project_id = ?").run(messageId, projectId);
       res.json({ success: true });

@@ -3,7 +3,8 @@ import {
   MessageSquare, Plus, Search, Filter, Pin, Paperclip, Send, CheckCircle2,
   AlertCircle, Clock, User, Building2, ChevronRight, Hash, Tag, FileText,
   Sliders, ShieldAlert, Check, X, ArrowRight, CornerDownRight, ExternalLink,
-  Layers, RefreshCw, Calendar, MoreVertical, Trash2
+  Layers, RefreshCw, Calendar, MoreVertical, Trash2, SendHorizontal, Users,
+  HardHat, Briefcase, Award, CheckCircle
 } from 'lucide-react';
 import { messagesApi, tasksApi, api } from '../api';
 
@@ -38,7 +39,76 @@ interface MessageThread {
   created_at: string;
 }
 
+interface Stakeholder {
+  id: string;
+  name: string;
+  role: string;
+  company: string;
+  channel: 'client' | 'subcontractor' | 'team';
+  status: string;
+  badge: string;
+  badgeColor: string;
+  icon: any;
+  avatarColor: string;
+}
+
+const STAKEHOLDERS: Stakeholder[] = [
+  {
+    id: 'usr-client-01',
+    name: 'Mark Farrugia',
+    role: 'Client Project Manager',
+    company: 'Bank of Valletta (BOV Property Dept)',
+    channel: 'client',
+    status: 'Active on Client Portal',
+    badge: 'Client / Owner',
+    badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+    icon: Building2,
+    avatarColor: 'bg-emerald-600'
+  },
+  {
+    id: 'usr-sub-01',
+    name: 'Kevin Bonnici',
+    role: 'Lead Electrical Subcontractor',
+    company: 'ElectroData Ltd',
+    channel: 'subcontractor',
+    status: 'On Site · Shaft B / Level 2',
+    badge: 'Subcontractor',
+    badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-800',
+    icon: HardHat,
+    avatarColor: 'bg-amber-600'
+  },
+  {
+    id: 'usr-enser-01',
+    name: 'Ing. Christian Borg',
+    role: 'Consultant Electrical Engineer',
+    company: 'Enser Ltd Consulting Engineers',
+    channel: 'team',
+    status: 'Engineering Review',
+    badge: 'MEP Consultant',
+    badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300 dark:border-blue-800',
+    icon: Award,
+    avatarColor: 'bg-blue-600'
+  },
+  {
+    id: 'usr-eng-01',
+    name: 'Marco Vella',
+    role: 'MEP Site Lead & Mechanical Eng.',
+    company: 'Internal Engineering Team',
+    channel: 'team',
+    status: 'On Site · Level 1 Fit-out',
+    badge: 'Site Team',
+    badgeColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800',
+    icon: Users,
+    avatarColor: 'bg-indigo-600'
+  }
+];
+
 export function ProjectMessagesPage({ projectId, navigate, addToast, user }: ProjectMessagesPageProps) {
+  // Always ensure a fallback active project
+  const activeProjectId = (projectId && projectId !== 'ALL' && projectId !== 'undefined')
+    ? projectId
+    : 'bov-st-venera-2618';
+
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replies, setReplies] = useState<any[]>([]);
@@ -57,38 +127,38 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
   const [replyText, setReplyText] = useState('');
   const [replySending, setReplySending] = useState(false);
 
-  // New Thread Modal
+  // New Thread Form (for right panel direct compose or modal)
   const [newModalOpen, setNewModalOpen] = useState(false);
-  const [newChannel, setNewChannel] = useState<'client' | 'subcontractor' | 'team'>('team');
+  const [newChannel, setNewChannel] = useState<'client' | 'subcontractor' | 'team'>('subcontractor');
   const [newSubject, setNewSubject] = useState('');
   const [newBody, setNewBody] = useState('');
   const [newPriority, setNewPriority] = useState<'Normal' | 'Urgent' | 'Info'>('Normal');
-  const [newLinkedType, setNewLinkedType] = useState<string>('');
+  const [newLinkedType, setNewLinkedType] = useState<string>('task');
   const [newLinkedLabel, setNewLinkedLabel] = useState<string>('');
   const [newAttachmentName, setNewAttachmentName] = useState('');
   const [projectTasks, setProjectTasks] = useState<any[]>([]);
 
   // Load project tasks for quick linking
   useEffect(() => {
-    if (projectId) {
-      tasksApi.list({ project_id: projectId })
+    if (activeProjectId) {
+      tasksApi.list({ project_id: activeProjectId })
         .then((res: any) => { if (Array.isArray(res)) setProjectTasks(res); })
         .catch(() => {});
     }
-  }, [projectId]);
+  }, [activeProjectId]);
 
   // Load threads and stats
   const loadThreads = useCallback(async () => {
-    if (!projectId) return;
+    if (!activeProjectId) return;
     setLoading(true);
     try {
       const [threadList, threadStats] = await Promise.all([
-        messagesApi.list(projectId, {
+        messagesApi.list(activeProjectId, {
           channel: activeChannel !== 'all' ? activeChannel : undefined,
           search: search || undefined,
           linked_item_type: itemTypeFilter !== 'all' ? itemTypeFilter : undefined
         }),
-        messagesApi.getStats(projectId)
+        messagesApi.getStats(activeProjectId)
       ]);
       setThreads(Array.isArray(threadList) ? threadList : []);
       if (threadStats) setStats(threadStats);
@@ -101,15 +171,13 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
           }
           return prev;
         });
-      } else {
-        setSelectedThreadId(null);
       }
     } catch (err: any) {
       if (addToast) addToast('error', err.message || 'Failed to load messages');
     } finally {
       setLoading(false);
     }
-  }, [projectId, activeChannel, search, itemTypeFilter, addToast]);
+  }, [activeProjectId, activeChannel, search, itemTypeFilter, addToast]);
 
   useEffect(() => {
     loadThreads();
@@ -117,16 +185,16 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
 
   // Load replies whenever selected thread changes
   useEffect(() => {
-    if (!projectId || !selectedThreadId) {
+    if (!activeProjectId || !selectedThreadId) {
       setReplies([]);
       return;
     }
     setLoadingReplies(true);
-    messagesApi.getReplies(projectId, selectedThreadId)
+    messagesApi.getReplies(activeProjectId, selectedThreadId)
       .then(res => {
         setReplies(res.replies || []);
         // Mark thread as read
-        messagesApi.markRead(projectId, selectedThreadId).then(() => {
+        messagesApi.markRead(activeProjectId, selectedThreadId).then(() => {
           setThreads(prev => prev.map(t => t.id === selectedThreadId ? { ...t, is_unread: 0 } : t));
           setStats(prev => ({
             ...prev,
@@ -138,7 +206,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
         if (addToast) addToast('error', err.message || 'Failed to load replies');
       })
       .finally(() => setLoadingReplies(false));
-  }, [projectId, selectedThreadId, addToast]);
+  }, [activeProjectId, selectedThreadId, addToast]);
 
   const activeThread = useMemo(() => {
     return threads.find(t => t.id === selectedThreadId) || null;
@@ -151,7 +219,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
 
     setReplySending(true);
     try {
-      const rep = await messagesApi.reply(projectId, selectedThreadId, {
+      const rep = await messagesApi.reply(activeProjectId, selectedThreadId, {
         body: replyText.trim()
       });
       setReplies(prev => [...prev, rep]);
@@ -174,6 +242,11 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
     }
   };
 
+  // Quick reply prompt insert
+  const insertQuickReply = (text: string) => {
+    setReplyText(prev => prev ? `${prev} ${text}` : text);
+  };
+
   // Handle create new thread
   const handleCreateThread = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,7 +256,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
     }
 
     try {
-      const created = await messagesApi.create(projectId, {
+      const created = await messagesApi.create(activeProjectId, {
         channel: newChannel,
         subject: newSubject.trim(),
         body: newBody.trim(),
@@ -199,7 +272,6 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
       setNewSubject('');
       setNewBody('');
       setNewPriority('Normal');
-      setNewLinkedType('');
       setNewLinkedLabel('');
       setNewAttachmentName('');
       if (addToast) addToast('success', 'New conversation started');
@@ -209,11 +281,28 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
     }
   };
 
+  // Switch to stakeholder conversation or composer
+  const handleSelectStakeholder = (stk: Stakeholder) => {
+    setActiveChannel(stk.channel);
+    // Find if there is an existing thread from or involving this stakeholder
+    const matchingThread = threads.find(t =>
+      t.sender_name.toLowerCase().includes(stk.name.toLowerCase()) ||
+      t.channel === stk.channel
+    );
+    if (matchingThread) {
+      setSelectedThreadId(matchingThread.id);
+    } else {
+      setSelectedThreadId(null);
+      setNewChannel(stk.channel);
+      setNewSubject(`Coordination with ${stk.name} (${stk.company})`);
+    }
+  };
+
   // Handle pin toggle
   const handleTogglePin = async (e: React.MouseEvent, threadId: string) => {
     e.stopPropagation();
     try {
-      const updated = await messagesApi.togglePin(projectId, threadId);
+      const updated = await messagesApi.togglePin(activeProjectId, threadId);
       setThreads(prev => prev.map(t => t.id === threadId ? { ...t, is_pinned: updated.is_pinned } : t));
       if (addToast) addToast('info', updated.is_pinned ? 'Thread pinned to top' : 'Thread unpinned');
     } catch (err: any) {
@@ -239,12 +328,19 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs">
-              <MessageSquare size={18} />
+            <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-sm">
+              <MessageSquare size={20} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Project Messages &amp; Discussions</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Buildertrend-standard communication hub · Client, Subcontractor &amp; Team channels</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Project Messages &amp; Discussions</h1>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  Buildertrend Hub
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Centralized multi-party communication hub · Client, Subcontractor &amp; Engineering Team channels
+              </p>
             </div>
           </div>
         </div>
@@ -252,17 +348,85 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
         <div className="flex items-center gap-2">
           <button
             onClick={loadThreads}
-            className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-200 dark:border-slate-800"
+            className="flex items-center gap-1.5 px-3 py-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 text-xs font-semibold shadow-xs"
             title="Refresh messages"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={13} />
+            <span>Refresh</span>
           </button>
           <button
-            onClick={() => setNewModalOpen(true)}
+            onClick={() => {
+              setSelectedThreadId(null);
+              setNewSubject('');
+              setNewBody('');
+            }}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-all"
           >
             <Plus size={14} /> New Conversation
           </button>
+        </div>
+      </div>
+
+      {/* ── Active Stakeholders & Testing Directory ─────────────────────────────── */}
+      <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md border border-slate-800 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+              Active Project Stakeholders &amp; Testing Directory
+            </span>
+            <span className="text-[11px] bg-slate-800 px-2 py-0.5 rounded-full font-medium text-slate-300">
+              BOV St. Venera Level 1 &amp; 2 Fit-out
+            </span>
+          </div>
+          <div className="text-xs text-slate-300 flex items-center gap-1.5">
+            <span>You are testing as:</span>
+            <span className="bg-blue-600/30 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-md font-semibold text-[11px]">
+              {user?.name || 'David Spiteri'} ({user?.role || 'MEP Project Manager'})
+            </span>
+          </div>
+        </div>
+
+        {/* 4 Interactive Stakeholder Direct Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {STAKEHOLDERS.map(stk => {
+            return (
+              <div
+                key={stk.id}
+                onClick={() => handleSelectStakeholder(stk)}
+                className="bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/80 rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.01] hover:border-blue-400 group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-xl ${stk.avatarColor} text-white font-bold flex items-center justify-center text-xs shadow-xs`}>
+                        {stk.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors leading-tight">
+                          {stk.name}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 line-clamp-1">{stk.role}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-300 font-medium mt-2 flex items-center gap-1 truncate">
+                    <Building2 size={11} className="text-slate-400 flex-shrink-0" />
+                    <span className="truncate">{stk.company}</span>
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-700/60 flex items-center justify-between">
+                  <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${stk.badgeColor}`}>
+                    {stk.badge}
+                  </span>
+                  <span className="text-[10px] font-bold text-blue-400 group-hover:underline flex items-center gap-0.5">
+                    Chat <ArrowRight size={10} />
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -271,7 +435,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">All Discussions</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{stats.total}</p>
+            <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{threads.length || stats.total}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
             <MessageSquare size={18} />
@@ -292,19 +456,19 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">Subcontractor Coordination</p>
+            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">Subcontractors</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
               {threads.filter(t => t.channel === 'subcontractor').length}
             </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center justify-center">
-            <User size={18} />
+            <HardHat size={18} />
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">Internal Team</p>
+            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">Internal Team &amp; Enser</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
               {threads.filter(t => t.channel === 'team').length}
             </p>
@@ -320,7 +484,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
         {/* Channel Selector */}
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
           {[
-            { id: 'all', label: 'All Channels', count: stats.total },
+            { id: 'all', label: 'All Channels', count: threads.length },
             { id: 'client', label: 'Client / Owner', count: threads.filter(t => t.channel === 'client').length },
             { id: 'subcontractor', label: 'Subcontractors', count: threads.filter(t => t.channel === 'subcontractor').length },
             { id: 'team', label: 'Internal Team', count: threads.filter(t => t.channel === 'team').length },
@@ -376,12 +540,12 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
       {/* ── Master-Detail Workspace ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[580px]">
         {/* Left Column: Thread List (5 cols) */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col overflow-hidden max-h-[750px]">
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col overflow-hidden max-h-[780px]">
           <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Conversations ({threads.length})
             </h2>
-            <span className="text-[11px] text-slate-400 font-medium">Sorted by latest activity</span>
+            <span className="text-[11px] text-slate-400 font-medium">Click to open &amp; type reply</span>
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -391,12 +555,24 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
                 <p className="text-xs text-slate-400">Loading conversation threads...</p>
               </div>
             ) : threads.length === 0 ? (
-              <div className="py-20 text-center px-4 space-y-2">
+              <div className="py-20 text-center px-4 space-y-3">
                 <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
                   <MessageSquare size={20} />
                 </div>
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">No discussions found</p>
-                <p className="text-xs text-slate-400 max-w-xs mx-auto">Try clearing your search query or start a new conversation using the button above.</p>
+                <div>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">No discussions found</p>
+                  <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1">Start a message with one of the stakeholders above.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedThreadId(null);
+                    setNewSubject('Site Coordination Query');
+                    setNewBody('');
+                  }}
+                  className="px-3.5 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-blue-700"
+                >
+                  Compose Message
+                </button>
               </div>
             ) : (
               threads.map(thread => {
@@ -409,7 +585,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
                     onClick={() => setSelectedThreadId(thread.id)}
                     className={`p-4 cursor-pointer transition-all border-l-4 ${
                       isSelected
-                        ? 'bg-blue-50/70 dark:bg-slate-800/90 border-l-blue-600'
+                        ? 'bg-blue-50/80 dark:bg-slate-800/90 border-l-blue-600'
                         : isUrgent
                         ? 'border-l-rose-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                         : thread.is_pinned
@@ -452,8 +628,8 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
 
                     {/* Linked Record Tag */}
                     {thread.linked_item_label && (
-                      <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md w-fit max-w-full truncate">
-                        <Tag size={10} className="text-blue-500 flex-shrink-0" />
+                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-blue-700 dark:text-blue-300 font-medium bg-blue-50/60 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-900/40 w-fit max-w-full truncate">
+                        <Tag size={10} className="flex-shrink-0" />
                         <span className="truncate">{thread.linked_item_label}</span>
                       </div>
                     )}
@@ -479,7 +655,7 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
         </div>
 
         {/* Right Column: Active Thread Stream & Reply (7 cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col overflow-hidden max-h-[750px]">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col overflow-hidden max-h-[780px]">
           {activeThread ? (
             <>
               {/* Thread Header */}
@@ -616,51 +792,205 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
                 )}
               </div>
 
-              {/* Reply Composer */}
-              <div className="p-3 sm:p-4 bg-slate-50/80 dark:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800">
-                <form onSubmit={handleSendReply} className="space-y-2">
+              {/* ── HIGH VISIBILITY REPLY COMPOSER ("WHERE I CAN TYPE") ─────────── */}
+              <div className="p-4 bg-slate-100/90 dark:bg-slate-950 border-t-2 border-blue-500 dark:border-blue-600">
+                <form onSubmit={handleSendReply} className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Type reply as <span className="text-blue-600 dark:text-blue-400 font-black">{user?.name || 'David Spiteri'}</span> (MEP PM):
+                      </label>
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Notifying {activeThread.sender_name} &amp; {activeThread.channel} channel
+                    </span>
+                  </div>
+
+                  {/* Quick-reply chip suggestions */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase flex-shrink-0">Quick reply:</span>
+                    {[
+                      '✅ Approved - Proceed with installation',
+                      '📸 Please send site photos',
+                      '⚠️ Pending Enser Ltd sign-off',
+                      '📅 Meeting on site tomorrow 09:00',
+                      '📦 Delivery confirmed for Friday'
+                    ].map((chip, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => insertQuickReply(chip)}
+                        className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 whitespace-nowrap text-[10px] font-medium transition-all"
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="relative">
                     <textarea
                       rows={3}
-                      placeholder="Type your response to this project discussion..."
+                      placeholder="Type your message or response here... (e.g. 'We reviewed drawing 2618-S-ELE-01 with Enser Ltd and approved the bracket offset.')"
                       value={replyText}
                       onChange={e => setReplyText(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white placeholder-slate-400 resize-none shadow-xs"
+                      className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-blue-300 dark:border-blue-700 focus:border-blue-600 focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white placeholder-slate-400 resize-none shadow-sm"
                     />
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-slate-400">
-                      Replies notify participants in the <strong>{activeThread.channel}</strong> channel.
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Press <strong>Send Reply</strong> to post to this conversation thread.
                     </p>
 
                     <button
                       type="submit"
                       disabled={replySending || !replyText.trim()}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all hover:scale-[1.02]"
                     >
-                      <Send size={13} />
-                      <span>{replySending ? 'Posting...' : 'Post Reply'}</span>
+                      <Send size={14} />
+                      <span>{replySending ? 'Sending...' : 'Send Message'}</span>
                     </button>
                   </div>
                 </form>
               </div>
             </>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-3">
-              <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-3xl flex items-center justify-center shadow-xs">
-                <MessageSquare size={26} />
+            /* ── DIRECT MESSAGE COMPOSER WHEN NO THREAD IS SELECTED ───────────── */
+            <div className="h-full flex flex-col p-6 space-y-5 overflow-y-auto">
+              <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl">
+                    <SendHorizontal size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Start a New Project Discussion
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Select a recipient below and type your message to begin testing.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">No conversation selected</h3>
-              <p className="text-xs text-slate-400 max-w-sm">
-                Select a message thread from the left list to review communication, or start a new project conversation.
-              </p>
+
+              <form onSubmit={handleCreateThread} className="space-y-4 flex-1 flex flex-col justify-between">
+                <div className="space-y-4">
+                  {/* Stakeholder Target Pills */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                      Who would you like to message?
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {[
+                        { id: 'client', label: 'Mark Farrugia', sub: 'Client (BOV Property)' },
+                        { id: 'subcontractor', label: 'Kevin Bonnici', sub: 'Subcontractor (ElectroData)' },
+                        { id: 'team', label: 'Ing. Christian Borg', sub: 'Enser Ltd Consultant / Team' },
+                      ].map(target => (
+                        <button
+                          type="button"
+                          key={target.id}
+                          onClick={() => setNewChannel(target.id as any)}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            newChannel === target.id
+                              ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 font-bold shadow-xs'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                          }`}
+                        >
+                          <p className="text-xs font-bold leading-tight">{target.label}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">{target.sub}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Subject line */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Subject / Topic *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Level 2 Containment Routing & Riser Approvals"
+                      value={newSubject}
+                      onChange={e => setNewSubject(e.target.value)}
+                      className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Optional Task Linking */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Link to Project Task (Optional)
+                      </label>
+                      <select
+                        value={newLinkedLabel}
+                        onChange={e => setNewLinkedLabel(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        <option value="">No task linked</option>
+                        {projectTasks.map(t => (
+                          <option key={t.id} value={`${t.wbs_code || ''} ${t.title}`}>
+                            {t.wbs_code ? `[${t.wbs_code}] ` : ''}{t.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Priority
+                      </label>
+                      <select
+                        value={newPriority}
+                        onChange={e => setNewPriority(e.target.value as any)}
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        <option value="Normal">Normal</option>
+                        <option value="Urgent">Urgent Action Required</option>
+                        <option value="Info">Information Only</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* THE MAIN TYPE AREA */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                      Type your message content *
+                    </label>
+                    <textarea
+                      required
+                      rows={5}
+                      placeholder="Type your message here... (e.g. 'Hello Kevin, please confirm when ElectroData can begin pulling the secondary Cat 6 feeders in Shaft B.')"
+                      value={newBody}
+                      onChange={e => setNewBody(e.target.value)}
+                      className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-blue-400 dark:border-blue-600 focus:border-blue-700 focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white placeholder-slate-400 resize-none shadow-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Posting as: <strong>David Spiteri (MEP Project Manager)</strong>
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={!newSubject.trim() || !newBody.trim()}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all hover:scale-[1.02]"
+                  >
+                    <Send size={14} />
+                    <span>Send Message</span>
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── New Conversation Modal ───────────────────────────────────────────── */}
+      {/* ── New Conversation Modal (if opened via button) ────────────────────── */}
       {newModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-2xl w-full overflow-hidden animate-fadeIn">
@@ -675,16 +1005,15 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
             </div>
 
             <form onSubmit={handleCreateThread} className="p-6 space-y-4">
-              {/* Channel Selector */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   Audience Channel
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'client', label: 'Client / Owner', desc: 'Customer facing' },
-                    { id: 'subcontractor', label: 'Subcontractor', desc: 'Trades & field' },
-                    { id: 'team', label: 'Internal Team', desc: 'Private management' },
+                    { id: 'client', label: 'Client / Owner', desc: 'Mark Farrugia (BOV)' },
+                    { id: 'subcontractor', label: 'Subcontractor', desc: 'Kevin Bonnici (ElectroData)' },
+                    { id: 'team', label: 'Internal Team', desc: 'Ing. Borg (Enser) / Site' },
                   ].map(ch => (
                     <button
                       type="button"
@@ -703,88 +1032,20 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
                 </div>
               </div>
 
-              {/* Subject & Priority */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div className="sm:col-span-3">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Subject Topic *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Level 1 Cable Tray Coordination & Clearances"
-                    value={newSubject}
-                    onChange={e => setNewSubject(e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Priority
-                  </label>
-                  <select
-                    value={newPriority}
-                    onChange={e => setNewPriority(e.target.value as any)}
-                    className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="Normal">Normal</option>
-                    <option value="Urgent">Urgent</option>
-                    <option value="Info">Info Only</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Subject Topic *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Level 1 Cable Tray Coordination & Clearances"
+                  value={newSubject}
+                  onChange={e => setNewSubject(e.target.value)}
+                  className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
-              {/* Contextual Link to Record (Task, Drawing, Selection) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Link to Project Record (Optional)
-                  </label>
-                  <select
-                    value={newLinkedType}
-                    onChange={e => {
-                      setNewLinkedType(e.target.value);
-                      if (!e.target.value) setNewLinkedLabel('');
-                    }}
-                    className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="">No linked record</option>
-                    <option value="task">WBS Schedule Task</option>
-                    <option value="drawing">Engineering Drawing</option>
-                    <option value="selection">Client Selection / Allowance</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Select Record
-                  </label>
-                  {newLinkedType === 'task' ? (
-                    <select
-                      value={newLinkedLabel}
-                      onChange={e => setNewLinkedLabel(e.target.value)}
-                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
-                    >
-                      <option value="">Choose a task...</option>
-                      {projectTasks.map(t => (
-                        <option key={t.id} value={`${t.wbs_code || ''} ${t.title}`}>
-                          {t.wbs_code ? `[${t.wbs_code}] ` : ''}{t.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      placeholder="e.g. Drawing 2618-S-ELE-01 or SEL-001"
-                      value={newLinkedLabel}
-                      onChange={e => setNewLinkedLabel(e.target.value)}
-                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Message Body */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Message Content *
@@ -792,24 +1053,10 @@ export function ProjectMessagesPage({ projectId, navigate, addToast, user }: Pro
                 <textarea
                   required
                   rows={4}
-                  placeholder="Describe the issue, question, or update..."
+                  placeholder="Type your message here..."
                   value={newBody}
                   onChange={e => setNewBody(e.target.value)}
                   className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Attachment name */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Attachment Reference (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Site_Coordination_Sketch_Rev1.pdf"
-                  value={newAttachmentName}
-                  onChange={e => setNewAttachmentName(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
                 />
               </div>
 

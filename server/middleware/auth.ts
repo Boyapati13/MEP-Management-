@@ -34,8 +34,9 @@ let stmtCompProjAccess: any = null;
 // Performance Optimization: Memoizes project authorization checks per request to avoid
 // redundant database query execution during batch record filtering on list endpoints.
 export function canAccessProject(user: AuthenticatedUser, projectId?: string): boolean {
-  if (!projectId) return false;
-  if (user.role === "Admin") return true;
+  if (!projectId || projectId === 'undefined' || projectId === 'null') return false;
+  if (!user || !user.user_id) return false;
+  if (user.role === 'Admin') return true;
 
   if (!user._projectAccessCache) {
     user._projectAccessCache = new Map<string, boolean>();
