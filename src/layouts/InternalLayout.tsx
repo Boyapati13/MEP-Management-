@@ -133,27 +133,32 @@ export function InternalLayout({
         </div>
 
         {/* Domain Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
           <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Operational Domains
+            ERP Operational Pillars
           </div>
-          {visibleDomains.map((domain) => {
+          {visibleDomains.map((domain: any) => {
             const Icon = domain.icon;
             const isActive = domain.id === activeDomain;
             return (
               <button
                 key={domain.id}
                 onClick={() => handleDomainSelect(domain.id, domain.defaultRoute)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all touch-manipulation ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all touch-manipulation ${
                   isActive
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
                 }`}
               >
-                <span className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Icon size={18} className="flex-shrink-0" />
-                  <span className="truncate">{domain.label}</span>
-                </span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold leading-tight truncate">{domain.label}</div>
+                    <div className={`text-[10px] truncate ${isActive ? 'text-amber-100' : 'text-slate-500'}`}>
+                      {domain.pillar || 'Operational Scope'}
+                    </div>
+                  </div>
+                </div>
                 <ChevronRight size={14} className={isActive ? 'text-amber-100 flex-shrink-0' : 'text-slate-600 flex-shrink-0'} />
               </button>
             );
