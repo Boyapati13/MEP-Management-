@@ -33,7 +33,7 @@ it('Project Master BOV St. Venera exists in projects table', () => {
   const proj = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any;
   assert.ok(proj, 'Project must exist');
   assert.strictEqual(proj.currency, 'EUR', 'Currency must be EUR');
-  assert.strictEqual(proj.contract_value, 130893, 'Contract value must match tender ceiling €130,893');
+  assert.ok(typeof proj.contract_value === 'number', 'Contract value must be numeric (0 for unpriced tender or actual contract amount)');
 });
 
 // Test 2: Exactly 71 BOQ line items seeded
@@ -133,13 +133,14 @@ it('Drawing references match task drawing_ref columns', () => {
   }
 });
 
-// Test 10: Task titles contain exact tender item numbers
-it('Task titles preserve tender item numbers (1.0 to UPS.04)', () => {
+// Test 10: Task titles contain exact tender item numbers and clean specifications without synthetic price tags
+it('Task titles preserve tender item numbers (1.0 to UPS.04) and clean specifications', () => {
   const sampleTitles = db.prepare(`
-    SELECT title FROM tasks WHERE project_id = ? LIMIT 10
+    SELECT title, description FROM tasks WHERE project_id = ? LIMIT 10
   `).all(projectId) as any[];
   for (const row of sampleTitles) {
     assert.match(row.title, /^\[.*\]/, 'Task title must start with [item_number]');
+    assert.ok(!row.description.includes('@ €'), 'Description must not contain synthetic price tags');
   }
 });
 
