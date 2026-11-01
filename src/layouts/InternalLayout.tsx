@@ -332,9 +332,9 @@ export function InternalLayout({
         </button>
 
         <button
-          onClick={() => handleDomainSelect('site', 'workforce')}
+          onClick={() => handleDomainSelect('delivery', 'workforce')}
           className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium touch-manipulation ${
-            activeDomain === 'site' ? 'text-amber-400 font-bold' : 'text-slate-400'
+            activeDomain === 'delivery' && activeRoute === 'workforce' ? 'text-amber-400 font-bold' : 'text-slate-400'
           }`}
         >
           <HardHat size={18} />

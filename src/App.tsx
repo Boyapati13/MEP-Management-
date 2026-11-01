@@ -171,6 +171,83 @@ const btnSecondary = 'inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-
 const btnDanger = 'inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 transition-colors';
 const btnGreen = 'inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-colors';
 
+
+// ─── Production React Error Boundary ───────────────────────────────────────────
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallbackTitle?: string;
+  onReset?: () => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Platform view error caught by ErrorBoundary:', error, errorInfo);
+  }
+
+  resetError = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-[50vh] flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-3xl border border-stone-200 p-8 shadow-xl text-center space-y-4">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shadow-xs">
+              <AlertTriangle size={28} />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">
+              {this.props.fallbackTitle || 'Workspace View Interrupted'}
+            </h2>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              An unexpected condition occurred while loading this view. All records and project data remain safely stored.
+            </p>
+            {this.state.error?.message && (
+              <div className="bg-stone-50 rounded-xl p-3 border border-stone-200 text-[11px] font-mono text-slate-600 text-left overflow-x-auto max-h-24">
+                {this.state.error.message}
+              </div>
+            )}
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={this.resetError}
+                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                Reload Module
+              </button>
+              <button
+                onClick={() => {
+                  this.resetError();
+                  window.location.hash = '';
+                  window.location.reload();
+                }}
+                className="px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 text-xs font-semibold border border-stone-200 transition-colors cursor-pointer"
+              >
+                Reset to Overview
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── Login Page ───────────────────────────────────────────────────────────────
 function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
   const { setUser } = useAuth();
@@ -670,7 +747,9 @@ function AppShell() {
         onNavigate={handleInternalNavigate}
         onOpenAssistant={() => setAssistantOpen(true)}
       >
-        {renderPage()}
+        <ErrorBoundary key={page} onReset={() => navigate('dashboard')}>
+          {renderPage()}
+        </ErrorBoundary>
       </InternalLayout>
 
       <MepAssistantDrawer

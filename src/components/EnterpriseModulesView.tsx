@@ -28,7 +28,9 @@ import {
   RefreshCw,
   X,
   ArrowUpRight,
-  Layers
+  Layers,
+  Package,
+  ShieldCheck
 } from 'lucide-react';
 import { api, projectsApi, procurementApi, risksApi } from '../api';
 import { ProcurementProgrammeRiskView } from './ProcurementProgrammeRiskView';
@@ -136,6 +138,70 @@ const BoqAndJobCostingWorkspace: React.FC<{
     unit_rate: 0,
     completed_qty: 0,
   });
+
+  const [inspectorItem, setInspectorItem] = useState<any | null>(null);
+  const [inspectorLoading, setInspectorLoading] = useState(false);
+  const [inspectorDetails, setInspectorDetails] = useState<{
+    material_requests: any[];
+    purchase_orders: any[];
+    inspections: any[];
+  }>({
+    material_requests: [],
+    purchase_orders: [],
+    inspections: [],
+  });
+
+  const openInspector = async (item: any) => {
+    setInspectorItem(item);
+    setInspectorLoading(true);
+    try {
+      const q = selectedProject ? `?project_id=${selectedProject}` : '';
+      const [mrRes, poRes, inspRes] = await Promise.all([
+        procurementApi.materialRequests(selectedProject ? { project_id: selectedProject } : undefined).catch(() => []),
+        procurementApi.listOrders(selectedProject ? { project_id: selectedProject } : undefined).catch(() => []),
+        api.get<any[]>(`/api/inspections${q}`).catch(() => []),
+      ]);
+
+      const itemCode = String(item.item_code || item.item_number || '').trim().toLowerCase();
+      const itemId = String(item.id || '').trim();
+
+      const matchedMrs = Array.isArray(mrRes)
+        ? mrRes.filter(
+            (mr: any) =>
+              (mr.boq_item_id && String(mr.boq_item_id) === itemId) ||
+              (mr.boq_reference && String(mr.boq_reference).toLowerCase() === itemCode) ||
+              (mr.discipline && item.discipline && mr.discipline === item.discipline)
+          )
+        : [];
+
+      const matchedPos = Array.isArray(poRes)
+        ? poRes.filter(
+            (po: any) =>
+              (po.boq_item_id && String(po.boq_item_id) === itemId) ||
+              (po.discipline && item.discipline && po.discipline === item.discipline) ||
+              (item.description && po.description && String(po.description).toLowerCase().includes(itemCode))
+          )
+        : [];
+
+      const matchedInsps = Array.isArray(inspRes)
+        ? inspRes.filter(
+            (insp: any) =>
+              (insp.discipline && item.discipline && insp.discipline === item.discipline) ||
+              (insp.boq_item_id && String(insp.boq_item_id) === itemId)
+          )
+        : [];
+
+      setInspectorDetails({
+        material_requests: matchedMrs,
+        purchase_orders: matchedPos,
+        inspections: matchedInsps,
+      });
+    } catch {
+      setInspectorDetails({ material_requests: [], purchase_orders: [], inspections: [] });
+    } finally {
+      setInspectorLoading(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
