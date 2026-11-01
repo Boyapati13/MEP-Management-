@@ -436,7 +436,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                   const pct = qty > 0 ? Math.min(100, Math.round((doneQty / qty) * 100)) : 0;
                   const specText = item.specification || item.spec || `${item.discipline || 'MEP'} — ${item.system || 'Standard Specification'}`;
                   return (
-                    <tr key={item.id} className="hover:bg-stone-50/80 transition-colors">
+                    <tr key={item.id} onClick={() => openInspector(item)} className="hover:bg-amber-50/60 transition-colors cursor-pointer group">
                       <td className="py-3 px-4 font-mono font-semibold text-slate-900">
                         {item.item_code || item.item_number || item.id?.slice(0, 8)}
                       </td>
@@ -468,6 +468,179 @@ const BoqAndJobCostingWorkspace: React.FC<{
           </table>
         </div>
       </div>
+
+
+      {/* Buildertrend Unified Item Master Inspector Slide-Over */}
+      {inspectorItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/40 backdrop-blur-xs p-0 sm:p-4">
+          <div className="bg-white h-full sm:h-auto sm:max-h-[92vh] w-full max-w-2xl rounded-none sm:rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                    {inspectorItem.item_code || inspectorItem.item_number || 'ITEM'}
+                  </span>
+                  <span className="text-xs font-bold uppercase text-slate-500">
+                    {inspectorItem.discipline || 'MEP'} Division
+                  </span>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mt-1">{inspectorItem.description}</h3>
+              </div>
+              <button
+                onClick={() => setInspectorItem(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-stone-200/60 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+              {/* Technical Specifications */}
+              <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200">
+                <p className="font-bold text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+                  Technical Specification
+                </p>
+                <p className="font-mono text-slate-800 leading-relaxed">
+                  {inspectorItem.specification || inspectorItem.spec || 'Standard MEP specification section'}
+                </p>
+              </div>
+
+              {/* Quantities & Financial Anatomy */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                  <p className="text-[10px] text-slate-400 uppercase font-bold">Tender Qty</p>
+                  <p className="text-base font-bold font-mono text-slate-900 mt-0.5">
+                    {inspectorItem.quantity ?? inspectorItem.tender_quantity} {inspectorItem.unit}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                  <p className="text-[10px] text-slate-400 uppercase font-bold">Unit Rate</p>
+                  <p className="text-base font-bold font-mono text-slate-900 mt-0.5">
+                    ${Number(inspectorItem.unit_rate ?? inspectorItem.tender_rate ?? 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                  <p className="text-[10px] text-slate-400 uppercase font-bold">Total Tender</p>
+                  <p className="text-base font-bold font-mono text-slate-900 mt-0.5">
+                    ${Number(inspectorItem.total_amount ?? inspectorItem.tender_amount ?? 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <p className="text-[10px] text-emerald-800 uppercase font-bold">Installed</p>
+                  <p className="text-base font-bold font-mono text-emerald-900 mt-0.5">
+                    {inspectorItem.completed_qty ?? inspectorItem.installed_quantity ?? 0} {inspectorItem.unit}
+                  </p>
+                </div>
+              </div>
+
+              {/* Linked Commercial Lifecycle */}
+              <div className="space-y-4">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Package size={16} className="text-amber-600" />
+                  Linked Material Requests &amp; Procurement
+                </h4>
+                {inspectorLoading ? (
+                  <p className="text-slate-400 italic">Querying linked commitments...</p>
+                ) : !inspectorDetails?.material_requests?.length ? (
+                  <p className="text-slate-500 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                    No Material Requests raised for this line yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {inspectorDetails.material_requests.map((mr: any) => (
+                      <div key={mr.id} className="p-3 rounded-xl border border-blue-100 bg-blue-50/50 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-blue-950">{mr.material || mr.item}</p>
+                          <p className="text-[11px] text-blue-700 mt-0.5">
+                            Qty: {mr.quantity} {mr.unit} • Status: <span className="font-semibold">{mr.status || 'Pending'}</span>
+                          </p>
+                        </div>
+                        <span className="font-mono text-[11px] px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 font-bold">
+                          {mr.pr_number || 'MR-AUTO'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Linked Purchase Orders */}
+              <div className="space-y-4">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <DollarSign size={16} className="text-emerald-600" />
+                  Committed Purchase Orders (POs)
+                </h4>
+                {inspectorLoading ? (
+                  <p className="text-slate-400 italic">Querying purchase orders...</p>
+                ) : !inspectorDetails?.purchase_orders?.length ? (
+                  <p className="text-slate-500 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                    No active PO issued against this line yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {inspectorDetails.purchase_orders.map((po: any) => (
+                      <div key={po.id} className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/50 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-emerald-950">{po.po_number || 'PO'}: {po.vendor}</p>
+                          <p className="text-[11px] text-emerald-700 mt-0.5">
+                            Delivery: {po.expected_delivery || po.delivery_date || 'Standard'} • Status: {po.status}
+                          </p>
+                        </div>
+                        <span className="font-mono text-sm font-bold text-emerald-900">
+                          ${Number(po.amount || po.total_amount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Linked QA/QC Inspections */}
+              <div className="space-y-4">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-indigo-600" />
+                  Quality &amp; Testing Inspections
+                </h4>
+                {inspectorLoading ? (
+                  <p className="text-slate-400 italic">Checking quality records...</p>
+                ) : !inspectorDetails?.inspections?.length ? (
+                  <p className="text-slate-500 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                    No inspection walk recorded yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {inspectorDetails.inspections.map((insp: any) => (
+                      <div key={insp.id} className="p-3 rounded-xl border border-indigo-100 bg-indigo-50/50 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-indigo-950">{insp.title || insp.type}</p>
+                          <p className="text-[11px] text-indigo-700 mt-0.5">
+                            Result: <span className="font-bold text-emerald-700">{insp.result}</span> • Verified: {insp.verified_progress}%
+                          </p>
+                        </div>
+                        <span className="text-[11px] px-2.5 py-1 rounded bg-indigo-100 text-indigo-800 font-semibold">
+                          {insp.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end">
+              <button
+                onClick={() => setInspectorItem(null)}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors"
+              >
+                Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add BOQ Modal */}
       {showAddModal && (

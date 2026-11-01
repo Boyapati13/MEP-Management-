@@ -922,4 +922,45 @@ export function registerCrudController(app: Express): void {
       res.json({ ok: true });
     });
   }
+
+  // --- BUILDERTREND UNIFIED BOQ ITEM INSPECTOR API ---
+  app.get("/api/boq/:id/details", authRequired, (req, res) => {
+    try {
+      const item = db.prepare("SELECT * FROM boq_items WHERE id=?").get(req.params.id) as any;
+      if (!item) {
+        res.status(404).json({ error: "BOQ item not found" });
+        return;
+      }
+      if (!canAccessRecord(req.user!, item, "view", "boq_items")) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const materialRequests = db.prepare(
+        "SELECT * FROM material_requests WHERE project_id=? AND (boq_item_id=? OR boq_reference=? OR LOWER(COALESCE(material, item, '')) = LOWER(?))"
+      ).all(item.project_id, item.id, item.item_number, item.description) as any[];
+
+      const purchaseOrders = db.prepare(
+        "SELECT * FROM purchase_orders WHERE project_id=? AND (description LIKE ? OR vendor_quote_ref=?)"
+      ).all(item.project_id, `%${item.item_number}%`, item.item_number) as any[];
+
+      const inspections = db.prepare(
+        "SELECT * FROM inspections WHERE project_id=? AND boq_item_id=?"
+      ).all(item.project_id, item.id) as any[];
+
+      const tasks = db.prepare(
+        "SELECT id, title, trade, status, progress, start, end FROM tasks WHERE project_id=? AND (title LIKE ? OR id IN (SELECT task_id FROM inspections WHERE boq_item_id=?))"
+      ).all(item.project_id, `%${(item.description || '').slice(0, 15)}%`, item.id) as any[];
+
+      res.json({
+        boq_item: rowToDict(item),
+        material_requests: materialRequests.map(rowToDict),
+        purchase_orders: purchaseOrders.map(rowToDict),
+        inspections: inspections.map(rowToDict),
+        tasks: tasks.map(rowToDict)
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 }
