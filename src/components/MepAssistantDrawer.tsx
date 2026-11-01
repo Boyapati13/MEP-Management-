@@ -44,8 +44,9 @@ export function MepAssistantDrawer({
   useEffect(() => {
     if (projectId) {
       setActiveProjectId(projectId);
-    } else if (projects.length > 0 && !activeProjectId) {
-      setActiveProjectId(projects[0].id);
+    } else if (projects.length > 0 && (!activeProjectId || activeProjectId === '')) {
+      const best = projects.find(p => Number(p.budget || 0) > 0 && !p.name.includes('Untitled')) || projects[0];
+      setActiveProjectId(best.id);
     }
   }, [projectId, projects]);
 
@@ -110,21 +111,26 @@ export function MepAssistantDrawer({
   function handleProjectChange(newId: string) {
     setActiveProjectId(newId);
     if (onSelectProject) {
-      onSelectProject(newId);
+      onSelectProject(newId === 'all' ? '' : newId);
     }
     const chosen = projects.find(p => p.id === newId);
-    // Add a notice in the thread
+    const label = newId === 'all' ? 'All Projects (Portfolio Intelligence)' : (chosen?.name || 'Selected Project');
     setMessages(prev => [
       ...prev,
       {
         id: `switch-${Date.now()}`,
         role: 'assistant',
-        text: `Switched project focus to **${chosen?.name || 'Selected Project'}**. Ready to answer questions on this project's budget, work packages, BOQ, snags, documents, and schedule.`,
+        text: `Switched project focus to **${label}**. Ready to answer questions on live budgets, work packages, change orders, committed POs, snags, documents, and programme milestones.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestedFollowups: [
-          "Summarize this project status",
-          "What is the budget and trade breakdown?",
-          "Show open punch list snags",
+        suggestedFollowups: newId === 'all' ? [
+          "List all projects and budgets in the portfolio",
+          "Which project has the highest budget?",
+          "Show open punch list snags across all projects"
+        ] : [
+          "What is the budget and commercial breakdown?",
+          "List all work packages and assigned subcontractors",
+          "What open punch list snags require attention?",
+          "Show committed purchase orders and vendors"
         ]
       }
     ]);
@@ -380,6 +386,7 @@ export function MepAssistantDrawer({
                     onChange={e => handleProjectChange(e.target.value)}
                     className="appearance-none bg-white border border-slate-300 rounded-lg pl-2 pr-6 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 truncate max-w-[220px]"
                   >
+                    <option value="all">🌐 All Projects (Portfolio Intelligence)</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>
                         {p.name}

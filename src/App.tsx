@@ -4090,7 +4090,10 @@ export default function App() {
     try {
       const p = await projectsApi.list();
       setProjects(p);
-      if (p.length > 0 && !selectedProject) setSelectedProject(p[0].id);
+      if (p.length > 0 && !selectedProject) {
+        const best = p.find((x: any) => Number(x.budget || 0) > 0 && !x.name.includes('Untitled')) || p[0];
+        setSelectedProject(best.id);
+      }
     } catch {}
   }, [user, selectedProject]);
 
