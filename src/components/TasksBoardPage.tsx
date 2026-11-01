@@ -45,10 +45,10 @@ interface Task {
 
 // ─── Status Config ─────────────────────────────────────────────────────────────
 const STATUSES: { id: TaskStatus; label: string; icon: React.ComponentType<any>; accent: string; bg: string; border: string; text: string; dot: string }[] = [
-  { id: 'Not Started', label: 'Not Started', icon: CircleDot, accent: 'bg-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700', dot: 'bg-slate-400' },
-  { id: 'In Progress', label: 'In Progress', icon: Clock3, accent: 'bg-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dot: 'bg-blue-500' },
-  { id: 'Completed', label: 'Completed', icon: CheckCircle2, accent: 'bg-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  { id: 'Blocked', label: 'Blocked', icon: AlertOctagon, accent: 'bg-red-600', bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
+  { id: 'Not Started', label: 'Not Started', icon: CircleDot, accent: 'bg-slate-600', bg: 'bg-slate-50 dark:bg-slate-900/60', border: 'border-slate-200 dark:border-slate-800', text: 'text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
+  { id: 'In Progress', label: 'In Progress', icon: Clock3, accent: 'bg-blue-600', bg: 'bg-blue-50/70 dark:bg-slate-900/60', border: 'border-blue-200 dark:border-slate-800', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  { id: 'Completed', label: 'Completed', icon: CheckCircle2, accent: 'bg-emerald-600', bg: 'bg-emerald-50/70 dark:bg-slate-900/60', border: 'border-emerald-200 dark:border-slate-800', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  { id: 'Blocked', label: 'Blocked', icon: AlertOctagon, accent: 'bg-red-600', bg: 'bg-red-50/70 dark:bg-slate-900/60', border: 'border-red-200 dark:border-slate-800', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
 ];
 
 const PRIORITY_PILL: Record<string, string> = {
@@ -84,25 +84,25 @@ function KpiStrip({ tasks }: { tasks: Task[] }) {
   const withPhoto = tasks.filter(t => t.evidence_url).length;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100 sm:divide-y-0 sm:divide-x divide-gray-100">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-white dark:bg-slate-850 dark:bg-slate-900/80 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden divide-y divide-gray-100 dark:divide-slate-800 sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-slate-800">
       {[
-        { label: 'Total', val: total, cls: 'text-gray-900', bar: 'bg-gray-200' },
-        { label: 'Done', val: done, cls: 'text-emerald-700', bar: 'bg-emerald-500' },
-        { label: 'In Progress', val: wip, cls: 'text-blue-700', bar: 'bg-blue-500' },
-        { label: 'Blocked', val: blocked, cls: 'text-red-700', bar: 'bg-red-500' },
-        { label: 'With Photo', val: withPhoto, cls: 'text-indigo-700', bar: 'bg-indigo-500' },
+        { label: 'Total', val: total, cls: 'text-gray-900 dark:text-slate-100', bar: 'bg-gray-200' },
+        { label: 'Done', val: done, cls: 'text-emerald-700 dark:text-emerald-400', bar: 'bg-emerald-500' },
+        { label: 'In Progress', val: wip, cls: 'text-blue-700 dark:text-blue-400', bar: 'bg-blue-500' },
+        { label: 'Blocked', val: blocked, cls: 'text-red-700 dark:text-red-400', bar: 'bg-red-500' },
+        { label: 'With Photo', val: withPhoto, cls: 'text-indigo-700 dark:text-indigo-400', bar: 'bg-indigo-500' },
       ].map((k) => (
         <div key={k.label} className="px-3.5 py-2.5 sm:px-4 sm:py-3">
           <div className={cn('text-lg sm:text-xl font-bold tabular-nums', k.cls)}>{k.val}</div>
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{k.label}</div>
+          <div className="text-[10px] font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mt-0.5">{k.label}</div>
         </div>
       ))}
       <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 col-span-2 sm:col-span-1">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Progress</span>
-          <span className="text-sm font-bold text-gray-900">{pct}%</span>
+          <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Progress</span>
+          <span className="text-sm font-bold text-gray-900 dark:text-slate-100">{pct}%</span>
         </div>
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
+        <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-1.5">
           <div className="h-1.5 bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
         </div>
       </div>
@@ -139,19 +139,19 @@ function TaskCard({
 
   return (
     <div className={cn(
-      'bg-white rounded-xl border shadow-xs hover:shadow-sm transition-shadow p-4 group relative',
-      isDone ? 'border-emerald-200' : 'border-gray-100'
+      'bg-white dark:bg-slate-800/95 rounded-xl border shadow-xs hover:shadow-md transition-all p-4 group relative',
+      isDone ? 'border-emerald-300 dark:border-emerald-800/60' : 'border-gray-100 dark:border-slate-700/80'
     )}>
       {/* Top row: WBS + priority + trade */}
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           {task.wbs_code && (
-            <span className="text-[10px] font-mono font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-mono font-bold bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 px-1.5 py-0.5 rounded">
               {task.wbs_code}
             </span>
           )}
           {task.trade && (
-            <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded', TRADE_PILL[task.trade] || 'bg-gray-100 text-gray-600')}>
+            <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded', TRADE_PILL[task.trade] || 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300')}>
               {task.trade}
             </span>
           )}
@@ -166,15 +166,15 @@ function TaskCard({
         <div className="relative flex-shrink-0" ref={menuRef}>
           <button
             onClick={() => setMenuOpen(v => !v)}
-            className="p-1 text-gray-300 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+            className="p-1 text-gray-300 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
           >
             <MoreHorizontal size={14} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-7 z-20 bg-white rounded-xl border border-gray-100 shadow-xl py-1 min-w-[160px]">
+            <div className="absolute right-0 top-7 z-20 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-xl py-1 min-w-[160px]">
               <button
                 onClick={() => { setMenuOpen(false); onEdit(task); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
               >
                 <Edit3 size={13} className="text-blue-500" /> Edit Details
               </button>
@@ -182,7 +182,7 @@ function TaskCard({
               {!isDone && (
                 <button
                   onClick={() => { setMenuOpen(false); onComplete(task); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-emerald-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
                 >
                   <Camera size={13} className="text-emerald-600" /> Mark Done + Photo
                 </button>
@@ -191,31 +191,31 @@ function TaskCard({
               {task.evidence_url && (
                 <button
                   onClick={() => { setMenuOpen(false); onViewPhoto(task); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
                 >
                   <ZoomIn size={13} className="text-indigo-500" /> View Evidence
                 </button>
               )}
 
-              <div className="border-t border-gray-100 my-1" />
+              <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
               <div className="px-3 py-1">
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Move to</p>
+                <p className="text-[10px] text-gray-400 dark:text-slate-400 font-semibold uppercase tracking-wider mb-1">Move to</p>
               </div>
               {nextStatuses.map(s => (
                 <button
                   key={s.id}
                   onClick={() => { setMenuOpen(false); onMoveStatus(task, s.id); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                 >
                   <span className={cn('w-2 h-2 rounded-full flex-shrink-0', s.dot)} />
                   {s.label}
                 </button>
               ))}
 
-              <div className="border-t border-gray-100 my-1" />
+              <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
               <button
                 onClick={() => { setMenuOpen(false); onDelete(task); }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
               >
                 <Trash2 size={13} /> Delete Task
               </button>
@@ -226,8 +226,8 @@ function TaskCard({
 
       {/* Title */}
       <h3 className={cn(
-        'text-sm font-semibold leading-snug mb-2 cursor-pointer hover:text-blue-600 transition-colors',
-        isDone ? 'text-gray-500 line-through decoration-emerald-400/60 decoration-1' : 'text-gray-900'
+        'text-sm font-semibold leading-snug mb-2 cursor-pointer transition-colors',
+        isDone ? 'text-slate-800 dark:text-slate-100 hover:text-emerald-500' : 'text-gray-900 dark:text-slate-100 hover:text-blue-500'
       )} onClick={() => onEdit(task)}>
         {task.title}
       </h3>
@@ -338,9 +338,9 @@ function KanbanColumn({
           />
         ))}
         {tasks.length === 0 && (
-          <div className="py-8 text-center text-xs text-gray-400">
-            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
-              <StatusIcon size={14} className="text-gray-300" />
+          <div className="py-8 text-center text-xs text-gray-400 dark:text-slate-500">
+            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-2">
+              <StatusIcon size={14} className="text-gray-300 dark:text-slate-600" />
             </div>
             No tasks
           </div>
@@ -351,7 +351,7 @@ function KanbanColumn({
       {status.id === 'Not Started' && (
         <button
           onClick={onAddTask}
-          className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-xs font-semibold text-gray-400 hover:text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-1.5"
+          className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-gray-200 dark:border-slate-800 text-xs font-semibold text-gray-400 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 hover:border-gray-400 dark:hover:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-800/80 transition-all flex items-center justify-center gap-1.5"
         >
           <Plus size={13} /> Add Task
         </button>
@@ -388,8 +388,8 @@ function ListRow({
 
   return (
     <tr className={cn(
-      'group hover:bg-gray-50/80 transition-colors border-b border-gray-50',
-      isDone && 'bg-emerald-50/30'
+      'group hover:bg-gray-50/80 dark:hover:bg-slate-800/60 transition-colors border-b border-gray-50 dark:border-slate-800/60',
+      isDone && 'bg-emerald-50/30 dark:bg-emerald-950/20'
     )}>
       {/* Status indicator */}
       <td className="pl-4 pr-2 py-3 w-2">
@@ -400,14 +400,14 @@ function ListRow({
       <td className="py-3 pr-4 max-w-[280px]">
         <div className="flex items-center gap-2">
           {task.wbs_code && (
-            <span className="text-[10px] font-mono font-bold text-gray-400 whitespace-nowrap">{task.wbs_code}</span>
+            <span className="text-[10px] font-mono font-bold text-gray-400 dark:text-slate-400 whitespace-nowrap">{task.wbs_code}</span>
           )}
         </div>
         <button
           onClick={() => onEdit(task)}
           className={cn(
-            'text-xs font-semibold text-left hover:text-blue-600 transition-colors leading-snug block',
-            isDone ? 'text-gray-400 line-through decoration-emerald-400/60' : 'text-gray-900'
+            'text-xs font-semibold text-left transition-colors leading-snug block',
+            isDone ? 'text-slate-800 dark:text-slate-200 hover:text-emerald-500' : 'text-gray-900 dark:text-slate-100 hover:text-blue-600'
           )}
         >
           {task.title}
@@ -670,11 +670,11 @@ export function TasksBoardPage({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* View Toggle */}
-          <div className="flex items-center bg-gray-100 rounded-xl p-0.5">
+          <div className="flex items-center bg-gray-100 dark:bg-slate-800 rounded-xl p-0.5 border border-transparent dark:border-slate-700">
             <button
               onClick={() => setViewMode('kanban')}
               className={cn('px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all flex items-center gap-1.5',
-                viewMode === 'kanban' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                viewMode === 'kanban' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
               )}
             >
               <LayoutGrid size={13} /> Board
@@ -682,7 +682,7 @@ export function TasksBoardPage({
             <button
               onClick={() => setViewMode('list')}
               className={cn('px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all flex items-center gap-1.5',
-                viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
               )}
             >
               <List size={13} /> List
@@ -690,7 +690,7 @@ export function TasksBoardPage({
           </div>
           <button
             onClick={loadTasks}
-            className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+            className="p-2 text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
             title="Refresh"
           >
             <RefreshCw size={15} />
@@ -708,20 +708,20 @@ export function TasksBoardPage({
       <KpiStrip tasks={tasks} />
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-white/70 p-2 sm:p-2.5 rounded-2xl border border-gray-100 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-white/70 dark:bg-slate-900/80 p-2 sm:p-2.5 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-xs">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {/* Search */}
-          <div className="flex items-center gap-2 flex-1 min-w-[180px] max-w-sm bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-xs">
-            <Search size={14} className="text-gray-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 flex-1 min-w-[180px] max-w-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-xs">
+            <Search size={14} className="text-gray-400 dark:text-slate-400 flex-shrink-0" />
             <input
               type="text"
               placeholder="Search tasks, WBS, BOQ ref…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="bg-transparent text-xs w-full focus:outline-none text-gray-800 placeholder-gray-400 touch-manipulation"
+              className="bg-transparent text-xs w-full focus:outline-none text-gray-800 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 touch-manipulation"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200">
                 <X size={12} />
               </button>
             )}
@@ -731,7 +731,7 @@ export function TasksBoardPage({
           <select
             value={selectedProject}
             onChange={e => setSelectedProject(e.target.value)}
-            className="text-xs font-semibold border border-gray-200 rounded-xl px-2.5 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs max-w-[180px] truncate touch-manipulation"
+            className="text-xs font-semibold border border-gray-200 dark:border-slate-700 rounded-xl px-2.5 py-2 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs max-w-[180px] truncate touch-manipulation"
           >
             <option value="">All Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -747,7 +747,7 @@ export function TasksBoardPage({
                   'px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-colors whitespace-nowrap border touch-manipulation flex-shrink-0',
                   tradeFilter === trade
                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
                 )}
               >
                 {trade}
@@ -756,7 +756,7 @@ export function TasksBoardPage({
           </div>
         </div>
 
-        <div className="text-[11px] text-gray-400 font-medium whitespace-nowrap px-1">
+        <div className="text-[11px] text-gray-400 dark:text-slate-400 font-medium whitespace-nowrap px-1">
           {filtered.length} of {tasks.length} tasks
         </div>
       </div>

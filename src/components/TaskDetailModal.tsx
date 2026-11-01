@@ -219,14 +219,14 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
     }
   };
 
-  const inputCls = "w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all";
-  const labelCls = "text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1 block";
+  const inputCls = "w-full px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500";
+  const labelCls = "text-[11px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1 block";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[92vh] border border-gray-100 dark:border-slate-800">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-900 text-white">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between bg-slate-900 text-white">
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs font-bold text-blue-400 bg-blue-500/20 px-2 py-0.5 rounded">
@@ -242,12 +242,12 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
         </div>
 
         {/* Pillar Tabs */}
-        <div className="flex items-center gap-1 px-6 border-b border-gray-100 bg-gray-50/70 overflow-x-auto">
+        <div className="flex items-center gap-1 px-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-900/90 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => setActiveTab('scope')}
             className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'scope' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+              activeTab === 'scope' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
             }`}
           >
             <Layers size={14} /> 1. Scope & Trade
@@ -256,7 +256,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
             type="button"
             onClick={() => setActiveTab('hierarchy')}
             className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'hierarchy' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+              activeTab === 'hierarchy' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
             }`}
           >
             <Users size={14} /> 2. Delivery Hierarchy
@@ -265,7 +265,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
             type="button"
             onClick={() => setActiveTab('schedule')}
             className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+              activeTab === 'schedule' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
             }`}
           >
             <Calendar size={14} /> 3. Schedule & Baselines
@@ -274,7 +274,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
             type="button"
             onClick={() => setActiveTab('refs')}
             className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'refs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+              activeTab === 'refs' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
             }`}
           >
             <FileText size={14} /> 4. Engineering & BOQ
@@ -283,7 +283,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
             type="button"
             onClick={() => setActiveTab('evidence')}
             className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'evidence' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+              activeTab === 'evidence' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
             }`}
           >
             <ShieldCheck size={14} /> 5. Quality Gate
@@ -293,7 +293,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
               type="button"
               onClick={() => setActiveTab('readiness')}
               className={`py-3 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                activeTab === 'readiness' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-900'
+                activeTab === 'readiness' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
               }`}
             >
               <Zap size={14} /> 6. Readiness
@@ -831,11 +831,11 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
           )}
 
           {/* Modal Footer */}
-          <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-200 text-gray-700 font-semibold rounded-xl text-xs hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 font-semibold rounded-xl text-xs hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             >
               Cancel
             </button>

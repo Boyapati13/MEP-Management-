@@ -76,6 +76,19 @@ h1, h2, h3, .font-display {
   border-color: #334155 !important;
   color: #f8fafc !important;
 }
+.workspace-surface[data-workspace-theme="dark"] .bg-gray-50,
+.workspace-surface[data-workspace-theme="dark"] .bg-gray-50\/70,
+.workspace-surface[data-workspace-theme="dark"] .bg-gray-50\/50,
+.workspace-surface[data-workspace-theme="dark"] .bg-slate-50 {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-gray-100 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
 .workspace-surface[data-workspace-theme="dark"] .text-slate-900,
 .workspace-surface[data-workspace-theme="dark"] .text-gray-900 {
   color: #f8fafc !important;
@@ -88,11 +101,56 @@ h1, h2, h3, .font-display {
 .workspace-surface[data-workspace-theme="dark"] .text-gray-600 {
   color: #94a3b8 !important;
 }
+.workspace-surface[data-workspace-theme="dark"] .text-gray-500 {
+  color: #94a3b8 !important;
+}
 .workspace-surface[data-workspace-theme="dark"] .border-gray-100,
+.workspace-surface[data-workspace-theme="dark"] .border-gray-200,
+.workspace-surface[data-workspace-theme="dark"] .border-gray-300,
 .workspace-surface[data-workspace-theme="dark"] .border-stone-200,
 .workspace-surface[data-workspace-theme="dark"] .border-slate-200,
 .workspace-surface[data-workspace-theme="dark"] .border-slate-700 {
   border-color: #334155 !important;
+}
+
+/* Universal Form Controls Dark Theme - Fixes invisible white-on-white inputs */
+.workspace-surface[data-workspace-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.workspace-surface[data-workspace-theme="dark"] select,
+.workspace-surface[data-workspace-theme="dark"] textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+.workspace-surface[data-workspace-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+.workspace-surface[data-workspace-theme="dark"] select:focus,
+.workspace-surface[data-workspace-theme="dark"] textarea:focus {
+  background-color: #1e293b !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+.workspace-surface[data-workspace-theme="dark"] input::placeholder,
+.workspace-surface[data-workspace-theme="dark"] textarea::placeholder {
+  color: #64748b !important;
+}
+.workspace-surface[data-workspace-theme="dark"] select option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+/* Scrollbar refinement for Dark Theme */
+.workspace-surface[data-workspace-theme="dark"] ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.workspace-surface[data-workspace-theme="dark"] ::-webkit-scrollbar-track {
+  background: #0b1329;
+}
+.workspace-surface[data-workspace-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+.workspace-surface[data-workspace-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 .workspace-surface[data-workspace-grid="standard"] {
