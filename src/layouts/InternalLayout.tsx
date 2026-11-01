@@ -74,6 +74,23 @@ export function InternalLayout({
     }
   });
 
+  // Global document & DOM synchronization for themes, dark class, and grids
+  useEffect(() => {
+    if (workspaceTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+
+    document.documentElement.setAttribute('data-workspace-theme', workspaceTheme);
+    document.documentElement.setAttribute('data-theme', workspaceTheme);
+    document.body.setAttribute('data-workspace-theme', workspaceTheme);
+    document.documentElement.setAttribute('data-workspace-grid', gridEnabled ? gridStrength : 'off');
+    document.documentElement.setAttribute('data-workspace-density', workspaceDensity);
+  }, [workspaceTheme, gridEnabled, gridStrength, workspaceDensity]);
+
   // Sidebar Inline Draft State (Allows users to change options and explicitly click APPLY)
   const [sidebarDraftTheme, setSidebarDraftTheme] = useState<AppearanceSettings['theme']>(workspaceTheme);
   const [sidebarDraftGrid, setSidebarDraftGrid] = useState(gridEnabled);
@@ -188,8 +205,8 @@ export function InternalLayout({
 
   return (
     <div
-      className={`min-h-screen workspace-surface flex flex-col lg:flex-row text-[#14171f] relative ${
-        workspaceTheme === 'dark' ? 'dark-mode-cards' : ''
+      className={`min-h-screen workspace-surface flex flex-col lg:flex-row text-slate-900 dark:text-slate-100 relative ${
+        workspaceTheme === 'dark' ? 'dark dark-mode-cards' : ''
       }`}
       data-workspace-theme={workspaceTheme}
       data-workspace-grid={gridEnabled ? gridStrength : 'off'}

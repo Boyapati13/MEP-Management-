@@ -59,7 +59,7 @@ export function CompleteTaskModal({ open, task, onClose, onCompleted, onToast }:
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-gray-100 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
@@ -82,25 +82,25 @@ export function CompleteTaskModal({ open, task, onClose, onCompleted, onToast }:
         </div>
 
         {/* Task Info Summary */}
-        <div className="p-4 bg-emerald-50/60 border-b border-emerald-100/80 flex flex-col gap-1.5">
+        <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 border-b border-emerald-100/80 dark:border-emerald-900/60 flex flex-col gap-1.5">
           <div className="flex items-center gap-2 flex-wrap text-xs">
             {task.wbs_code && (
-              <span className="font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-200">
+              <span className="font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
                 {task.wbs_code}
               </span>
             )}
             {task.boq_ref && (
-              <span className="font-mono text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200">
+              <span className="font-mono text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-700">
                 BOQ Ref: {task.boq_ref}
               </span>
             )}
             {task.trade && (
-              <span className="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+              <span className="font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800">
                 {task.trade}
               </span>
             )}
           </div>
-          <h3 className="font-bold text-gray-900 text-sm mt-1">{task.title}</h3>
+          <h3 className="font-bold text-gray-900 dark:text-slate-100 text-sm mt-1">{task.title}</h3>
         </div>
 
         {/* Form Body */}
@@ -173,8 +173,8 @@ export function CompleteTaskModal({ open, task, onClose, onCompleted, onToast }:
 
           {/* Actual Completion Date */}
           <div>
-            <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Calendar size={14} className="text-gray-500" />
+            <label className="block text-xs font-bold text-gray-800 dark:text-slate-200 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Calendar size={14} className="text-gray-500 dark:text-slate-400" />
               Actual Completion Date
             </label>
             <input
@@ -182,14 +182,14 @@ export function CompleteTaskModal({ open, task, onClose, onCompleted, onToast }:
               value={actualEndDate}
               onChange={e => setActualEndDate(e.target.value)}
               required
-              className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900"
+              className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-slate-100"
             />
           </div>
 
           {/* Notes & Acceptance Comments */}
           <div>
-            <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <FileText size={14} className="text-gray-500" />
+            <label className="block text-xs font-bold text-gray-800 dark:text-slate-200 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <FileText size={14} className="text-gray-500 dark:text-slate-400" />
               Signoff Notes &amp; Verification Details
             </label>
             <textarea
@@ -197,7 +197,7 @@ export function CompleteTaskModal({ open, task, onClose, onCompleted, onToast }:
               value={evidenceNotes}
               onChange={e => setEvidenceNotes(e.target.value)}
               placeholder="e.g. All 130 lighting containment points inspected and verified against IFC revision 3. Installation verified 100% complete."
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 resize-none"
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-slate-100 resize-none"
             />
           </div>
 

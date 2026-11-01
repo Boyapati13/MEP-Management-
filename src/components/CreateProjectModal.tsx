@@ -237,21 +237,21 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     }
   };
 
-  const inputCls = "w-full px-3.5 py-2.5 text-xs bg-white border border-stone-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all";
-  const selectCls = "w-full px-3.5 py-2.5 text-xs bg-white border border-stone-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all";
+  const inputCls = "w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all";
+  const selectCls = "w-full px-3.5 py-2.5 text-xs bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white rounded-3xl border border-stone-200 shadow-2xl w-full max-w-3xl my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-stone-200 dark:border-slate-800 shadow-2xl w-full max-w-3xl my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-stone-100 flex items-center justify-between bg-gradient-to-r from-stone-50 via-blue-50/30 to-indigo-50/40">
+        <div className="px-6 py-5 border-b border-stone-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-stone-50 dark:from-slate-800 via-blue-50/30 dark:via-slate-800 to-indigo-50/40 dark:to-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
               <Building2 size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Create New MEP Project</h2>
-              <p className="text-xs text-slate-500">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Create New MEP Project</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Upload your project contract or tender document to auto-fill complete info, or enter manually.
               </p>
             </div>

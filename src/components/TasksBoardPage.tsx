@@ -45,25 +45,25 @@ interface Task {
 
 // ─── Status Config ─────────────────────────────────────────────────────────────
 const STATUSES: { id: TaskStatus; label: string; icon: React.ComponentType<any>; accent: string; bg: string; border: string; text: string; dot: string }[] = [
-  { id: 'Not Started', label: 'Not Started', icon: CircleDot, accent: 'bg-slate-600', bg: 'bg-slate-50 dark:bg-slate-900/60', border: 'border-slate-200 dark:border-slate-800', text: 'text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
-  { id: 'In Progress', label: 'In Progress', icon: Clock3, accent: 'bg-blue-600', bg: 'bg-blue-50/70 dark:bg-slate-900/60', border: 'border-blue-200 dark:border-slate-800', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
-  { id: 'Completed', label: 'Completed', icon: CheckCircle2, accent: 'bg-emerald-600', bg: 'bg-emerald-50/70 dark:bg-slate-900/60', border: 'border-emerald-200 dark:border-slate-800', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
-  { id: 'Blocked', label: 'Blocked', icon: AlertOctagon, accent: 'bg-red-600', bg: 'bg-red-50/70 dark:bg-slate-900/60', border: 'border-red-200 dark:border-slate-800', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
+  { id: 'Not Started', label: 'Not Started', icon: CircleDot, accent: 'bg-slate-600', bg: 'bg-slate-100/70 dark:bg-slate-900/70', border: 'border-slate-200 dark:border-slate-800', text: 'text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
+  { id: 'In Progress', label: 'In Progress', icon: Clock3, accent: 'bg-blue-600', bg: 'bg-blue-50/70 dark:bg-slate-900/70', border: 'border-blue-200 dark:border-slate-800', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  { id: 'Completed', label: 'Completed', icon: CheckCircle2, accent: 'bg-emerald-600', bg: 'bg-emerald-50/70 dark:bg-slate-900/70', border: 'border-emerald-200 dark:border-slate-800', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  { id: 'Blocked', label: 'Blocked', icon: AlertOctagon, accent: 'bg-red-600', bg: 'bg-red-50/70 dark:bg-slate-900/70', border: 'border-red-200 dark:border-slate-800', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
 ];
 
 const PRIORITY_PILL: Record<string, string> = {
-  Critical: 'bg-red-100 text-red-800 border border-red-200',
-  High: 'bg-orange-100 text-orange-800 border border-orange-200',
-  Medium: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
-  Low: 'bg-gray-100 text-gray-600 border border-gray-200',
+  Critical: 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/60',
+  High: 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800/60',
+  Medium: 'bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-950/60 dark:text-yellow-300 dark:border-yellow-800/60',
+  Low: 'bg-gray-100 text-gray-600 border border-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600',
 };
 
 const TRADE_PILL: Record<string, string> = {
-  Electrical: 'bg-amber-100 text-amber-800',
-  HVAC: 'bg-sky-100 text-sky-800',
-  Plumbing: 'bg-cyan-100 text-cyan-800',
-  'Fire Fighting': 'bg-rose-100 text-rose-800',
-  ELV: 'bg-violet-100 text-violet-800',
+  Electrical: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:border dark:border-amber-800/60',
+  HVAC: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 dark:border dark:border-sky-800/60',
+  Plumbing: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border dark:border-cyan-800/60',
+  'Fire Fighting': 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 dark:border dark:border-rose-800/60',
+  ELV: 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300 dark:border dark:border-violet-800/60',
 };
 
 function fmtDate(d?: string) {
@@ -227,7 +227,7 @@ function TaskCard({
       {/* Title */}
       <h3 className={cn(
         'text-sm font-semibold leading-snug mb-2 cursor-pointer transition-colors',
-        isDone ? 'text-slate-800 dark:text-slate-100 hover:text-emerald-500' : 'text-gray-900 dark:text-slate-100 hover:text-blue-500'
+        isDone ? 'text-slate-900 dark:text-slate-100 hover:text-emerald-500' : 'text-slate-900 dark:text-slate-100 hover:text-blue-500'
       )} onClick={() => onEdit(task)}>
         {task.title}
       </h3>

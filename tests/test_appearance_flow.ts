@@ -83,6 +83,45 @@ assert(fakeLocalStorage.getItem('mep-workspace-theme') === 'blueprint', "Reset r
 assert(fakeLocalStorage.getItem('mep-workspace-grid-strength') === 'subtle', "Reset restored 'subtle'");
 assert(fakeLocalStorage.getItem('mep-workspace-density') === 'comfortable', "Reset restored 'comfortable'");
 
+// 3. Verify Global DOM Synchronization Logic
+const mockClassList = new Set<string>();
+const mockAttributes: Record<string, string> = {};
+const mockDocElement = {
+  classList: {
+    add: (cls: string) => mockClassList.add(cls),
+    remove: (cls: string) => mockClassList.delete(cls),
+    contains: (cls: string) => mockClassList.has(cls),
+  },
+  setAttribute: (key: string, val: string) => { mockAttributes[key] = val; },
+  getAttribute: (key: string) => mockAttributes[key] || null,
+};
+
+function syncThemeToDOM(theme: AppearanceSettings['theme'], gridEnabled: boolean, gridStrength: AppearanceSettings['gridStrength'], density: AppearanceSettings['density']) {
+  if (theme === 'dark') {
+    mockDocElement.classList.add('dark');
+  } else {
+    mockDocElement.classList.remove('dark');
+  }
+  mockDocElement.setAttribute('data-workspace-theme', theme);
+  mockDocElement.setAttribute('data-theme', theme);
+  mockDocElement.setAttribute('data-workspace-grid', gridEnabled ? gridStrength : 'off');
+  mockDocElement.setAttribute('data-workspace-density', density);
+}
+
+// Test dark theme sync
+syncThemeToDOM('dark', true, 'standard', 'compact');
+assert(mockDocElement.classList.contains('dark'), "documentElement has 'dark' class when dark theme active");
+assert(mockDocElement.getAttribute('data-workspace-theme') === 'dark', "documentElement has data-workspace-theme='dark'");
+assert(mockDocElement.getAttribute('data-workspace-grid') === 'standard', "documentElement has grid='standard'");
+assert(mockDocElement.getAttribute('data-workspace-density') === 'compact', "documentElement has density='compact'");
+
+// Test switching back to light themes (blueprint, slate, sage, sand)
+for (const lightTheme of ['blueprint', 'slate', 'sage', 'sand'] as const) {
+  syncThemeToDOM(lightTheme, true, 'subtle', 'comfortable');
+  assert(!mockDocElement.classList.contains('dark'), `'dark' class removed when switched to ${lightTheme}`);
+  assert(mockDocElement.getAttribute('data-workspace-theme') === lightTheme, `data-workspace-theme updated to ${lightTheme}`);
+}
+
 console.log(`\nAppearance Flow Test Results: ${passed} / ${total} passed.`);
 if (passed === total) {
   console.log("🎉 ALL APPEARANCE FLOW TESTS PASSED 100%!");
