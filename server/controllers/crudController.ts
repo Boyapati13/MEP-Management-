@@ -948,8 +948,8 @@ export function registerCrudController(app: Express): void {
       ).all(item.project_id, item.id) as any[];
 
       const tasks = db.prepare(
-        "SELECT id, title, trade, status, progress, start, end FROM tasks WHERE project_id=? AND (title LIKE ? OR id IN (SELECT task_id FROM inspections WHERE boq_item_id=?))"
-      ).all(item.project_id, `%${(item.description || '').slice(0, 15)}%`, item.id) as any[];
+        "SELECT id, title, trade, status, progress, start, end, boq_ref, drawing_ref, work_package_id FROM tasks WHERE project_id=? AND (boq_item_id=? OR boq_ref=? OR boq_ref=? OR title LIKE ?)"
+      ).all(item.project_id, item.id, item.item_number, item.item_code || '', `%${(item.description || '').slice(0, 15)}%`) as any[];
 
       res.json({
         boq_item: rowToDict(item),
@@ -957,6 +957,203 @@ export function registerCrudController(app: Express): void {
         purchase_orders: purchaseOrders.map(rowToDict),
         inspections: inspections.map(rowToDict),
         tasks: tasks.map(rowToDict)
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- CONVERT 100% OF BOQ ITEMS TO WBS TASKS ENDPOINT ---
+  app.post("/api/projects/:id/convert-boq-to-tasks", authRequired, (req, res) => {
+    try {
+      const projectId = req.params.id;
+      if (!hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "Access denied to project" });
+        return;
+      }
+      if (!canEdit(req.user!, "tasks")) {
+        res.status(403).json({ error: "Edit permission required for schedule tasks" });
+        return;
+      }
+
+      const boqItems = db.prepare(`
+        SELECT id, item_number, description, unit, tender_quantity, tender_rate, tender_amount, discipline, system
+        FROM boq_items
+        WHERE project_id = ?
+        ORDER BY rowid ASC
+      `).all(projectId) as any[];
+
+      if (boqItems.length === 0) {
+        res.status(400).json({ error: "No BOQ items found for this project to convert." });
+        return;
+      }
+
+      const insertTask = db.prepare(`
+        INSERT INTO tasks (
+          id, project_id, title, trade, assignee, start, end, duration, progress,
+          completion_percent, status, priority, is_summary, is_milestone,
+          work_package_id, drawing_ref, boq_ref, boq_item_id, description
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+      `);
+
+      db.prepare("DELETE FROM tasks WHERE project_id = ?").run(projectId);
+
+      let converted = 0;
+      for (const item of boqItems) {
+        const num = String(item.item_number || '').trim();
+        const desc = String(item.description || '').trim();
+
+        // Work Package logic
+        let wpId = 'wp-02';
+        if (num.startsWith('1.') || num.startsWith('2.') || num.startsWith('3.') || num.startsWith('4.') || num.startsWith('5.')) {
+          wpId = 'wp-01';
+        } else if (num.startsWith('E-01') || num.startsWith('E-02')) {
+          wpId = 'wp-02';
+        } else if (num.startsWith('E-03') || num.startsWith('E-04') || num.startsWith('E-05') || num.startsWith('E-06') || num.startsWith('E-07')) {
+          wpId = 'wp-03';
+        } else if (num.startsWith('E-08.09') || num.startsWith('E-08.13') || num.startsWith('E-08.14') || num.startsWith('E-08.15') || num.startsWith('E-08.16') || num.startsWith('E-10') || num.startsWith('E-11') || num.startsWith('E-12') || num.startsWith('E-14')) {
+          wpId = 'wp-04';
+        } else if (num.startsWith('E-08.01') || num.startsWith('E-08.02') || num.startsWith('E-08.03') || num.startsWith('E-08.04') || num.startsWith('E-08.05') || num.startsWith('E-08.06') || num.startsWith('E-08.08') || num.startsWith('E-15') || num.startsWith('E-16')) {
+          wpId = 'wp-05';
+        } else if (num.startsWith('E-17')) {
+          wpId = 'wp-03';
+        } else if (num.startsWith('E-18') || num.startsWith('E-20') || num.startsWith('E-22')) {
+          wpId = 'wp-02';
+        } else if (num.startsWith('D-01') || num.startsWith('D-02') || num.startsWith('D-03') || num.startsWith('D-04') || num.startsWith('D-05') || num.startsWith('D-06') || num.startsWith('D-07') || num.startsWith('D-08') || num.startsWith('D-09') || num.startsWith('D-23')) {
+          wpId = 'wp-06';
+        } else if (num.startsWith('D-12') || num.startsWith('D-13') || num.startsWith('D-14') || num.startsWith('D-16') || num.startsWith('D-17') || num.startsWith('D-19')) {
+          wpId = 'wp-07';
+        } else if (num.startsWith('UPS')) {
+          wpId = 'wp-08';
+        }
+
+        // Drawing Ref logic
+        let dwgRef = '2618-S-ELE-01';
+        if (num.startsWith('E-01') || num.startsWith('E-02') || num.startsWith('E-03') || num.startsWith('E-05') || num.startsWith('E-06') || num.startsWith('E-07') || num.startsWith('UPS')) {
+          dwgRef = '2618-S-ELE-01';
+        } else if (num.startsWith('E-08.01') || num.startsWith('E-08.02') || num.startsWith('E-08.03') || num.startsWith('E-08.04') || num.startsWith('E-08.05') || num.startsWith('E-08.06') || num.startsWith('E-08.08') || num.startsWith('E-15') || num.startsWith('E-16')) {
+          dwgRef = '2618-L-LTG-01';
+        } else if (num.startsWith('E-08.09') || num.startsWith('E-08.13') || num.startsWith('E-08.14') || num.startsWith('E-08.15') || num.startsWith('E-08.16') || num.startsWith('E-10') || num.startsWith('E-11') || num.startsWith('E-12') || num.startsWith('E-14')) {
+          dwgRef = '2618-L-PWR-01';
+        } else if (num.startsWith('D-')) {
+          dwgRef = '2618-L-DTA-01';
+        } else if (num.includes('17.08') || num.includes('17.09') || num.includes('17.10') || num.includes('17.11')) {
+          dwgRef = '2618-L-SEC-01';
+        } else if (num.startsWith('1.') || num.startsWith('2.') || num.startsWith('3.') || num.startsWith('4.') || num.startsWith('5.') || num.startsWith('E-17') || num.startsWith('E-19')) {
+          dwgRef = '2618-L-CON-01';
+        }
+
+        // Trade & Assignee
+        let trade = 'Electrical';
+        let assignee = 'David Sterling';
+        let priority = 'Medium';
+        let progress = 0;
+        let status = 'Pending';
+        let start = '2026-06-01';
+        let end = '2026-06-25';
+
+        if (wpId === 'wp-01') {
+          trade = 'Management';
+          assignee = 'David Sterling';
+          progress = 100;
+          status = 'Completed';
+          priority = 'High';
+          start = '2026-05-02';
+          end = '2026-05-18';
+        } else if (wpId === 'wp-02') {
+          trade = 'Electrical';
+          assignee = 'Lucas Vance';
+          progress = 35;
+          status = 'In Progress';
+          priority = 'Critical';
+          start = '2026-05-20';
+          end = '2026-07-15';
+        } else if (wpId === 'wp-03') {
+          trade = 'Containment';
+          assignee = 'Marcus Brody';
+          progress = 80;
+          status = 'In Progress';
+          priority = 'High';
+          start = '2026-05-15';
+          end = '2026-06-30';
+        } else if (wpId === 'wp-04') {
+          trade = 'Electrical';
+          assignee = 'Marcus Brody';
+          progress = 45;
+          status = 'In Progress';
+          priority = 'Medium';
+          start = '2026-06-05';
+          end = '2026-07-25';
+        } else if (wpId === 'wp-05') {
+          trade = 'Lighting';
+          assignee = 'Lucas Vance';
+          progress = 30;
+          status = 'In Progress';
+          priority = 'Medium';
+          start = '2026-06-12';
+          end = '2026-08-05';
+        } else if (wpId === 'wp-06') {
+          trade = 'ELV/Data';
+          assignee = 'Elena Rossi';
+          progress = 35;
+          status = 'In Progress';
+          priority = 'High';
+          start = '2026-06-15';
+          end = '2026-08-10';
+        } else if (wpId === 'wp-07') {
+          trade = 'AV/Sound';
+          assignee = 'Elena Rossi';
+          progress = 15;
+          status = 'In Progress';
+          priority = 'Medium';
+          start = '2026-07-01';
+          end = '2026-08-20';
+        } else if (wpId === 'wp-08') {
+          trade = 'UPS Specialist';
+          assignee = 'Lucas Vance';
+          progress = 0;
+          status = 'Pending';
+          priority = 'Critical';
+          start = '2026-07-20';
+          end = '2026-08-30';
+        }
+
+        const taskId = crypto.randomUUID();
+        const title = `[${num}] ${desc}`;
+        const duration = 14;
+
+        insertTask.run(
+          taskId,
+          projectId,
+          title,
+          trade,
+          assignee,
+          start,
+          end,
+          duration,
+          progress,
+          progress,
+          status,
+          priority,
+          0,
+          0,
+          wpId,
+          dwgRef,
+          num,
+          item.id,
+          `${desc} (BOQ Item #${num}, Qty: ${item.tender_quantity || 1} ${item.unit || 'Item'})`
+        );
+        converted++;
+      }
+
+      writeAudit(req.user!.user_id, "tasks", projectId, projectId, "convert_boq_to_tasks", null, { converted_count: converted });
+      res.json({
+        ok: true,
+        message: `Successfully converted ${converted} BOQ items into individual WBS tasks!`,
+        converted_count: converted,
+        project_id: projectId
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

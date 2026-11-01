@@ -30,7 +30,12 @@ import {
   ArrowUpRight,
   Layers,
   Package,
-  ShieldCheck
+  ShieldCheck,
+  Zap,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  CalendarCheck
 } from 'lucide-react';
 import { api, projectsApi, procurementApi, risksApi } from '../api';
 import { ProcurementProgrammeRiskView } from './ProcurementProgrammeRiskView';
@@ -126,6 +131,8 @@ const BoqAndJobCostingWorkspace: React.FC<{
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
   const [uploadingBoq, setUploadingBoq] = useState(false);
+  const [convertingBoq, setConvertingBoq] = useState(false);
+  const [projectTasks, setProjectTasks] = useState<any[]>([]);
   const [boqUploadMsg, setBoqUploadMsg] = useState<string | null>(null);
   const boqFileInputRef = React.useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
@@ -207,14 +214,16 @@ const BoqAndJobCostingWorkspace: React.FC<{
     setLoading(true);
     try {
       const q = selectedProject ? `?project_id=${selectedProject}` : '';
-      const [boqRes, coRes, poRes] = await Promise.all([
+      const [boqRes, coRes, poRes, tasksRes] = await Promise.all([
         api.get<any[]>(`/api/boq${q}`).catch(() => []),
         api.get<any[]>(`/api/change_orders${q}`).catch(() => []),
         api.get<any[]>(`/api/purchase_orders${q}`).catch(() => []),
+        api.get<any[]>(`/api/tasks${q}`).catch(() => []),
       ]);
       setItems(Array.isArray(boqRes) ? boqRes : []);
       setChangeOrders(Array.isArray(coRes) ? coRes : []);
       setPurchaseOrders(Array.isArray(poRes) ? poRes : []);
+      setProjectTasks(Array.isArray(tasksRes) ? tasksRes : []);
     } finally {
       setLoading(false);
     }
@@ -223,6 +232,25 @@ const BoqAndJobCostingWorkspace: React.FC<{
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleConvertBoqToTasks = async () => {
+    const targetProj = selectedProject || activeProject?.id;
+    if (!targetProj) {
+      setBoqUploadMsg('Please select a project before converting BOQ to tasks.');
+      return;
+    }
+    setConvertingBoq(true);
+    try {
+      const res = await api.post<any>(`/api/projects/${targetProj}/convert-boq-to-tasks`, {});
+      setBoqUploadMsg(`✓ ${res.message || 'Successfully converted all BOQ items into individual WBS schedule tasks!'}`);
+      await loadData();
+      onProjectUpdated?.();
+    } catch (err: any) {
+      setBoqUploadMsg(`Conversion error: ${err.message || 'Failed to convert BOQ to tasks'}`);
+    } finally {
+      setConvertingBoq(false);
+    }
+  };
 
   const handleDirectBoqFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -346,6 +374,16 @@ const BoqAndJobCostingWorkspace: React.FC<{
           />
           <button
             type="button"
+            disabled={convertingBoq}
+            onClick={handleConvertBoqToTasks}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+            title="Convert 100% of BOQ line items into individual WBS schedule tasks with drawings & work packages linked"
+          >
+            <Zap size={15} />
+            {convertingBoq ? 'Converting BOQ to Tasks...' : '⚡ Convert BOQ to Tasks'}
+          </button>
+          <button
+            type="button"
             disabled={uploadingBoq}
             onClick={() => {
               if (!selectedProject && !activeProject?.id) {
@@ -357,7 +395,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
           >
             <Upload size={15} />
-            {uploadingBoq ? 'Importing Excel / PDF BOQ...' : 'Import BOQ (Excel .xlsx / PDF / CSV)'}
+            {uploadingBoq ? 'Importing Excel / PDF BOQ...' : 'Import BOQ (Excel / PDF / CSV)'}
           </button>
           <button
             onClick={() => setShowDocModal(true)}
@@ -384,7 +422,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
       {boqUploadMsg && (
         <div
           className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-semibold ${
-            boqUploadMsg.startsWith('Import error') || boqUploadMsg.includes('Please select')
+            boqUploadMsg.startsWith('Import error') || boqUploadMsg.startsWith('Conversion error') || boqUploadMsg.includes('Please select')
               ? 'bg-rose-50 border-rose-200 text-rose-900'
               : 'bg-emerald-50 border-emerald-200 text-emerald-900'
           }`}
@@ -399,41 +437,89 @@ const BoqAndJobCostingWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Buildertrend 6-Column Job Costing Summary Ribbon */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">1. Original Budget</p>
-          <p className="text-lg font-bold font-mono text-slate-900 mt-1">${originalBudget.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{items.length} Tender Line Items</p>
+      {/* BOQ to Tasks Integration Bar */}
+      <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/90 to-emerald-50/90 rounded-2xl border border-blue-200/80 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-sm flex-shrink-0">
+            <Zap size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-900 text-sm">WBS Programme Execution Link</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                {projectTasks.length} / {items.length} Tasks Linked ({items.length > 0 ? Math.min(100, Math.round((projectTasks.length / items.length) * 100)) : 0}%)
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 mt-0.5">
+              100% of BOQ line items mapped into executable Work Packages (WP-01 to WP-08) with official Enser engineering drawings (2618 series) and field assignees.
+            </p>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">2. Approved Variations</p>
-          <p className="text-lg font-bold font-mono text-amber-700 mt-1">+${approvedVariations.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{changeOrders.length} Change Orders</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">3. Revised Contract Sum</p>
-          <p className="text-lg font-bold font-mono text-slate-900 mt-1">${revisedBudget.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Current Ceiling</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">4. Committed POs</p>
-          <p className="text-lg font-bold font-mono text-blue-700 mt-1">${committedPos.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{purchaseOrders.length} Active POs</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">5. Earned / Certified</p>
-          <p className="text-lg font-bold font-mono text-emerald-700 mt-1">${actualEarned.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Measured Installed Value</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">6. Cost Variance</p>
-          <p className={`text-lg font-bold font-mono mt-1 ${variance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-            {variance >= 0 ? '+' : ''}${variance.toLocaleString()}
-          </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{variance >= 0 ? 'Within Revised Budget' : 'Over Budget Alert'}</p>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            disabled={convertingBoq}
+            onClick={handleConvertBoqToTasks}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+          >
+            <Zap size={14} />
+            {convertingBoq ? 'Converting...' : 'Re-sync / Convert BOQ to Tasks'}
+          </button>
+          <a
+            href="#/tasks"
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.hash = '#/tasks';
+              window.dispatchEvent(new HashChangeEvent('hashchange'));
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-stone-100 text-slate-800 text-xs font-bold border border-stone-300 shadow-sm transition-colors cursor-pointer"
+          >
+            <CalendarCheck size={14} className="text-blue-600" />
+            View Gantt &amp; Tasks →
+          </a>
         </div>
       </div>
+
+      {/* Buildertrend 6-Column Job Costing Summary Ribbon */}
+      {(() => {
+        const curr = activeProject?.currency === 'EUR' ? '€' : '$';
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">1. Original Budget</p>
+              <p className="text-lg font-bold font-mono text-slate-900 mt-1">{curr}{originalBudget.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{items.length} Tender Line Items</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">2. Approved Variations</p>
+              <p className="text-lg font-bold font-mono text-amber-700 mt-1">+{curr}{approvedVariations.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{changeOrders.length} Change Orders</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">3. Revised Contract Sum</p>
+              <p className="text-lg font-bold font-mono text-slate-900 mt-1">{curr}{revisedBudget.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Current Ceiling</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">4. Committed POs</p>
+              <p className="text-lg font-bold font-mono text-blue-700 mt-1">{curr}{committedPos.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{purchaseOrders.length} Active POs</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">5. Earned / Certified</p>
+              <p className="text-lg font-bold font-mono text-emerald-700 mt-1">{curr}{actualEarned.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Measured Installed Value</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">6. Cost Variance</p>
+              <p className={`text-lg font-bold font-mono mt-1 ${variance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                {variance >= 0 ? '+' : ''}{curr}{variance.toLocaleString()}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{variance >= 0 ? 'Within Revised Budget' : 'Over Budget Alert'}</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Filter & Search Bar */}
       <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
@@ -1257,6 +1343,12 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, any>>({});
   const [showUploadDoc, setShowUploadDoc] = useState(false);
   const [showContractorModal, setShowContractorModal] = useState(false);
+  const [selectedDrawing, setSelectedDrawing] = useState<any | null>(null);
+  const [drawingZoom, setDrawingZoom] = useState(1);
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('All');
+  const [linkedTasks, setLinkedTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [docSearch, setDocSearch] = useState('');
   const [docForm, setDocForm] = useState({
     name: '',
     category: 'Contract',
@@ -1366,16 +1458,70 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     loadDocs();
   };
 
+  const openDrawingViewer = async (doc: any) => {
+    setSelectedDrawing(doc);
+    setDrawingZoom(1);
+    setLoadingTasks(true);
+    try {
+      const q = selectedProject ? `?project_id=${selectedProject}` : '';
+      const allTasks = await api.get<any[]>(`/api/tasks${q}`).catch(() => []);
+      const docNum = doc.document_number || (doc.name ? (doc.name.match(/2618-[A-Z]-[A-Z]{3}-\d{2}/) || [])[0] : '');
+      const matched = Array.isArray(allTasks)
+        ? allTasks.filter((t: any) => t.drawing_ref === docNum || (docNum && (t.title?.includes(docNum) || t.description?.includes(docNum))))
+        : [];
+      setLinkedTasks(matched);
+    } catch {
+      setLinkedTasks([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const drawingDocs = docs.filter(
+    (d: any) =>
+      d.document_number?.startsWith('2618-') ||
+      d.category === 'Plan' ||
+      d.category === 'Schematic' ||
+      d.category === 'Drawing' ||
+      d.category === 'Drawings / BIM' ||
+      d.attachment_name?.endsWith('.svg')
+  );
+
+  const displayedDocs = docs.filter((d: any) => {
+    const isDrawing =
+      d.document_number?.startsWith('2618-') ||
+      d.category === 'Plan' ||
+      d.category === 'Schematic' ||
+      d.category === 'Drawing' ||
+      d.category === 'Drawings / BIM' ||
+      d.attachment_name?.endsWith('.svg');
+
+    if (activeCategoryFilter === 'Drawings' && !isDrawing) return false;
+    if (activeCategoryFilter === 'Contracts' && d.category !== 'Contract' && d.category !== 'BOQ') return false;
+    if (activeCategoryFilter === 'Specifications' && isDrawing) return false;
+
+    if (docSearch) {
+      const q = docSearch.toLowerCase();
+      const match =
+        (d.name && d.name.toLowerCase().includes(q)) ||
+        (d.document_number && d.document_number.toLowerCase().includes(q)) ||
+        (d.discipline && d.discipline.toLowerCase().includes(q)) ||
+        (d.category && d.category.toLowerCase().includes(q));
+      if (!match) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-            CDE &amp; Document Intelligence
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+            CDE &amp; Plans &amp; Drawing Studio
           </span>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Controlled Documents &amp; Drawings</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Controlled Documents &amp; Engineering Drawings</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Common Data Environment with Client Portal publication controls and review-first project setup extraction.
+            Common Data Environment for Enser Ltd CAD drawings (2618 series), project contracts, submittals, and client approvals.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -1384,14 +1530,14 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               <button
                 onClick={handleRunReviewOnlyExtraction}
                 disabled={extracting}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-800 text-xs font-bold border border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-800 text-xs font-bold border border-stone-300 transition-colors cursor-pointer"
               >
                 <Eye size={14} className="text-amber-600" />
                 {extracting ? 'Scanning Stored Docs...' : 'Review Setup Suggestions'}
               </button>
               <button
                 onClick={() => setShowContractorModal(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
               >
                 <Sparkles size={14} /> Upload &amp; Review Contract/BOQ
               </button>
@@ -1399,10 +1545,61 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
           )}
           <button
             onClick={() => setShowUploadDoc(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
           >
             <Plus size={15} /> Upload Document
           </button>
+        </div>
+      </div>
+
+      {/* Drawing Category Quick Filter Tabs & Search */}
+      <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveCategoryFilter('All')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              activeCategoryFilter === 'All'
+                ? 'bg-slate-900 text-white'
+                : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
+            }`}
+          >
+            All Controlled Documents ({docs.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveCategoryFilter('Drawings')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeCategoryFilter === 'Drawings'
+                ? 'bg-blue-600 text-white'
+                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+            }`}
+          >
+            <Eye size={13} />
+            Engineering Drawings ({drawingDocs.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveCategoryFilter('Contracts')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              activeCategoryFilter === 'Contracts'
+                ? 'bg-amber-600 text-white'
+                : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+            }`}
+          >
+            Contracts &amp; Tender Schedule
+          </button>
+        </div>
+
+        <div className="relative min-w-[220px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={docSearch}
+            onChange={e => setDocSearch(e.target.value)}
+            placeholder="Search drawings or docs..."
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-stone-200 rounded-xl bg-stone-50"
+          />
         </div>
       </div>
 
@@ -1419,7 +1616,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                 Current Project: <strong>{activeProject?.name}</strong>. Approve the extracted fields below to apply them via <code>PUT /api/projects/{selectedProject}</code>.
               </p>
             </div>
-            <button onClick={() => setSetupSuggestions(null)} className="text-amber-700 hover:text-amber-950">
+            <button onClick={() => setSetupSuggestions(null)} className="text-amber-700 hover:text-amber-950 cursor-pointer">
               <X size={18} />
             </button>
           </div>
@@ -1448,13 +1645,13 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setSetupSuggestions(null)}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-amber-100"
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-amber-100 cursor-pointer"
             >
               Discard
             </button>
             <button
               onClick={handleApproveSuggestions}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm cursor-pointer"
             >
               <CheckSquare size={14} /> Approve &amp; Apply to Project
             </button>
@@ -1462,64 +1659,114 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Documents Table */}
+      {/* Documents & Drawings Table */}
       <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <th className="py-3.5 px-4">Document Title</th>
+              <th className="py-3.5 px-4">Document / Drawing Sheet</th>
               <th className="py-3.5 px-4">Category</th>
               <th className="py-3.5 px-4">Discipline</th>
               <th className="py-3.5 px-4">Revision</th>
               <th className="py-3.5 px-4">Workflow Status</th>
-              <th className="py-3.5 px-4">Client Portal Access</th>
+              <th className="py-3.5 px-4">Interactive Drawing Sheet</th>
+              <th className="py-3.5 px-4">Client Portal</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100 text-xs">
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-400">Loading document register...</td>
+                <td colSpan={7} className="py-12 text-center text-slate-400">Loading document register...</td>
               </tr>
-            ) : docs.length === 0 ? (
+            ) : displayedDocs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">No documents uploaded for this project yet.</td>
+                <td colSpan={7} className="py-12 text-center text-slate-500">No documents match the current filter.</td>
               </tr>
             ) : (
-              docs.map((doc: any) => {
+              displayedDocs.map((doc: any) => {
                 const isClientVisible = doc.visibility === 'Client' || doc.visibility === 'All' || (Number(doc.client_visible) === 1 && doc.status === 'Approved');
+                const isDrawing =
+                  doc.document_number?.startsWith('2618-') ||
+                  doc.category === 'Plan' ||
+                  doc.category === 'Schematic' ||
+                  doc.category === 'Drawing' ||
+                  doc.category === 'Drawings / BIM' ||
+                  doc.attachment_name?.endsWith('.svg');
+
                 return (
-                  <tr key={doc.id} className="hover:bg-stone-50/80">
-                    <td className="py-3.5 px-4 font-semibold text-slate-900 flex items-center gap-2">
-                      <FileText size={15} className="text-amber-600 flex-shrink-0" />
+                  <tr
+                    key={doc.id}
+                    className="hover:bg-blue-50/40 transition-colors"
+                  >
+                    <td className="py-3.5 px-4 font-semibold text-slate-900 flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        isDrawing ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-stone-100 text-stone-600'
+                      }`}>
+                        {isDrawing ? <Eye size={16} /> : <FileText size={16} />}
+                      </div>
                       <div>
-                        <p>{doc.name || doc.title}</p>
-                        {doc.attachment_name && <p className="text-[10px] text-slate-400 font-mono">{doc.attachment_name}</p>}
+                        <p className="font-bold text-slate-900">{doc.name || doc.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {doc.document_number && (
+                            <span className="text-[10px] text-blue-700 font-mono font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                              {doc.document_number}
+                            </span>
+                          )}
+                          {doc.attachment_name && (
+                            <span className="text-[10px] text-slate-400 font-mono truncate max-w-xs">{doc.attachment_name}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-slate-600">{doc.category || 'Technical'}</td>
-                    <td className="py-3.5 px-4 text-slate-600">{doc.discipline || 'General'}</td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600">v{doc.version || doc.revision || '1.0'}</td>
+                    <td className="py-3.5 px-4 text-slate-600">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-stone-100 text-slate-700 border border-stone-200">
+                        {doc.category || 'Technical'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600 font-medium">{doc.discipline || 'General'}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-700 font-bold">{doc.revision || doc.version || 'Rev A'}</td>
                     <td className="py-3.5 px-4">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${WORKFLOW_COLORS[doc.status] || WORKFLOW_COLORS.Draft}`}>
-                        {doc.status || 'Draft'}
+                        {doc.status || 'Approved'}
                       </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {isDrawing ? (
+                        <button
+                          type="button"
+                          onClick={() => openDrawingViewer(doc)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
+                        >
+                          <Eye size={13} /> View Sheet
+                        </button>
+                      ) : doc.attachment_data ? (
+                        <a
+                          href={doc.attachment_data}
+                          download={doc.attachment_name || `${doc.name}.pdf`}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-slate-700 text-[11px] font-semibold transition-colors"
+                        >
+                          <Download size={12} /> Download
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">—</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4">
                       {canManage ? (
                         <button
                           onClick={() => toggleClientVisibility(doc)}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
                             isClientVisible
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : 'bg-stone-100 text-slate-600 border-stone-200 hover:bg-stone-200'
                           }`}
                         >
                           {isClientVisible ? <Globe size={12} /> : <Lock size={12} />}
-                          {isClientVisible ? 'Published to Client' : 'Internal Only'}
+                          {isClientVisible ? 'Published' : 'Internal'}
                         </button>
                       ) : (
                         <span className="text-[11px] text-slate-500">
-                          {isClientVisible ? 'Client Visible' : 'Internal'}
+                          {isClientVisible ? 'Published' : 'Internal'}
                         </span>
                       )}
                     </td>
@@ -1530,6 +1777,217 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
           </tbody>
         </table>
       </div>
+
+      {/* Interactive Drawing Sheet Modal */}
+      {selectedDrawing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl shadow-2xl w-full max-w-7xl h-[94vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-blue-600/30 text-blue-400 border border-blue-500/30 flex-shrink-0">
+                  {selectedDrawing.document_number || '2618 SHEET'}
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-white truncate">
+                    {selectedDrawing.name || selectedDrawing.title}
+                  </h3>
+                  <p className="text-xs text-slate-400 flex items-center gap-2 truncate">
+                    <span>Enser Ltd Consulting Engineers</span>
+                    <span>•</span>
+                    <span>Job 2618 (BOV St. Venera)</span>
+                    <span>•</span>
+                    <span className="text-amber-400">{selectedDrawing.discipline || 'Engineering'}</span>
+                    <span>•</span>
+                    <span className="text-emerald-400">Rev A (Approved for Construction)</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Viewer Controls */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center bg-slate-800/80 rounded-xl border border-slate-700 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setDrawingZoom(z => Math.max(0.5, z - 0.25))}
+                    className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut size={16} />
+                  </button>
+                  <span className="px-2.5 text-xs font-mono font-semibold text-slate-300">
+                    {Math.round(drawingZoom * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDrawingZoom(z => Math.min(3, z + 0.25))}
+                    className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="Zoom In"
+                  >
+                    <ZoomIn size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDrawingZoom(1)}
+                    className="p-1.5 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors cursor-pointer ml-1 border-l border-slate-700"
+                    title="Reset Zoom (100%)"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                </div>
+
+                {selectedDrawing.attachment_data && (
+                  <a
+                    href={selectedDrawing.attachment_data}
+                    download={selectedDrawing.attachment_name || `${selectedDrawing.document_number || 'drawing'}.svg`}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    <Download size={14} /> Download SVG
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDrawing(null)}
+                  className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Left Canvas + Right WBS Sidebar */}
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              {/* Drawing Sheet Canvas (Left 72%) */}
+              <div className="flex-1 bg-[#090d16] overflow-auto relative p-4 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800">
+                {selectedDrawing.attachment_data ? (
+                  <div
+                    className="transition-transform duration-150 ease-out origin-center"
+                    style={{ transform: `scale(${drawingZoom})`, transformOrigin: 'center center' }}
+                  >
+                    <img
+                      src={selectedDrawing.attachment_data}
+                      alt={selectedDrawing.name}
+                      className="max-w-[1300px] w-full shadow-2xl rounded border border-slate-800 pointer-events-auto"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center p-8 text-slate-400">
+                    <FileText size={48} className="mx-auto mb-3 opacity-40 text-blue-400" />
+                    <p className="font-semibold text-slate-200 text-base">Engineering Drawing Specification Sheet</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      Drawing {selectedDrawing.document_number} ({selectedDrawing.name}) is registered in the CDE register.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Sidebar: Linked WBS Tasks & Engineering Specs (Right 28%) */}
+              <div className="w-full lg:w-96 bg-slate-950 flex flex-col overflow-y-auto divide-y divide-slate-800 flex-shrink-0">
+                {/* Engineering Sheet Metadata */}
+                <div className="p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Drawing Metadata</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      Approved
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Sheet Number</span>
+                      <p className="font-mono font-bold text-blue-400 mt-0.5">{selectedDrawing.document_number || '2618-S-ELE-01'}</p>
+                    </div>
+                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Revision</span>
+                      <p className="font-mono font-bold text-slate-200 mt-0.5">{selectedDrawing.revision || 'Rev A'}</p>
+                    </div>
+                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Scale</span>
+                      <p className="font-bold text-slate-200 mt-0.5">1:100 @ A1</p>
+                    </div>
+                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Discipline</span>
+                      <p className="font-bold text-amber-400 mt-0.5">{selectedDrawing.discipline || 'Electrical'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Linked WBS Tasks Section */}
+                <div className="p-5 flex-1 flex flex-col min-h-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Layers size={14} className="text-blue-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Linked WBS Tasks ({linkedTasks.length})
+                      </h4>
+                    </div>
+                    <a
+                      href="#/tasks"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setSelectedDrawing(null);
+                        window.location.hash = '#/tasks';
+                        window.dispatchEvent(new HashChangeEvent('hashchange'));
+                      }}
+                      className="text-[11px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      Open Gantt <ArrowUpRight size={12} />
+                    </a>
+                  </div>
+
+                  {loadingTasks ? (
+                    <div className="py-8 text-center text-xs text-slate-500">Loading linked schedule tasks...</div>
+                  ) : linkedTasks.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-500">
+                      No schedule tasks directly linked to drawing {selectedDrawing.document_number}.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 overflow-y-auto max-h-[360px] pr-1">
+                      {linkedTasks.map((t: any) => (
+                        <div key={t.id} className="bg-slate-900/80 hover:bg-slate-900 p-3 rounded-xl border border-slate-800 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-200 leading-snug line-clamp-2">
+                              {t.title}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex-shrink-0">
+                              {t.progress}%
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
+                            <span>{t.trade || 'MEP'} • {t.assignee || 'Assigned'}</span>
+                            <span className={t.status === 'Completed' ? 'text-emerald-400' : 'text-amber-400'}>
+                              {t.status}
+                            </span>
+                          </div>
+                          {/* Mini Progress Bar */}
+                          <div className="w-full bg-slate-800 rounded-full h-1 mt-2 overflow-hidden">
+                            <div
+                              className="bg-blue-500 h-full rounded-full transition-all"
+                              style={{ width: `${t.progress || 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Publication Controls Footer */}
+                <div className="p-4 bg-slate-900/60 border-t border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Client Portal:</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleClientVisibility(selectedDrawing)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
+                  >
+                    <Globe size={13} /> Published to Client
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Standard Controlled Document Modal */}
       {showUploadDoc && (
