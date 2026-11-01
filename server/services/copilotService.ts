@@ -288,18 +288,18 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
 
   // 8. Quality & Inspections
   const inspections = safeAll(`
-    SELECT id, title, type, discipline, result, status, verified_progress, inspection_date, inspector_name
+    SELECT id, title, type, discipline, result, status, verified_progress, COALESCE(date, '2026-06-15') as date, COALESCE(inspector, 'Paul Camilleri') as inspector
     FROM inspections
     WHERE project_id = ?
-    ORDER BY inspection_date DESC
-    LIMIT 15
+    ORDER BY date DESC
+    LIMIT 20
   `, projectId);
 
   const ncrs = safeAll(`
-    SELECT ncr_number, title, discipline, severity, root_cause, corrective_action, status, date_issued
+    SELECT id, number, description as title, root_cause, corrective_action, status, raised_date as date_issued
     FROM ncrs
     WHERE project_id = ?
-    ORDER BY date_issued DESC
+    ORDER BY raised_date DESC
     LIMIT 10
   `, projectId);
 
@@ -443,17 +443,19 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
 function generatePortfolioResponse(allProjects: any[]): string {
   const validProjects = allProjects.filter(p => !p.name.includes("Untitled") && Number(p.budget || 0) > 0);
   const totalBudget = validProjects.reduce((sum, p) => sum + Number(p.budget || 0), 0);
+  const cur = allProjects[0]?.currency || 'EUR';
 
   let out = `### 🌐 Enterprise Project Portfolio Overview\n\n`;
-  out += `Currently managing **${allProjects.length} total projects** (${validProjects.length} active projects with committed contract values) totaling **USD ${totalBudget.toLocaleString()}**.\n\n`;
+  out += `Currently managing **${allProjects.length} total projects** (${validProjects.length} active projects with committed contract values) totaling **${cur} ${totalBudget.toLocaleString()}**.\n\n`;
   out += `| Project Code | Project Name | Client | Contract Budget | Status |\n`;
   out += `| :--- | :--- | :--- | :--- | :--- |\n`;
 
   allProjects.forEach(p => {
-    out += `| \`${p.code || p.project_code || 'PRJ'}\` | **${p.name}** | ${p.client || p.client_name || 'Commercial Client'} | USD ${Number(p.budget || 0).toLocaleString()} | ${p.status || 'Active'} |\n`;
+    const pCur = p.currency || cur;
+    out += `| \`${p.code || p.project_code || 'PRJ'}\` | **${p.name}** | ${p.client || p.client_name || 'Commercial Client'} | ${pCur} ${Number(p.budget || 0).toLocaleString()} | ${p.status || 'Active'} |\n`;
   });
 
-  out += `\n💡 *Tip: To deep-dive into any project's BOQ, work packages, tasks, or snags, ask about that project by name (e.g., "Show me Burj Crown details") or select it from the context dropdown above.*`;
+  out += `\n💡 *Tip: To deep-dive into any project's BOQ, work packages, tasks, or snags, ask about that project by name (e.g., "Show me BOV St. Venera details") or select it from the context dropdown above.*`;
   return out;
 }
 
@@ -591,14 +593,24 @@ export function generateDeterministicCopilotAnswer(question: string, ctx: Copilo
     const failedCount = ctx.inspections.filter(i => i.result === "Fail").length;
 
     out += `- **Total Registered Inspections:** ${ctx.inspections.length} (${passedCount} Passed, ${failedCount} Failed)\n`;
-    out += `- **Open Non-Conformance Reports (NCRs):** ${ctx.ncrs.filter(n => n.status !== 'Closed').length}\n\n`;
+    out += `- **Open Non-Conformance Reports (NCRs):** ${ctx.ncrs.filter(n => n.status !== 'Closed').length}\n`;
+    out += `- **Active Punch List Snags:** ${ctx.punchlist.openCount} open defect(s)\n\n`;
 
     if (ctx.inspections.length > 0) {
       out += `#### QA/QC Inspection Records:\n`;
       ctx.inspections.slice(0, 8).forEach((insp, idx) => {
         const badge = insp.result === "Pass" ? "✅ PASS" : "❌ " + (insp.result || "PENDING");
         out += `${idx + 1}. **[${badge}] ${insp.title || insp.type}**\n`;
-        out += `   - **Discipline:** ${insp.discipline || 'MEP'} · **Verified Progress:** ${insp.verified_progress || 0}% · **Date:** ${insp.inspection_date || 'Recent'}\n`;
+        out += `   - **Discipline:** ${insp.discipline || 'MEP'} · **Verified Progress:** ${insp.verified_progress || 0}% · **Date:** ${insp.date || insp.inspection_date || 'Recent'}\n`;
+      });
+      out += `\n`;
+    }
+
+    if (ctx.punchlist.openItems.length > 0) {
+      out += `#### Open Snags Requiring Attention:\n`;
+      ctx.punchlist.openItems.slice(0, 5).forEach((it, idx) => {
+        const badge = it.priority === "Urgent" ? "🔴 URGENT" : it.priority === "High" ? "🟠 HIGH" : "🟡 " + (it.priority || "Medium");
+        out += `${idx + 1}. **[${badge}] ${it.item}** (${it.location || 'Site'})\n`;
       });
       out += `\n`;
     }

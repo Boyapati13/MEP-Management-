@@ -2,51 +2,45 @@ import { answerCopilotQuestion } from "../server/services/copilotService";
 
 async function run() {
   console.log("=========================================");
-  console.log("COPILOT SERVICE INTEGRATION VERIFICATION");
+  console.log("COPILOT SERVICE REAL PROJECT VERIFICATION");
   console.log("=========================================");
 
   const queries = [
     {
-      name: "Burj Crown Budget Query",
-      prompt: "What is the budget for Burj Crown?",
+      name: "BOV St. Venera Budget & Commercial Ledger",
+      prompt: "What is the budget and commercial breakdown for BOV St. Venera?",
       projectId: "all",
-      checks: ["Burj Crown", "Budget", "USD"]
+      checks: ["BOV St. Venera", "Budget", "EUR", "1,30,893"]
     },
     {
-      name: "Burj Crown Work Packages Query",
-      prompt: "Show me the work packages for Burj Crown",
+      name: "BOV St. Venera Work Packages",
+      prompt: "Show me the work packages for BOV St. Venera",
       projectId: "all",
-      checks: ["Work Packages", "HVAC", "Plumbing"]
+      checks: ["Work Packages", "Preliminaries", "Electrical Distribution", "Cat 6"]
     },
     {
-      name: "BOV St. Venera Specific Context",
-      prompt: "What is the total cost and packages for BOV St. Venera?",
+      name: "BOV St. Venera Variations & Change Orders",
+      prompt: "Are there any change orders or variations on BOV St. Venera?",
       projectId: "all",
-      checks: ["BOV", "Venera"]
+      checks: ["Variations", "Change Orders", "VAR-2618-001", "HDMI"]
+    },
+    {
+      name: "BOV St. Venera Purchase Orders & Committed Costs",
+      prompt: "List the purchase orders and committed costs for BOV St. Venera",
+      projectId: "all",
+      checks: ["Purchase Orders", "PO-2618-001", "Schneider Electric", "Prysmian"]
+    },
+    {
+      name: "BOV St. Venera QA/QC Inspections & Snags",
+      prompt: "What are the latest QA/QC inspections and snags?",
+      projectId: "all",
+      checks: ["QA/QC", "Inspections", "Continuity", "Snags", "Traffolyte"]
     },
     {
       name: "Portfolio Overview Query",
       prompt: "Give me an executive summary of all projects and portfolio budget",
       projectId: "all",
-      checks: ["Portfolio", "projects", "USD"]
-    },
-    {
-      name: "Change Orders & Variations",
-      prompt: "Are there any change orders or variations on Burj Crown?",
-      projectId: "all",
-      checks: ["Variations", "Change Orders", "Burj Crown"]
-    },
-    {
-      name: "Purchase Orders & Committed Costs",
-      prompt: "List the purchase orders and committed costs for Burj Crown",
-      projectId: "all",
-      checks: ["Purchase Orders", "Burj Crown"]
-    },
-    {
-      name: "QA/QC Inspections & Snags",
-      prompt: "What are the latest QA/QC inspections?",
-      projectId: "all",
-      checks: ["QA/QC", "Inspections"]
+      checks: ["Portfolio", "BOV St. Venera", "EUR"]
     },
     {
       name: "Technical MEP Engineering Standard",
@@ -57,7 +51,7 @@ async function run() {
   ];
 
   let passed = 0;
-  const dummyUser = { id: "user-1", username: "admin", role: "Admin", company_id: "comp-1" };
+  const dummyUser = { id: "e13aa2c0-3c49-45d1-b204-ce2a11c77cf2", username: "admin", role: "Admin", company: "Apex MEP Engineering Ltd" };
 
   for (const q of queries) {
     try {
@@ -85,7 +79,7 @@ async function run() {
 
   console.log(`\nResults: ${passed} / ${queries.length} passed.`);
   if (passed === queries.length) {
-    console.log("🎉 ALL COPILOT TESTS PASSED 100%!");
+    console.log("🎉 ALL REAL PROJECT COPILOT TESTS PASSED 100%!");
     process.exit(0);
   } else {
     process.exit(1);
