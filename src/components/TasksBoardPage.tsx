@@ -3,13 +3,13 @@
  * Kanban + List hybrid · BOQ workflow · Unified action controls
  * 15-year senior FE standard: clean, purposeful, zero redundancy
  */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Plus, RefreshCw, Search, Filter, CheckCircle2, Clock3, AlertOctagon,
-  CircleDot, Camera, Edit3, Trash2, X, Upload, Eye, ChevronDown,
+  CircleDot, Camera, Edit3, Trash2, X, Upload, Eye, ChevronDown, ChevronRight,
   LayoutGrid, List, ArrowRight, Check, Calendar, User, Building2,
   Hash, Shield, Image as ImageIcon, MoreHorizontal, Move, ZoomIn,
-  TrendingUp, Target, Activity, Layers, Download
+  TrendingUp, Target, Activity, Layers, Download, FileText
 } from 'lucide-react';
 import { tasksApi, projectsApi } from '../api';
 import { TaskDetailModal } from './TaskDetailModal';
@@ -30,14 +30,25 @@ interface Task {
   progress: number;
   wbs_code?: string;
   boq_ref?: string;
+  boq_item_id?: string;
+  boq_item_number?: string;
+  boq_unit?: string;
+  boq_quantity?: number;
+  boq_installed_qty?: number;
+  boq_discipline?: string;
+  boq_system?: string;
   drawing_ref?: string;
   start?: string;
   end?: string;
   actual_end_date?: string;
+  site_id?: string;
   site_name?: string;
+  work_package_id?: string;
+  work_package_code?: string;
   work_package_name?: string;
   company_name?: string;
   supervisor_name?: string;
+  worker_name?: string;
   evidence_url?: string;
   evidence_notes?: string;
   evidence_required?: number;
@@ -373,10 +384,14 @@ function ListRow({
   onViewPhoto: (t: Task) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [expandedDesc, setExpandedDesc] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isDone = task.status === 'Completed';
   const statusCfg = STATUSES.find(s => s.id === task.status)!;
   const isOverdue = !isDone && task.end && new Date(task.end) < new Date();
+
+  const boqItemNum = task.boq_item_number || task.title.match(/^\[(.*?)\]/)?.[1] || task.boq_ref;
+  const cleanTitle = task.title.replace(/^\[.*?\]\s*/, '');
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -389,37 +404,105 @@ function ListRow({
 
   return (
     <tr className={cn(
-      'group hover:bg-gray-50/80 dark:hover:bg-slate-800/60 transition-colors border-b border-gray-50 dark:border-slate-800/60',
+      'group hover:bg-gray-50/80 dark:hover:bg-slate-800/60 transition-colors border-b border-gray-100 dark:border-slate-800/80',
       isDone && 'bg-emerald-50/30 dark:bg-emerald-950/20'
     )}>
       {/* Status indicator */}
-      <td className="pl-4 pr-2 py-3 w-2">
-        <span className={cn('w-2 h-2 rounded-full inline-block', statusCfg.dot)} />
+      <td className="pl-4 pr-1 py-3 w-2 align-top">
+        <span className={cn('w-2 h-2 rounded-full inline-block mt-1', statusCfg.dot)} />
       </td>
 
-      {/* WBS + Title */}
-      <td className="py-3 pr-4 max-w-[280px]">
-        <div className="flex items-center gap-2">
+      {/* BOQ Item Number */}
+      <td className="py-3 pr-3 align-top whitespace-nowrap">
+        {boqItemNum ? (
+          <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 px-2 py-0.5 rounded-md">
+            <Hash size={10} className="text-amber-500" />
+            {boqItemNum}
+          </span>
+        ) : (
+          <span className="text-[11px] text-gray-300 dark:text-slate-600 font-mono">—</span>
+        )}
+      </td>
+
+      {/* Task Scope & Full Tender Specification */}
+      <td className="py-3 pr-4 max-w-[340px] align-top">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {task.wbs_code && (
-            <span className="text-[10px] font-mono font-bold text-gray-400 dark:text-slate-400 whitespace-nowrap">{task.wbs_code}</span>
+            <span className="text-[10px] font-mono font-bold text-gray-400 dark:text-slate-500">{task.wbs_code}</span>
           )}
+          <button
+            onClick={() => onEdit(task)}
+            className={cn(
+              'text-xs font-semibold text-left transition-colors leading-snug',
+              isDone ? 'text-slate-700 dark:text-slate-300 hover:text-emerald-500' : 'text-gray-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400'
+            )}
+          >
+            {cleanTitle}
+          </button>
         </div>
-        <button
-          onClick={() => onEdit(task)}
-          className={cn(
-            'text-xs font-semibold text-left transition-colors leading-snug block',
-            isDone ? 'text-slate-800 dark:text-slate-200 hover:text-emerald-500' : 'text-gray-900 dark:text-slate-100 hover:text-blue-600'
-          )}
-        >
-          {task.title}
-        </button>
         {task.description && (
-          <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{task.description}</p>
+          <div className="mt-1">
+            <p className={cn(
+              'text-[11px] text-slate-500 dark:text-slate-400 font-normal leading-relaxed',
+              !expandedDesc && 'line-clamp-2'
+            )}>
+              {task.description}
+            </p>
+            {task.description.length > 90 && (
+              <button
+                type="button"
+                onClick={() => setExpandedDesc(!expandedDesc)}
+                className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline mt-0.5 font-medium inline-block"
+              >
+                {expandedDesc ? 'Show less' : 'View full specification'}
+              </button>
+            )}
+          </div>
+        )}
+      </td>
+
+      {/* Tender Qty & Unit */}
+      <td className="py-3 pr-3 align-top whitespace-nowrap">
+        {task.boq_quantity !== undefined && task.boq_quantity !== null && task.boq_quantity > 0 ? (
+          <div className="text-xs">
+            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+              {Number(task.boq_quantity).toLocaleString()}
+            </span>
+            <span className="text-slate-500 dark:text-slate-400 text-[11px] ml-1 font-medium">
+              {task.boq_unit || ''}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">—</span>
+        )}
+      </td>
+
+      {/* Drawing Reference */}
+      <td className="py-3 pr-3 align-top whitespace-nowrap hidden sm:table-cell">
+        {task.drawing_ref ? (
+          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 px-2 py-0.5 rounded-md" title={`Engineering Drawing: ${task.drawing_ref}`}>
+            <FileText size={10} className="text-blue-500" />
+            {task.drawing_ref}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-300 dark:text-slate-600 font-mono">—</span>
+        )}
+      </td>
+
+      {/* Work Package */}
+      <td className="py-3 pr-3 align-top whitespace-nowrap hidden md:table-cell">
+        {(task.work_package_code || task.work_package_name) ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800/80 px-2 py-0.5 rounded-md" title={task.work_package_name}>
+            <Layers size={10} className="text-purple-500" />
+            {task.work_package_code || task.work_package_name}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-300 dark:text-slate-600 font-mono">—</span>
         )}
       </td>
 
       {/* Trade */}
-      <td className="py-3 pr-3 hidden sm:table-cell">
+      <td className="py-3 pr-3 align-top whitespace-nowrap hidden lg:table-cell">
         {task.trade && (
           <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap', TRADE_PILL[task.trade] || 'bg-gray-100 text-gray-600')}>
             {task.trade}
@@ -427,57 +510,57 @@ function ListRow({
         )}
       </td>
 
-      {/* Status badge */}
-      <td className="py-3 pr-3 hidden md:table-cell">
-        <span className={cn('text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap', statusCfg.bg, statusCfg.text, 'border', statusCfg.border)}>
+      {/* Status */}
+      <td className="py-3 pr-3 align-top whitespace-nowrap">
+        <span className={cn('text-[10px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap', statusCfg.bg, statusCfg.text, 'border', statusCfg.border)}>
           {task.status}
         </span>
       </td>
 
       {/* Progress */}
-      <td className="py-3 pr-4 w-28 hidden lg:table-cell">
+      <td className="py-3 pr-4 w-28 align-top hidden xl:table-cell">
         <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="flex-1 h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
             <div
               className={cn('h-1.5 rounded-full transition-all', isDone ? 'bg-emerald-500' : 'bg-blue-500')}
               style={{ width: `${Math.min(task.progress || 0, 100)}%` }}
             />
           </div>
-          <span className="text-[10px] font-bold text-gray-600 w-7 text-right">{task.progress || 0}%</span>
+          <span className="text-[10px] font-bold text-gray-600 dark:text-slate-300 w-7 text-right">{task.progress || 0}%</span>
         </div>
       </td>
 
       {/* Due date */}
-      <td className="py-3 pr-3 hidden xl:table-cell">
+      <td className="py-3 pr-3 align-top whitespace-nowrap hidden xl:table-cell">
         {task.end ? (
-          <span className={cn('text-[10px] font-medium whitespace-nowrap', isOverdue ? 'text-red-600 font-bold' : 'text-gray-500')}>
+          <span className={cn('text-[10px] font-medium whitespace-nowrap', isOverdue ? 'text-red-600 font-bold' : 'text-gray-500 dark:text-slate-400')}>
             {fmtDate(task.end)}
           </span>
-        ) : <span className="text-[10px] text-gray-300">—</span>}
+        ) : <span className="text-[10px] text-gray-300 dark:text-slate-600">—</span>}
       </td>
 
       {/* Evidence */}
-      <td className="py-3 pr-3 hidden lg:table-cell">
+      <td className="py-3 pr-3 align-top whitespace-nowrap hidden lg:table-cell">
         {task.evidence_url ? (
           <button onClick={() => onViewPhoto(task)} className="group/ev flex items-center gap-1">
-            <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold border border-emerald-200 flex items-center gap-1 group-hover/ev:bg-emerald-200 transition-colors">
+            <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 group-hover/ev:bg-emerald-200 transition-colors">
               <Camera size={9} /> Photo
             </span>
           </button>
         ) : isDone ? (
-          <button onClick={() => onComplete(task)} className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200 hover:bg-amber-200 transition-colors">
+          <button onClick={() => onComplete(task)} className="text-[9px] bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-200 dark:border-amber-800 hover:bg-amber-200 transition-colors">
             + Add
           </button>
         ) : null}
       </td>
 
       {/* Actions */}
-      <td className="py-3 pr-3 text-right">
+      <td className="py-3 pr-3 text-right align-top">
         <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" ref={menuRef}>
           {!isDone ? (
             <button
               onClick={() => onComplete(task)}
-              className="p-1.5 text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              className="p-1.5 text-gray-300 dark:text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
               title="Mark Done + Evidence"
             >
               <Camera size={13} />
@@ -485,7 +568,7 @@ function ListRow({
           ) : task.evidence_url ? (
             <button
               onClick={() => onViewPhoto(task)}
-              className="p-1.5 text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+              className="p-1.5 text-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
               title="View evidence photo"
             >
               <Eye size={13} />
@@ -493,7 +576,7 @@ function ListRow({
           ) : null}
           <button
             onClick={() => onEdit(task)}
-            className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            className="p-1.5 text-gray-300 dark:text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
             title="Edit"
           >
             <Edit3 size={13} />
@@ -501,25 +584,25 @@ function ListRow({
           <div className="relative">
             <button
               onClick={() => setMenuOpen(v => !v)}
-              className="p-1.5 text-gray-300 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 text-gray-300 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               <MoreHorizontal size={13} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-7 z-20 bg-white rounded-xl border border-gray-100 shadow-xl py-1 min-w-[150px]">
+              <div className="absolute right-0 top-7 z-20 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-xl py-1 min-w-[150px]">
                 {STATUSES.filter(s => s.id !== task.status).map(s => (
                   <button
                     key={s.id}
                     onClick={() => { setMenuOpen(false); onMoveStatus(task, s.id); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     <span className={cn('w-2 h-2 rounded-full', s.dot)} /> {s.label}
                   </button>
                 ))}
-                <div className="border-t border-gray-100 my-1" />
+                <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
                 <button
                   onClick={() => { setMenuOpen(false); onDelete(task); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-600 hover:bg-red-50"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
                 >
                   <Trash2 size={12} /> Delete
                 </button>
@@ -611,6 +694,13 @@ export function TasksBoardPage({
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
+  const [groupByPackage, setGroupByPackage] = useState(false);
+  const [collapsedPackages, setCollapsedPackages] = useState<Record<string, boolean>>({});
+
+  const togglePackageCollapse = (code: string) => {
+    setCollapsedPackages(prev => ({ ...prev, [code]: !prev[code] }));
+  };
+
   const filtered = tasks.filter(t => {
     const matchTrade = tradeFilter === 'All' || t.trade === tradeFilter;
     const q = search.toLowerCase();
@@ -618,9 +708,26 @@ export function TasksBoardPage({
       (t.title || '').toLowerCase().includes(q) ||
       (t.wbs_code || '').toLowerCase().includes(q) ||
       (t.boq_ref || '').toLowerCase().includes(q) ||
+      (t.boq_item_number || '').toLowerCase().includes(q) ||
+      (t.drawing_ref || '').toLowerCase().includes(q) ||
+      (t.work_package_code || '').toLowerCase().includes(q) ||
+      (t.work_package_name || '').toLowerCase().includes(q) ||
       (t.description || '').toLowerCase().includes(q);
     return matchTrade && matchSearch;
   });
+
+  const packageGroups = useMemo(() => {
+    const map = new Map<string, { code: string; name: string; tasks: Task[] }>();
+    for (const t of filtered) {
+      const code = t.work_package_code || 'WP-General';
+      const name = t.work_package_name || (code === 'WP-General' ? 'General Scope & Preliminaries' : code);
+      if (!map.has(code)) {
+        map.set(code, { code, name, tasks: [] });
+      }
+      map.get(code)!.tasks.push(t);
+    }
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  }, [filtered]);
 
   const handleOpenCreate = () => {
     setEditingTask(null);
@@ -765,8 +872,27 @@ export function TasksBoardPage({
           </div>
         </div>
 
-        <div className="text-[11px] text-gray-400 dark:text-slate-400 font-medium whitespace-nowrap px-1">
-          {filtered.length} of {tasks.length} tasks
+        <div className="flex items-center gap-2.5">
+          {viewMode === 'list' && (
+            <button
+              type="button"
+              onClick={() => setGroupByPackage(!groupByPackage)}
+              className={cn(
+                'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 border shadow-xs',
+                groupByPackage
+                  ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+              )}
+              title="Group tasks by official Tender Work Package"
+            >
+              <Layers size={13} className={groupByPackage ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
+              <span>Group by Package</span>
+            </button>
+          )}
+
+          <div className="text-[11px] text-gray-400 dark:text-slate-400 font-medium whitespace-nowrap px-1">
+            {filtered.length} of {tasks.length} tasks
+          </div>
         </div>
       </div>
 
@@ -817,40 +943,99 @@ export function TasksBoardPage({
           addToast={addToast}
         />
       ) : (
-        /* ── List View ────────────────────────────────────────────────────── */
-        <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
+        /* ── List View (Complete BOQ Tender Schedule & Specifications) ────── */
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-xs overflow-x-auto">
           {filtered.length === 0 ? (
             <div className="py-16 text-center">
-              <Layers size={36} className="mx-auto text-gray-200 mb-3" />
-              <p className="text-sm font-medium text-gray-500">No tasks found</p>
-              <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or search term</p>
+              <Layers size={36} className="mx-auto text-gray-200 dark:text-slate-700 mb-3" />
+              <p className="text-sm font-medium text-gray-500 dark:text-slate-400">No tasks found</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Try adjusting your filters or search term</p>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="w-2 pl-4 py-2" />
-                  <th className="py-2 pr-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Task</th>
-                  <th className="py-2 pr-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Trade</th>
-                  <th className="py-2 pr-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Status</th>
-                  <th className="py-2 pr-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell w-28">Progress</th>
-                  <th className="py-2 pr-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden xl:table-cell">Due</th>
-                  <th className="py-2 pr-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Evidence</th>
-                  <th className="py-2 pr-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider w-24">Actions</th>
+                <tr className="border-b border-gray-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60">
+                  <th className="w-2 pl-4 py-2.5" />
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">BOQ Item #</th>
+                  <th className="py-2.5 pr-4 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Task Scope &amp; Specification</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Tender Qty</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">Drawing</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Package</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Trade</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Status</th>
+                  <th className="py-2.5 pr-4 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap hidden xl:table-cell w-28">Progress</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap hidden xl:table-cell">Due</th>
+                  <th className="py-2.5 pr-3 text-left text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Evidence</th>
+                  <th className="py-2.5 pr-3 text-right text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider w-24">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {filtered.map(t => (
-                  <ListRow
-                    key={t.id}
-                    task={t}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    onMoveStatus={handleMoveStatus}
-                    onComplete={t => setCompletingTask(t)}
-                    onViewPhoto={t => setLightboxTask(t)}
-                  />
-                ))}
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
+                {groupByPackage ? (
+                  packageGroups.map(group => {
+                    const isCollapsed = collapsedPackages[group.code];
+                    const completedInGroup = group.tasks.filter(t => t.status === 'Completed').length;
+                    const groupProgressPct = group.tasks.length > 0 ? Math.round((completedInGroup / group.tasks.length) * 100) : 0;
+
+                    return (
+                      <React.Fragment key={group.code}>
+                        <tr className="bg-slate-100/90 dark:bg-slate-800/90 border-t border-b border-slate-200 dark:border-slate-700">
+                          <td colSpan={12} className="py-2.5 px-4">
+                            <div className="flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => togglePackageCollapse(group.code)}
+                                className="flex items-center gap-2.5 text-left font-bold text-xs text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                              >
+                                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                                <span className="font-mono text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800/80 px-2 py-0.5 rounded text-[11px] font-bold">
+                                  {group.code}
+                                </span>
+                                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">{group.name}</span>
+                                <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                                  ({group.tasks.length} {group.tasks.length === 1 ? 'item' : 'items'})
+                                </span>
+                              </button>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 hidden sm:inline">
+                                  {completedInGroup}/{group.tasks.length} done ({groupProgressPct}%)
+                                </span>
+                                <div className="w-20 sm:w-28 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-2 bg-emerald-500 rounded-full transition-all"
+                                    style={{ width: `${groupProgressPct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        {!isCollapsed && group.tasks.map(t => (
+                          <ListRow
+                            key={t.id}
+                            task={t}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onMoveStatus={handleMoveStatus}
+                            onComplete={t => setCompletingTask(t)}
+                            onViewPhoto={t => setLightboxTask(t)}
+                          />
+                        ))}
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  filtered.map(t => (
+                    <ListRow
+                      key={t.id}
+                      task={t}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onMoveStatus={handleMoveStatus}
+                      onComplete={t => setCompletingTask(t)}
+                      onViewPhoto={t => setLightboxTask(t)}
+                    />
+                  ))
+                )}
               </tbody>
             </table>
           )}

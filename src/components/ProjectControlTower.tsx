@@ -338,16 +338,16 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
               return (
                 <div
                   key={item.id}
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-all ${
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-l-4 transition-all shadow-xs ${
                     isCritical
-                      ? 'bg-rose-50/90 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 hover:bg-rose-100/70 dark:hover:bg-rose-950/60'
+                      ? 'bg-rose-50/90 dark:bg-slate-900 border-rose-200 dark:border-slate-800 border-l-rose-600 dark:border-l-rose-500 hover:bg-rose-100/70 dark:hover:bg-slate-850'
                       : isHigh
-                      ? 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 hover:bg-amber-100/70 dark:hover:bg-amber-950/60'
-                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 hover:bg-slate-100/80 dark:hover:bg-slate-800'
+                      ? 'bg-amber-50/90 dark:bg-slate-900 border-amber-200 dark:border-slate-800 border-l-amber-500 dark:border-l-amber-500 hover:bg-amber-100/70 dark:hover:bg-slate-850'
+                      : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-blue-500 dark:border-l-blue-400 hover:bg-slate-100/80 dark:hover:bg-slate-850'
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-xl mt-0.5 ${
+                    <div className={`p-2.5 rounded-xl mt-0.5 shadow-xs ${
                       isCritical ? 'bg-rose-600 text-white' : isHigh ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
                     }`}>
                       {isCritical ? <ShieldAlert size={16} /> : isHigh ? <AlertTriangle size={16} /> : <AlertCircle size={16} />}
@@ -356,28 +356,28 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
                           isCritical
-                            ? 'bg-rose-200 dark:bg-rose-900/70 text-rose-900 dark:text-rose-200'
+                            ? 'bg-rose-200 dark:bg-rose-950/80 text-rose-900 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
                             : isHigh
-                            ? 'bg-amber-200 dark:bg-amber-900/70 text-amber-900 dark:text-amber-200'
-                            : 'bg-blue-100 dark:bg-blue-900/70 text-blue-900 dark:text-blue-200'
+                            ? 'bg-amber-200 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                            : 'bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
                         }`}>
                           {item.severity}
                         </span>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{item.title}</h4>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{item.title}</h4>
                       </div>
                       <p className={`text-xs mt-1 font-medium ${
                         isCritical
-                          ? 'text-rose-900 dark:text-rose-200'
+                          ? 'text-rose-950 dark:text-rose-200'
                           : isHigh
-                          ? 'text-amber-900 dark:text-amber-200'
+                          ? 'text-amber-950 dark:text-amber-200'
                           : 'text-slate-700 dark:text-slate-300'
                       }`}>{item.subtitle}</p>
                       {item.project_name && (
                         <p className={`text-[11px] mt-0.5 font-medium ${
                           isCritical
-                            ? 'text-rose-800/90 dark:text-rose-300/90'
+                            ? 'text-rose-800 dark:text-slate-400'
                             : isHigh
-                            ? 'text-amber-800/90 dark:text-amber-300/90'
+                            ? 'text-amber-800 dark:text-slate-400'
                             : 'text-slate-500 dark:text-slate-400'
                         }`}>Project: {item.project_name}</p>
                       )}
@@ -387,9 +387,11 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
                   <div className="flex items-center gap-2 self-end sm:self-center">
                     <button
                       onClick={() => navigate(item.target_module, item.target_id)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-sm ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm ${
                         isCritical
                           ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : isHigh
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
                           : 'bg-blue-600 hover:bg-blue-700 text-white'
                       }`}
                     >

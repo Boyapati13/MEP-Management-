@@ -181,61 +181,57 @@ html.dark .border-slate-700 {
   border-color: #334155 !important;
 }
 
-/* Dark mode alert / status background overrides to eliminate murky beige contrast issues */
+/* Refined dark mode alert / status background overrides - high-contrast solid backgrounds */
 .workspace-surface[data-workspace-theme="dark"] .bg-amber-50,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-amber-50"],
 .workspace-surface[data-workspace-theme="dark"] .bg-yellow-50,
 html.dark .bg-amber-50,
-html.dark [class*="bg-amber-50"],
 html.dark .bg-yellow-50 {
-  background-color: rgba(120, 53, 15, 0.28) !important;
-  border-color: rgba(245, 158, 11, 0.45) !important;
+  background-color: #0f172a !important;
+  border-color: #f59e0b !important;
 }
 .workspace-surface[data-workspace-theme="dark"] .bg-rose-50,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-rose-50"],
 .workspace-surface[data-workspace-theme="dark"] .bg-red-50,
 html.dark .bg-rose-50,
-html.dark [class*="bg-rose-50"],
 html.dark .bg-red-50 {
-  background-color: rgba(136, 19, 55, 0.28) !important;
-  border-color: rgba(244, 63, 94, 0.45) !important;
+  background-color: #0f172a !important;
+  border-color: #f43f5e !important;
 }
 .workspace-surface[data-workspace-theme="dark"] .bg-emerald-50,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-emerald-50"],
 .workspace-surface[data-workspace-theme="dark"] .bg-green-50,
 html.dark .bg-emerald-50,
-html.dark [class*="bg-emerald-50"],
 html.dark .bg-green-50 {
-  background-color: rgba(6, 78, 59, 0.28) !important;
-  border-color: rgba(16, 185, 129, 0.45) !important;
+  background-color: #0f172a !important;
+  border-color: #10b981 !important;
 }
 .workspace-surface[data-workspace-theme="dark"] .bg-blue-50,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-blue-50"],
 .workspace-surface[data-workspace-theme="dark"] .bg-sky-50,
 html.dark .bg-blue-50,
-html.dark [class*="bg-blue-50"],
 html.dark .bg-sky-50 {
-  background-color: rgba(30, 58, 138, 0.28) !important;
-  border-color: rgba(59, 130, 246, 0.45) !important;
+  background-color: #0f172a !important;
+  border-color: #3b82f6 !important;
 }
 .workspace-surface[data-workspace-theme="dark"] .bg-indigo-50,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-indigo-50"],
-html.dark .bg-indigo-50,
-html.dark [class*="bg-indigo-50"] {
-  background-color: rgba(49, 46, 129, 0.28) !important;
-  border-color: rgba(99, 102, 241, 0.45) !important;
+html.dark .bg-indigo-50 {
+  background-color: #0f172a !important;
+  border-color: #6366f1 !important;
 }
 
 /* Alert subtitle text contrast inside status cards */
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-amber-50"] p,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-rose-50"] p,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-emerald-50"] p,
-.workspace-surface[data-workspace-theme="dark"] [class*="bg-blue-50"] p,
-html.dark [class*="bg-amber-50"] p,
-html.dark [class*="bg-rose-50"] p,
-html.dark [class*="bg-emerald-50"] p,
-html.dark [class*="bg-blue-50"] p {
-  color: #cbd5e1 !important;
+.workspace-surface[data-workspace-theme="dark"] .bg-amber-50 p,
+html.dark .bg-amber-50 p {
+  color: #fde68a !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-rose-50 p,
+html.dark .bg-rose-50 p {
+  color: #fecdd3 !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-emerald-50 p,
+html.dark .bg-emerald-50 p {
+  color: #a7f3d0 !important;
+}
+.workspace-surface[data-workspace-theme="dark"] .bg-blue-50 p,
+html.dark .bg-blue-50 p {
+  color: #bfdbfe !important;
 }
 
 /* Badges and pills in dark mode */

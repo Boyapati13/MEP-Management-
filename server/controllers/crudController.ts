@@ -339,13 +339,20 @@ export function registerCrudController(app: Express): void {
             wp.code as work_package_code,
             c.name as company_name,
             sup.name as supervisor_name,
-            w.name as worker_name
+            w.name as worker_name,
+            b.item_number as boq_item_number,
+            b.unit as boq_unit,
+            b.tender_quantity as boq_quantity,
+            b.installed_quantity as boq_installed_qty,
+            b.discipline as boq_discipline,
+            b.system as boq_system
           FROM tasks
           LEFT JOIN sites s ON s.id = tasks.site_id
           LEFT JOIN work_packages wp ON wp.id = tasks.work_package_id
           LEFT JOIN companies c ON c.id = tasks.company_id
           LEFT JOIN users sup ON sup.id = tasks.supervisor_id
           LEFT JOIN workers w ON w.id = tasks.assigned_worker_id
+          LEFT JOIN boq_items b ON b.id = tasks.boq_item_id
           WHERE ${where}
           ORDER BY tasks.wbs_code ASC, tasks.start ASC
         `).all(...params);
@@ -375,13 +382,20 @@ export function registerCrudController(app: Express): void {
             wp.code as work_package_code,
             c.name as company_name,
             sup.name as supervisor_name,
-            w.name as worker_name
+            w.name as worker_name,
+            b.item_number as boq_item_number,
+            b.unit as boq_unit,
+            b.tender_quantity as boq_quantity,
+            b.installed_quantity as boq_installed_qty,
+            b.discipline as boq_discipline,
+            b.system as boq_system
           FROM tasks
           LEFT JOIN sites s ON s.id = tasks.site_id
           LEFT JOIN work_packages wp ON wp.id = tasks.work_package_id
           LEFT JOIN companies c ON c.id = tasks.company_id
           LEFT JOIN users sup ON sup.id = tasks.supervisor_id
           LEFT JOIN workers w ON w.id = tasks.assigned_worker_id
+          LEFT JOIN boq_items b ON b.id = tasks.boq_item_id
           WHERE tasks.id = ?
         `).get(req.params.id);
       } else {
