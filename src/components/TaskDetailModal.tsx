@@ -219,7 +219,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
     }
   };
 
-  const inputCls = "w-full px-3 py-2 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500";
+  const inputCls = "w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500";
   const labelCls = "text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block";
 
   return (
@@ -242,7 +242,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
         </div>
 
         {/* Pillar Tabs */}
-        <div className="flex items-center gap-1 px-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-900/90 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-1 px-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-900/90 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('scope')}

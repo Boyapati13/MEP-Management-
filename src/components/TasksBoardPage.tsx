@@ -14,10 +14,11 @@ import {
 import { tasksApi, projectsApi } from '../api';
 import { TaskDetailModal } from './TaskDetailModal';
 import { CompleteTaskModal } from './CompleteTaskModal';
+import { CalendarProgrammeView } from './CalendarProgrammeView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TaskStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Blocked';
-type ViewMode = 'kanban' | 'list';
+type ViewMode = 'kanban' | 'list' | 'calendar';
 
 interface Task {
   id: string;
@@ -45,10 +46,10 @@ interface Task {
 
 // ─── Status Config ─────────────────────────────────────────────────────────────
 const STATUSES: { id: TaskStatus; label: string; icon: React.ComponentType<any>; accent: string; bg: string; border: string; text: string; dot: string }[] = [
-  { id: 'Not Started', label: 'Not Started', icon: CircleDot, accent: 'bg-slate-600', bg: 'bg-slate-100/70 dark:bg-slate-900/70', border: 'border-slate-200 dark:border-slate-800', text: 'text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
-  { id: 'In Progress', label: 'In Progress', icon: Clock3, accent: 'bg-blue-600', bg: 'bg-blue-50/70 dark:bg-slate-900/70', border: 'border-blue-200 dark:border-slate-800', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
-  { id: 'Completed', label: 'Completed', icon: CheckCircle2, accent: 'bg-emerald-600', bg: 'bg-emerald-50/70 dark:bg-slate-900/70', border: 'border-emerald-200 dark:border-slate-800', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
-  { id: 'Blocked', label: 'Blocked', icon: AlertOctagon, accent: 'bg-red-600', bg: 'bg-red-50/70 dark:bg-slate-900/70', border: 'border-red-200 dark:border-slate-800', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
+  { id: 'Not Started', label: 'Not Started', icon: CircleDot, accent: 'bg-slate-600', bg: 'bg-slate-50/80 dark:bg-slate-900/80', border: 'border-slate-200 dark:border-slate-800', text: 'text-slate-700 dark:text-slate-300', dot: 'bg-slate-400' },
+  { id: 'In Progress', label: 'In Progress', icon: Clock3, accent: 'bg-blue-600', bg: 'bg-blue-50/80 dark:bg-slate-900/80', border: 'border-blue-200 dark:border-slate-800', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+  { id: 'Completed', label: 'Completed', icon: CheckCircle2, accent: 'bg-emerald-600', bg: 'bg-emerald-50/80 dark:bg-slate-900/80', border: 'border-emerald-200 dark:border-slate-800', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+  { id: 'Blocked', label: 'Blocked', icon: AlertOctagon, accent: 'bg-red-600', bg: 'bg-red-50/80 dark:bg-slate-900/80', border: 'border-red-200 dark:border-slate-800', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
 ];
 
 const PRIORITY_PILL: Record<string, string> = {
@@ -687,6 +688,14 @@ export function TasksBoardPage({
             >
               <List size={13} /> List
             </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={cn('px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all flex items-center gap-1.5',
+                viewMode === 'calendar' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
+              )}
+            >
+              <Calendar size={13} /> Calendar
+            </button>
           </div>
           <button
             onClick={loadTasks}
@@ -786,6 +795,27 @@ export function TasksBoardPage({
             />
           ))}
         </div>
+      ) : viewMode === 'calendar' ? (
+        /* ── Interactive Calendar Programme View (Month / Week / Day) ───────── */
+        <CalendarProgrammeView
+          tasks={tasks}
+          projectId={selectedProject || (projects[0]?.id ?? '')}
+          onEditTask={handleEdit}
+          onAddTaskDate={(dateStr) => {
+            setEditingTask({
+              id: '',
+              title: '',
+              status: 'Not Started',
+              progress: 0,
+              start: dateStr,
+              end: dateStr,
+              trade: tradeFilter !== 'All' ? tradeFilter : 'Electrical'
+            } as any);
+            setShowEditModal(true);
+          }}
+          onRefreshTasks={loadTasks}
+          addToast={addToast}
+        />
       ) : (
         /* ── List View ────────────────────────────────────────────────────── */
         <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">

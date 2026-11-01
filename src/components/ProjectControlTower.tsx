@@ -186,15 +186,15 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
       </div>
 
       {/* ── SECTION A: LIVE MANPOWER RADAR ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl">
               <Users size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Live Site Manpower Radar</h2>
-              <p className="text-xs text-slate-500">Real-time GPS attendance punches vs. scheduled roster today</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Live Site Manpower Radar</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Real-time GPS attendance punches vs. scheduled roster today</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -291,15 +291,15 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
       </div>
 
       {/* ── SECTION B: DETERMINISTIC ATTENTION ENGINE ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+            <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
               <Zap size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Deterministic Attention Stream</h2>
-              <p className="text-xs text-slate-500">Prioritized operational blockers requiring immediate engineering action</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Deterministic Attention Stream</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Prioritized operational blockers requiring immediate engineering action</p>
             </div>
           </div>
 
@@ -340,10 +340,10 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
                   key={item.id}
                   className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-all ${
                     isCritical
-                      ? 'bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/50'
+                      ? 'bg-rose-50/90 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 hover:bg-rose-100/70 dark:hover:bg-rose-950/60'
                       : isHigh
-                      ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/60 hover:bg-amber-50 dark:hover:bg-amber-950/50'
-                      : 'bg-slate-50 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:bg-slate-100/60 dark:hover:bg-slate-900'
+                      ? 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 hover:bg-amber-100/70 dark:hover:bg-amber-950/60'
+                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 hover:bg-slate-100/80 dark:hover:bg-slate-800'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -365,9 +365,21 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
                         </span>
                         <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{item.title}</h4>
                       </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{item.subtitle}</p>
+                      <p className={`text-xs mt-1 font-medium ${
+                        isCritical
+                          ? 'text-rose-900 dark:text-rose-200'
+                          : isHigh
+                          ? 'text-amber-900 dark:text-amber-200'
+                          : 'text-slate-700 dark:text-slate-300'
+                      }`}>{item.subtitle}</p>
                       {item.project_name && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Project: {item.project_name}</p>
+                        <p className={`text-[11px] mt-0.5 font-medium ${
+                          isCritical
+                            ? 'text-rose-800/90 dark:text-rose-300/90'
+                            : isHigh
+                            ? 'text-amber-800/90 dark:text-amber-300/90'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}>Project: {item.project_name}</p>
                       )}
                     </div>
                   </div>
@@ -392,15 +404,15 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
       </div>
 
       {/* ── SECTION C: 2-WEEK ROLLING LOOKAHEAD SCHEDULE ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <Calendar size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Rolling Lookahead Schedule</h2>
-              <p className="text-xs text-slate-500">Tasks active within next {lookaheadDays} days with cascading dependency warnings</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Rolling Lookahead Schedule</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Tasks active within next {lookaheadDays} days with cascading dependency warnings</p>
             </div>
           </div>
 
@@ -532,10 +544,10 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
       </div>
 
       {/* ── SECTION D: ACTIVE PROJECT BLOCKERS REGISTER ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+            <div className="p-2 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-xl">
               <ShieldAlert size={18} />
             </div>
             <div>
