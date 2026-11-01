@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Building2, LogOut, Sparkles, ChevronRight, Calendar, DollarSign, ShieldCheck,
-  Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers, Palette
+  Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers, Palette, Check,
+  RotateCcw, Sliders
 } from 'lucide-react';
 import {
   DOMAINS, ROUTE_ITEMS, NavigationDomain
 } from '../app/routes';
+import { AppearanceModal, AppearanceSettings } from '../components/AppearanceModal';
 
 interface InternalLayoutProps {
   user: any;
@@ -34,22 +36,135 @@ export function InternalLayout({
 }: InternalLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
-  const [workspaceTheme, setWorkspaceTheme] = useState(() => {
-    try { return localStorage.getItem('mep-workspace-theme') || 'blueprint'; } catch { return 'blueprint'; }
-  });
-  const [gridEnabled, setGridEnabled] = useState(() => {
-    try { return localStorage.getItem('mep-workspace-grid') !== 'off'; } catch { return true; }
-  });
-  const [gridStrength, setGridStrength] = useState(() => {
-    try { return localStorage.getItem('mep-workspace-grid-strength') || 'subtle'; } catch { return 'subtle'; }
-  });
-  useEffect(() => {
+  const [appearanceModalOpen, setAppearanceModalOpen] = useState(false);
+
+  // Active Appearance Settings (Persisted in localStorage)
+  const [workspaceTheme, setWorkspaceTheme] = useState<AppearanceSettings['theme']>(() => {
     try {
-      localStorage.setItem('mep-workspace-theme', workspaceTheme);
-      localStorage.setItem('mep-workspace-grid', gridEnabled ? 'on' : 'off');
-      localStorage.setItem('mep-workspace-grid-strength', gridStrength);
-    } catch { /* browser storage may be unavailable */ }
-  }, [workspaceTheme, gridEnabled, gridStrength]);
+      const saved = localStorage.getItem('mep-workspace-theme');
+      return (saved as AppearanceSettings['theme']) || 'blueprint';
+    } catch {
+      return 'blueprint';
+    }
+  });
+
+  const [gridEnabled, setGridEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('mep-workspace-grid') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+
+  const [gridStrength, setGridStrength] = useState<AppearanceSettings['gridStrength']>(() => {
+    try {
+      const saved = localStorage.getItem('mep-workspace-grid-strength');
+      return (saved as AppearanceSettings['gridStrength']) || 'subtle';
+    } catch {
+      return 'subtle';
+    }
+  });
+
+  const [workspaceDensity, setWorkspaceDensity] = useState<AppearanceSettings['density']>(() => {
+    try {
+      const saved = localStorage.getItem('mep-workspace-density');
+      return (saved as AppearanceSettings['density']) || 'comfortable';
+    } catch {
+      return 'comfortable';
+    }
+  });
+
+  // Sidebar Inline Draft State (Allows users to change options and explicitly click APPLY)
+  const [sidebarDraftTheme, setSidebarDraftTheme] = useState<AppearanceSettings['theme']>(workspaceTheme);
+  const [sidebarDraftGrid, setSidebarDraftGrid] = useState(gridEnabled);
+  const [sidebarDraftStrength, setSidebarDraftStrength] = useState<AppearanceSettings['gridStrength']>(gridStrength);
+  const [sidebarDraftDensity, setSidebarDraftDensity] = useState<AppearanceSettings['density']>(workspaceDensity);
+  const [sidebarAppliedFeedback, setSidebarAppliedFeedback] = useState(false);
+
+  // Keep sidebar drafts synced with active settings
+  useEffect(() => {
+    setSidebarDraftTheme(workspaceTheme);
+    setSidebarDraftGrid(gridEnabled);
+    setSidebarDraftStrength(gridStrength);
+    setSidebarDraftDensity(workspaceDensity);
+  }, [workspaceTheme, gridEnabled, gridStrength, workspaceDensity, appearanceOpen]);
+
+  // Handle explicit sidebar Apply button
+  const handleSidebarApply = () => {
+    setWorkspaceTheme(sidebarDraftTheme);
+    setGridEnabled(sidebarDraftGrid);
+    setGridStrength(sidebarDraftStrength);
+    setWorkspaceDensity(sidebarDraftDensity);
+
+    try {
+      localStorage.setItem('mep-workspace-theme', sidebarDraftTheme);
+      localStorage.setItem('mep-workspace-grid', sidebarDraftGrid ? 'on' : 'off');
+      localStorage.setItem('mep-workspace-grid-strength', sidebarDraftStrength);
+      localStorage.setItem('mep-workspace-density', sidebarDraftDensity);
+    } catch {
+      /* browser storage may be unavailable */
+    }
+
+    setSidebarAppliedFeedback(true);
+    setTimeout(() => {
+      setSidebarAppliedFeedback(false);
+    }, 2000);
+  };
+
+  // Handle sidebar Reset button
+  const handleSidebarReset = () => {
+    const defaultTheme: AppearanceSettings['theme'] = 'blueprint';
+    const defaultGrid = true;
+    const defaultStrength: AppearanceSettings['gridStrength'] = 'subtle';
+    const defaultDensity: AppearanceSettings['density'] = 'comfortable';
+
+    setSidebarDraftTheme(defaultTheme);
+    setSidebarDraftGrid(defaultGrid);
+    setSidebarDraftStrength(defaultStrength);
+    setSidebarDraftDensity(defaultDensity);
+
+    setWorkspaceTheme(defaultTheme);
+    setGridEnabled(defaultGrid);
+    setGridStrength(defaultStrength);
+    setWorkspaceDensity(defaultDensity);
+
+    try {
+      localStorage.setItem('mep-workspace-theme', defaultTheme);
+      localStorage.setItem('mep-workspace-grid', 'on');
+      localStorage.setItem('mep-workspace-grid-strength', defaultStrength);
+      localStorage.setItem('mep-workspace-density', defaultDensity);
+    } catch {
+      /* browser storage may be unavailable */
+    }
+
+    setSidebarAppliedFeedback(true);
+    setTimeout(() => {
+      setSidebarAppliedFeedback(false);
+    }, 2000);
+  };
+
+  // Handle Modal Apply
+  const handleModalApply = (newSettings: AppearanceSettings) => {
+    setWorkspaceTheme(newSettings.theme);
+    setGridEnabled(newSettings.gridEnabled);
+    setGridStrength(newSettings.gridStrength);
+    setWorkspaceDensity(newSettings.density);
+
+    try {
+      localStorage.setItem('mep-workspace-theme', newSettings.theme);
+      localStorage.setItem('mep-workspace-grid', newSettings.gridEnabled ? 'on' : 'off');
+      localStorage.setItem('mep-workspace-grid-strength', newSettings.gridStrength);
+      localStorage.setItem('mep-workspace-density', newSettings.density);
+    } catch {
+      /* browser storage may be unavailable */
+    }
+  };
+
+  // Handle Modal Reset
+  const handleModalReset = () => {
+    handleSidebarReset();
+  };
+
   const role = user?.role || 'Worker';
   const visibleDomains = DOMAINS.filter(
     (d) => !d.allowedRoles || d.allowedRoles.includes(role)
@@ -72,7 +187,14 @@ export function InternalLayout({
   };
 
   return (
-    <div className="min-h-screen workspace-surface flex flex-col lg:flex-row text-[#14171f] relative" data-workspace-theme={workspaceTheme} data-workspace-grid={gridEnabled ? gridStrength : "off"}>
+    <div
+      className={`min-h-screen workspace-surface flex flex-col lg:flex-row text-[#14171f] relative ${
+        workspaceTheme === 'dark' ? 'dark-mode-cards' : ''
+      }`}
+      data-workspace-theme={workspaceTheme}
+      data-workspace-grid={gridEnabled ? gridStrength : 'off'}
+      data-workspace-density={workspaceDensity}
+    >
       {/* Mobile Backdrop Overlay */}
       {mobileMenuOpen && (
         <div
@@ -165,39 +287,138 @@ export function InternalLayout({
           })}
         </nav>
 
-        {/* Appearance lives in the shared sidebar, not duplicated per module. */}
+        {/* Appearance Section in Sidebar */}
         <div className="px-3 pb-2 border-t border-slate-800 pt-2">
-          <button type="button" onClick={() => setAppearanceOpen(!appearanceOpen)}
-            aria-expanded={appearanceOpen} aria-controls="workspace-appearance"
-            className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white">
-            <span className="flex items-center gap-2"><Palette size={17}/> Appearance</span>
-            <ChevronRight size={14} className={appearanceOpen ? 'rotate-90' : ''}/>
+          <button
+            type="button"
+            onClick={() => setAppearanceOpen(!appearanceOpen)}
+            aria-expanded={appearanceOpen}
+            aria-controls="workspace-appearance"
+            className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Palette size={17} className="text-amber-400" />
+              <span>Appearance</span>
+            </span>
+            <ChevronRight
+              size={14}
+              className={`transition-transform duration-200 ${appearanceOpen ? 'rotate-90' : ''}`}
+            />
           </button>
+
           {appearanceOpen && (
-            <div id="workspace-appearance" className="mt-2 p-3 bg-slate-800/80 rounded-xl space-y-3">
-              <label htmlFor="workspace-theme" className="block text-xs font-medium text-slate-200">Graph paper colour</label>
-              <select id="workspace-theme" value={workspaceTheme} onChange={e => setWorkspaceTheme(e.target.value)}
-                className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-sm text-white">
-                <option value="blueprint">Blueprint Blue</option>
-                <option value="slate">Slate Grey</option>
-                <option value="sage">Sage Green</option>
-                <option value="sand">Warm Sand</option>
-                <option value="dark">Dark Blueprint</option>
-              </select>
-              <label className="flex items-center gap-2 text-xs text-slate-200">
-                <input type="checkbox" checked={gridEnabled} onChange={e => setGridEnabled(e.target.checked)}/>
-                Show background grid
-              </label>
-              <label htmlFor="workspace-grid-strength" className="block text-xs text-slate-200">Grid intensity</label>
-              <select id="workspace-grid-strength" value={gridStrength} onChange={e => setGridStrength(e.target.value)}
-                disabled={!gridEnabled} className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-sm text-white disabled:opacity-50">
-                <option value="subtle">Subtle</option>
-                <option value="standard">Standard</option>
-              </select>
-              <p className="text-[11px] text-slate-400">Saved on this device. Does not change project data.</p>
+            <div id="workspace-appearance" className="mt-2 p-3 bg-slate-800/90 rounded-xl space-y-3 border border-slate-700/60 shadow-inner">
+              <div>
+                <label htmlFor="workspace-theme" className="block text-[11px] font-medium text-slate-200 mb-1">
+                  Graph paper colour
+                </label>
+                <select
+                  id="workspace-theme"
+                  value={sidebarDraftTheme}
+                  onChange={(e) => setSidebarDraftTheme(e.target.value as any)}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="blueprint">Blueprint Blue</option>
+                  <option value="slate">Slate Grey</option>
+                  <option value="sage">Sage Green</option>
+                  <option value="sand">Warm Sand</option>
+                  <option value="dark">Dark Obsidian</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between pt-0.5">
+                <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sidebarDraftGrid}
+                    onChange={(e) => setSidebarDraftGrid(e.target.checked)}
+                    className="rounded border-slate-600 text-amber-600 focus:ring-0"
+                  />
+                  <span>Show background grid</span>
+                </label>
+              </div>
+
+              {sidebarDraftGrid && (
+                <div>
+                  <label htmlFor="workspace-grid-strength" className="block text-[11px] font-medium text-slate-200 mb-1">
+                    Grid intensity
+                  </label>
+                  <select
+                    id="workspace-grid-strength"
+                    value={sidebarDraftStrength}
+                    onChange={(e) => setSidebarDraftStrength(e.target.value as any)}
+                    className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    <option value="subtle">Subtle (25%)</option>
+                    <option value="standard">Standard (50%)</option>
+                    <option value="high-contrast">High Contrast (80%)</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="workspace-density" className="block text-[11px] font-medium text-slate-200 mb-1">
+                  Display Density
+                </label>
+                <select
+                  id="workspace-density"
+                  value={sidebarDraftDensity}
+                  onChange={(e) => setSidebarDraftDensity(e.target.value as any)}
+                  className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="comfortable">Comfortable (Standard)</option>
+                  <option value="compact">Compact (Data Heavy)</option>
+                </select>
+              </div>
+
+              {/* THE APPLY BUTTON IN SIDEBAR */}
+              <div className="pt-2 border-t border-slate-700/80 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleSidebarApply}
+                  className={`w-full py-2 px-3 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-md transition-all touch-manipulation ${
+                    sidebarAppliedFeedback
+                      ? 'bg-emerald-600 ring-2 ring-emerald-400'
+                      : 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800'
+                  }`}
+                >
+                  <Check size={14} strokeWidth={2.5} />
+                  <span>{sidebarAppliedFeedback ? 'Applied & Saved!' : 'Apply Appearance'}</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSidebarReset}
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center justify-center gap-1 transition-colors"
+                    title="Reset to default settings"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Reset</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppearanceOpen(false);
+                      setAppearanceModalOpen(true);
+                    }}
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors"
+                    title="Open full customizer dialog"
+                  >
+                    <Sliders size={12} />
+                    <span>Customizer ↗</span>
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-400 text-center">
+                Saved on this device.
+              </p>
             </div>
           )}
         </div>
+
         {/* User Identity Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -235,7 +456,7 @@ export function InternalLayout({
                 {/* Domain & Project Title */}
                 <div className="min-w-0 flex items-center gap-2">
                   <span className="font-bold text-slate-900 text-sm sm:text-base truncate">
-                    {visibleDomains.find(d => d.id === activeDomain)?.label || 'Overview'}
+                    {visibleDomains.find((d) => d.id === activeDomain)?.label || 'Overview'}
                   </span>
                   {activeProject && (
                     <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-0.5 truncate max-w-[180px] md:max-w-[280px]">
@@ -246,8 +467,8 @@ export function InternalLayout({
                 </div>
               </div>
 
-              {/* Right actions: Project Budget / Details & AI Copilot */}
-              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              {/* Right actions: Project Budget, Appearance Quick Button & AI Copilot */}
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
                 {activeProject && (
                   <div className="hidden xl:flex items-center gap-3 px-3 py-1 rounded-xl bg-[#f6f4ee] border border-[#e5e0d5] text-xs">
                     {activeProject.budget !== undefined && (
@@ -264,6 +485,18 @@ export function InternalLayout({
                     )}
                   </div>
                 )}
+
+                {/* Quick Appearance Customizer Button in Header */}
+                <button
+                  type="button"
+                  onClick={() => setAppearanceModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-slate-700 border border-stone-200 transition-colors touch-manipulation"
+                  title="Customize Workspace Appearance & Theme"
+                  aria-label="Customize Workspace Appearance & Theme"
+                >
+                  <Palette size={14} className="text-amber-600 flex-shrink-0" />
+                  <span className="hidden md:inline">Appearance</span>
+                </button>
 
                 {onOpenAssistant && (
                   <button
@@ -359,6 +592,20 @@ export function InternalLayout({
           <span>More</span>
         </button>
       </nav>
+
+      {/* Full Dedicated Appearance & Drafting Theme Modal */}
+      <AppearanceModal
+        isOpen={appearanceModalOpen}
+        onClose={() => setAppearanceModalOpen(false)}
+        settings={{
+          theme: workspaceTheme,
+          gridEnabled,
+          gridStrength,
+          density: workspaceDensity,
+        }}
+        onApply={handleModalApply}
+        onReset={handleModalReset}
+      />
     </div>
   );
 }
