@@ -168,7 +168,7 @@ export function registerMessagesController(app: Express): void {
         now, now
       );
 
-      writeAudit(req, projectId, 'project_messages', id, 'CREATE', { subject, channel });
+      writeAudit(senderId, 'project_messages', id, projectId, 'CREATE', null, { subject, channel });
 
       const created = rowToDict(db.prepare("SELECT * FROM project_messages WHERE id = ?").get(id));
       res.status(201).json(created);
@@ -234,7 +234,7 @@ export function registerMessagesController(app: Express): void {
         WHERE id = ?
       `).run(now, now, messageId);
 
-      writeAudit(req, projectId, 'project_messages', replyId, 'REPLY', { parent_id: messageId });
+      writeAudit(senderId, 'project_messages', replyId, projectId, 'REPLY', null, { parent_id: messageId });
 
       const reply = rowToDict(db.prepare("SELECT * FROM project_messages WHERE id = ?").get(replyId));
       res.status(201).json(reply);
