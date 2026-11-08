@@ -1,0 +1,112 @@
+name: Build & Release Android (.apk) and Windows (.exe)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android-apk:
+    name: Build Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web and server assets
+        run: npm run build
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build Android APK
+        run: |
+          chmod +x android/gradlew
+          npm run mobile:build:android
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/MEP-FieldHub-Android.apk
+
+      - name: Upload Android APK Artifact (.apk)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEP-FieldHub-Android-APK
+          path: dist/MEP-FieldHub-Android.apk
+          if-no-files-found: error
+
+  build-windows-exe:
+    name: Build Windows Desktop (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web and server assets
+        run: npm run build
+
+      - name: Compile Windows Desktop Executable (.exe)
+        run: npm run desktop:build:exe
+
+      - name: Upload Windows EXE Artifact (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEP-FieldHub-Windows-EXE
+          path: dist/MEP-FieldHub-Windows.exe
+          if-no-files-found: error
+
+  publish-github-release:
+    name: Publish GitHub Release (.apk + .exe)
+    needs: [build-android-apk, build-windows-exe]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: MEP-FieldHub-Android-APK
+          path: release-assets
+
+      - name: Download Windows EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: MEP-FieldHub-Windows-EXE
+          path: release-assets
+
+      - name: Create or Update Latest GitHub Release with .apk and .exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.5.0-latest"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            release-assets/MEP-FieldHub-Android.apk \
+            release-assets/MEP-FieldHub-Windows.exe \
+            --title "MEP FieldHub Enterprise ERP v1.5.0 (Android .apk & Windows .exe)" \
+            --notes "Automated production build containing **MEP-FieldHub-Android.apk** (Android mobile installer) and **MEP-FieldHub-Windows.exe** (Windows standalone desktop executable)." \
+            --latest

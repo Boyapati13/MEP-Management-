@@ -28,6 +28,7 @@
     "mobile:sync": "cap sync",
     "mobile:android": "cap open android",
     "mobile:build:android": "node scripts/build_android.cjs",
+    "desktop:build:exe": "node scripts/build_windows_exe.cjs",
     "mobile:ios": "cap open ios",
     "test:octo": "node --import tsx tests/test_octo_integration.ts && node --test octo-agent/scripts/whatsapp-bridge/bridge.test.js",
     "test:doc-extraction": "tsx tests/test_contractor_doc_extraction.ts",
