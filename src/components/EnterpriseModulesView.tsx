@@ -2302,7 +2302,31 @@ const MODULE_META: Record<string, { title: string; subtitle: string; badge: stri
     title: 'Non-Conformance Reports (NCRs)',
     subtitle: 'Track site quality deviations, root cause corrective actions, and closure verification.',
     badge: 'Quality Assurance',
-    primaryField: 'title',
+    primaryField: 'description',
+  },
+  punchlist: {
+    title: 'Snagging & Punch List Register',
+    subtitle: 'Track field installation snags, trade contractor rectification, and QA/QC sign-off.',
+    badge: 'Field Quality & Snagging',
+    primaryField: 'item',
+  },
+  commissioning: {
+    title: 'Testing & Commissioning (T&C) Dossiers',
+    subtitle: 'Pre-commissioning prerequisites, witness testing protocols, and statutory certificates.',
+    badge: 'System Commissioning',
+    primaryField: 'equipment',
+  },
+  handover: {
+    title: 'Handover & O&M Closeout Dossiers',
+    subtitle: 'As-built drawings, O&M manuals, asset warranties, and client handover certification.',
+    badge: 'Project Handover',
+    primaryField: 'description',
+  },
+  equipment: {
+    title: 'Site Plant, Tools & Calibration Register',
+    subtitle: 'Track calibrated test instruments, lifting plant, and site equipment allocations.',
+    badge: 'Plant & Assets',
+    primaryField: 'name',
   },
 };
 
@@ -2312,7 +2336,7 @@ const WorkflowRegisterWorkspace: React.FC<{
   user?: any;
 }> = ({ moduleKey, selectedProject }) => {
   const meta = MODULE_META[moduleKey] || {
-    title: moduleKey.toUpperCase(),
+    title: moduleKey.replace(/_/g, ' ').toUpperCase(),
     subtitle: 'Controlled project register and workflow management.',
     badge: 'Operations Register',
     primaryField: 'title',
@@ -2326,9 +2350,10 @@ const WorkflowRegisterWorkspace: React.FC<{
     title: '',
     question: '',
     description: '',
-    discipline: 'HVAC',
+    discipline: 'Electrical',
     priority: 'High',
     amount: 0,
+    location: 'Main Building',
     status: 'Draft',
   });
 
@@ -2349,16 +2374,20 @@ const WorkflowRegisterWorkspace: React.FC<{
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProject) return;
+    const targetProject = (selectedProject && selectedProject !== 'ALL') ? selectedProject : 'bov-st-venera-2618';
     await api.post(`/api/${moduleKey}`, {
-      project_id: selectedProject,
+      project_id: targetProject,
       ...form,
+      item: form.title,
+      name: form.title,
+      equipment: form.title,
+      system: form.discipline,
       trade: form.discipline,
       cost_impact: Number(form.amount || 0),
       amount: Number(form.amount || 0),
     });
     setShowAdd(false);
-    setForm({ title: '', question: '', description: '', discipline: 'HVAC', priority: 'High', amount: 0, status: 'Draft' });
+    setForm({ title: '', question: '', description: '', discipline: 'Electrical', priority: 'High', amount: 0, location: 'Main Building', status: 'Draft' });
     loadRecords();
   };
 
@@ -2630,52 +2659,225 @@ const CompaniesDirectoryWorkspace: React.FC = () => {
  * ========================================================================== */
 const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
   const [users, setUsers] = useState<any[]>([]);
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    name: '',
+    username: '',
+    password: '',
+    role: 'SiteEngineer',
+    trade: 'Electrical',
+    company: 'Enser Ltd',
+    email: '',
+    project_id: projects[0]?.id || 'bov-st-venera-2618',
+  });
 
-  useEffect(() => {
+  const loadUsers = useCallback(() => {
     api.get<any[]>('/api/users').then(r => setUsers(Array.isArray(r) ? r : [])).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const handleProvision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api.post('/api/users', {
+        ...form,
+        project_ids: form.project_id ? [form.project_id] : ['ALL'],
+      });
+      setShowAdd(false);
+      setForm({
+        name: '',
+        username: '',
+        password: '',
+        role: 'SiteEngineer',
+        trade: 'Electrical',
+        company: 'Enser Ltd',
+        email: '',
+        project_id: projects[0]?.id || 'bov-st-venera-2618',
+      });
+      loadUsers();
+    } catch (err: any) {
+      setError(err.message || 'Unable to provision user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleStatus = async (userId: string) => {
+    try {
+      await api.post(`/api/users/${userId}/toggle-status`, {});
+      loadUsers();
+    } catch {}
+  };
+
+  const filteredUsers = users.filter(u => roleFilter === 'ALL' || u.role === roleFilter);
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
-        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-          Identity &amp; Tenant Access Control
-        </span>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">Users &amp; 8-Role RBAC Matrix</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Strict role-based isolation across Admin, ProjectManager, SiteEngineer, CommercialManager, QAQC, Safety, Subcontractor, and Client portals.
-        </p>
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+            Identity &amp; Tenant Access Control
+          </span>
+          <h1 className="text-lg font-bold text-slate-900 mt-1">Users &amp; 8-Role RBAC Matrix</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Role-based access control across Admin, ProjectManager, SiteEngineer, CommercialManager, QAQC, SafetyOfficer, Subcontractor, and Client portals.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="px-3.5 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto"
+        >
+          <Plus size={14} /> Provision User Account
+        </button>
       </div>
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+
+      <div className="flex items-center gap-1.5 overflow-x-auto bg-white border border-slate-200 rounded-lg p-2">
+        {['ALL', 'Admin', 'ProjectManager', 'SiteEngineer', 'CommercialManager', 'QAQC', 'SafetyOfficer', 'Subcontractor', 'Client'].map(r => (
+          <button
+            key={r}
+            onClick={() => setRoleFilter(r)}
+            className={`px-2.5 py-1 rounded text-xs font-semibold whitespace-nowrap ${
+              roleFilter === r ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {r === 'ALL' ? `All Roles (${users.length})` : r}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <th className="py-3.5 px-4">Name</th>
-              <th className="py-3.5 px-4">Username</th>
-              <th className="py-3.5 px-4">Role</th>
-              <th className="py-3.5 px-4">Trade / Scope</th>
-              <th className="py-3.5 px-4">Assigned Projects</th>
+            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <th className="py-3 px-4">Full Name</th>
+              <th className="py-3 px-4">Username</th>
+              <th className="py-3 px-4">Security Role</th>
+              <th className="py-3 px-4">Company &amp; Trade</th>
+              <th className="py-3 px-4">Project Scope</th>
+              <th className="py-3 px-4">Status</th>
+              <th className="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100 text-xs">
-            {users.map((u: any) => (
-              <tr key={u.id} className="hover:bg-stone-50">
-                <td className="py-3.5 px-4 font-bold text-slate-900">{u.name || u.username}</td>
-                <td className="py-3.5 px-4 font-mono text-slate-600">{u.username}</td>
-                <td className="py-3.5 px-4">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+          <tbody className="divide-y divide-slate-100 text-xs">
+            {filteredUsers.map((u: any) => (
+              <tr key={u.id} className="hover:bg-slate-50">
+                <td className="py-3 px-4 font-bold text-slate-900">{u.name || u.username}</td>
+                <td className="py-3 px-4 font-mono text-slate-600">{u.username}</td>
+                <td className="py-3 px-4">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
                     {u.role}
                   </span>
                 </td>
-                <td className="py-3.5 px-4 text-slate-600">{u.trade || 'All Trades'}</td>
-                <td className="py-3.5 px-4 text-slate-500 font-mono">
-                  {Array.isArray(u.project_ids) && u.project_ids.length > 0 ? `${u.project_ids.length} Project(s)` : 'Global / Assigned'}
+                <td className="py-3 px-4 text-slate-600">
+                  {u.company ? `${u.company} · ` : ''}{u.trade || 'All Trades'}
+                </td>
+                <td className="py-3 px-4 text-slate-500 max-w-[240px] truncate" title={u.project_names}>
+                  {u.project_names || (u.project_count > 0 ? `${u.project_count} Project(s)` : 'Assigned Scope')}
+                </td>
+                <td className="py-3 px-4">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    u.status === 'Inactive' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}>
+                    {u.status || 'Active'}
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-right">
+                  {u.role !== 'Admin' && (
+                    <button
+                      onClick={() => handleToggleStatus(u.id)}
+                      className="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-[11px]"
+                    >
+                      {u.status === 'Inactive' ? 'Activate' : 'Suspend'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <form onSubmit={handleProvision} className="bg-white rounded-lg border border-slate-200 shadow-xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-bold text-slate-900 text-base">Provision Enterprise User Account</h3>
+              <button type="button" onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            {error && <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-2.5 rounded">{error}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+                <input required value={form.name} onChange={e => setForm(s => ({ ...s, name: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. Marcus Vance" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Username *</label>
+                <input required value={form.username} onChange={e => setForm(s => ({ ...s, username: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. mvance" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password *</label>
+                <input required type="password" value={form.password} onChange={e => setForm(s => ({ ...s, password: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="Minimum 6 characters" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">RBAC Security Role *</label>
+                <select value={form.role} onChange={e => setForm(s => ({ ...s, role: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md">
+                  <option value="ProjectManager">Project Manager</option>
+                  <option value="SiteEngineer">Site Engineer</option>
+                  <option value="CommercialManager">Commercial Manager / QS</option>
+                  <option value="QAQC">QA/QC &amp; Commissioning Lead</option>
+                  <option value="SafetyOfficer">HSE Safety Officer</option>
+                  <option value="Subcontractor">Trade Subcontractor</option>
+                  <option value="Consultant">Supervising Consultant</option>
+                  <option value="Client">Client Representative</option>
+                  <option value="Admin">System Administrator</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Organization / Company</label>
+                <input value={form.company} onChange={e => setForm(s => ({ ...s, company: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Primary MEP Discipline</label>
+                <select value={form.trade} onChange={e => setForm(s => ({ ...s, trade: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md">
+                  <option value="Electrical">Electrical</option>
+                  <option value="HVAC">HVAC &amp; Mechanical</option>
+                  <option value="ELV">ELV &amp; Data</option>
+                  <option value="Plumbing">Plumbing &amp; Public Health</option>
+                  <option value="Fire Fighting">Fire Protection</option>
+                  <option value="General MEP">All MEP Trades</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Project Scope</label>
+              <select value={form.project_id} onChange={e => setForm(s => ({ ...s, project_id: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md">
+                <option value="ALL">All Enterprise Projects</option>
+                {projects.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.code || p.id})</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button type="button" onClick={() => setShowAdd(false)} className="px-3.5 py-2 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md">Cancel</button>
+              <button type="submit" disabled={saving} className="px-4 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold disabled:opacity-50">
+                {saving ? 'Provisioning...' : 'Provision Account'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
@@ -2685,42 +2887,87 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
  * ========================================================================== */
 const AuditTrailWorkspace: React.FC<{ selectedProject: string }> = ({ selectedProject }) => {
   const [logs, setLogs] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadLogs = useCallback(() => {
+    setLoading(true);
     const q = selectedProject ? `?project_id=${selectedProject}` : '';
-    api.get<any[]>(`/api/audit_logs${q}`).then(r => setLogs(Array.isArray(r) ? r.slice(0, 100) : [])).catch(() => {});
+    api.get<any[]>(`/api/audit_logs${q}`)
+      .then(r => setLogs(Array.isArray(r) ? r : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [selectedProject]);
 
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
+  const filtered = logs.filter(l => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (l.user_name || l.user_id || '').toLowerCase().includes(q) ||
+      (l.module || '').toLowerCase().includes(q) ||
+      (l.action || '').toLowerCase().includes(q) ||
+      (l.record_id || '').toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
-        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-          Compliance &amp; Forensics
-        </span>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">Immutable Enterprise Audit Trail</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Chronological ledger of all project mutations, status transitions, and security events.</p>
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-300">
+            Compliance &amp; Forensics
+          </span>
+          <h1 className="text-lg font-bold text-slate-900 mt-1">Immutable Enterprise Audit Trail</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Chronological ledger of all project mutations, status transitions, and security events ({filtered.length} entries).</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filter actor, module, action..."
+              className="pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-md w-56"
+            />
+          </div>
+          <button onClick={loadLogs} className="p-2 border border-slate-300 rounded-md hover:bg-slate-50 text-slate-600" title="Refresh Audit Trail">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <th className="py-3.5 px-4">Timestamp</th>
-              <th className="py-3.5 px-4">Actor</th>
-              <th className="py-3.5 px-4">Module</th>
-              <th className="py-3.5 px-4">Action</th>
-              <th className="py-3.5 px-4">Record ID</th>
+            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <th className="py-3 px-4">UTC Timestamp</th>
+              <th className="py-3 px-4">Actor</th>
+              <th className="py-3 px-4">Module</th>
+              <th className="py-3 px-4">Operation</th>
+              <th className="py-3 px-4">Project Scope</th>
+              <th className="py-3 px-4">Record Reference</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100 text-xs">
-            {logs.map((l: any) => (
-              <tr key={l.id} className="hover:bg-stone-50">
-                <td className="py-3 px-4 font-mono text-slate-500">{l.timestamp || l.created_at}</td>
-                <td className="py-3 px-4 font-semibold text-slate-800">{l.user_name || l.user_id}</td>
-                <td className="py-3 px-4 font-mono text-amber-700">{l.module}</td>
-                <td className="py-3 px-4 font-bold text-slate-900">{l.action}</td>
-                <td className="py-3 px-4 font-mono text-slate-500">{l.record_id}</td>
-              </tr>
-            ))}
+          <tbody className="divide-y divide-slate-100 text-xs">
+            {loading ? (
+              <tr><td colSpan={6} className="py-10 text-center text-slate-400">Loading forensic audit ledger...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6} className="py-10 text-center text-slate-500">No audit entries match the current filter.</td></tr>
+            ) : (
+              filtered.map((l: any) => (
+                <tr key={l.id} className="hover:bg-slate-50">
+                  <td className="py-2.5 px-4 font-mono text-slate-500 tabular-nums">{(l.timestamp || l.created_at || '').replace('T', ' ').slice(0, 19)}</td>
+                  <td className="py-2.5 px-4 font-semibold text-slate-900">{l.user_name || l.user_id}</td>
+                  <td className="py-2.5 px-4"><span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px]">{l.module}</span></td>
+                  <td className="py-2.5 px-4 font-bold text-blue-700 uppercase">{l.action}</td>
+                  <td className="py-2.5 px-4 text-slate-600">{l.project_name || l.project_id || 'SYSTEM'}</td>
+                  <td className="py-2.5 px-4 font-mono text-slate-500">{l.record_id}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

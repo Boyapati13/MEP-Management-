@@ -355,4 +355,36 @@ export function registerUserController(app: Express): void {
     res.json({ ok: true });
   });
 
+  // Enterprise Immutable Audit Trail Endpoint
+  const handleGetAuditLogs = (req: Request, res: Response) => {
+    if (!canView(req.user!, "audit") && req.user!.role !== "Admin" && req.user!.role !== "ProjectManager") {
+      res.status(403).json({ error: "Access denied to audit trail" });
+      return;
+    }
+    const projectId = (req.query.project_id as string) || "";
+    const moduleFilter = (req.query.module as string) || "";
+    const params: any[] = [];
+    let where = "1=1";
+    if (projectId && projectId !== "ALL") {
+      where += " AND (a.project_id = ? OR a.project_id = 'SYSTEM')";
+      params.push(projectId);
+    }
+    if (moduleFilter) {
+      where += " AND a.module = ?";
+      params.push(moduleFilter);
+    }
+    const rows = db.prepare(`
+      SELECT a.*, COALESCE(u.name, u.username, a.user_id) as user_name, u.role as user_role, p.name as project_name
+      FROM audit_logs a
+      LEFT JOIN users u ON u.id = a.user_id
+      LEFT JOIN projects p ON p.id = a.project_id
+      WHERE ${where}
+      ORDER BY a.timestamp DESC
+      LIMIT 250
+    `).all(...params);
+    res.json(rows.map(rowToDict));
+  };
+
+  app.get("/api/audit_logs", authRequired, handleGetAuditLogs);
+  app.get("/api/audit", authRequired, handleGetAuditLogs);
 }
