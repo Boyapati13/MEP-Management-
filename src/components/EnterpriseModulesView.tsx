@@ -35,11 +35,13 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  CalendarCheck
+  CalendarCheck,
+  Printer
 } from 'lucide-react';
 import { api, projectsApi, procurementApi, risksApi } from '../api';
 import { ProcurementProgrammeRiskView } from './ProcurementProgrammeRiskView';
 import { ContractorDocUploadModal } from './ContractorDocUploadModal';
+import { exportFormalDocumentPdf } from '../utils/printDocument';
 
 interface EnterpriseModuleProps {
   page: string;
@@ -233,6 +235,108 @@ const BoqAndJobCostingWorkspace: React.FC<{
     loadData();
   }, [loadData]);
 
+  // Real-Time SSE sync for BOQ & Job Costing
+  useEffect(() => {
+    const onRealtime = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      if (['budget', 'boq_items', 'change_orders', 'purchase_orders'].includes(detail.module)) {
+        loadData();
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime as EventListener);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime as EventListener);
+  }, [loadData]);
+
+  const handleInlineBoqUpdate = async (item: any, field: 'tender_rate' | 'installed_quantity', rawVal: string) => {
+    const numVal = Number(rawVal);
+    if (isNaN(numVal) || numVal < 0) return;
+    const qty = Number(item.quantity ?? item.tender_quantity ?? 0);
+    const nextRate = field === 'tender_rate' ? numVal : Number(item.unit_rate ?? item.tender_rate ?? 0);
+    const nextInstalled = field === 'installed_quantity' ? numVal : Number(item.completed_qty ?? item.installed_quantity ?? 0);
+    const nextTotal = qty * nextRate;
+
+    setItems(prev =>
+      prev.map(row =>
+        row.id === item.id
+          ? {
+              ...row,
+              unit_rate: nextRate,
+              tender_rate: nextRate,
+              total_amount: nextTotal,
+              tender_amount: nextTotal,
+              completed_qty: nextInstalled,
+              installed_quantity: nextInstalled,
+            }
+          : row
+      )
+    );
+
+    try {
+      await api.put(`/api/boq_items/${item.id}`, {
+        tender_rate: nextRate,
+        tender_amount: nextTotal,
+        installed_quantity: nextInstalled,
+      });
+    } catch {}
+  };
+
+  const exportValuationCertificatePdf = () => {
+    exportFormalDocumentPdf({
+      documentType: 'Interim Payment Valuation Certificate',
+      referenceCode: `IPC-${(activeProject?.code || selectedProject || 'BOV').toUpperCase().slice(0, 10)}-01`,
+      title: 'Interim Valuation & BOQ Job Costing Certificate',
+      subtitle: 'Measured Works Installed vs. Contract Tender Sum & Approved Variations',
+      projectName: activeProject?.name || 'BOV Head Office Renovation — St Venera',
+      projectCode: activeProject?.code || selectedProject,
+      status: 'CERTIFIED FOR VALUATION',
+      metadata: [
+        { label: 'Original Contract Sum', value: `€${originalBudget.toLocaleString()}` },
+        { label: 'Approved Variations', value: `€${approvedVariations.toLocaleString()}` },
+        { label: 'Revised Contract Sum', value: `€${revisedBudget.toLocaleString()}` },
+        { label: 'Committed PO Value', value: `€${committedPos.toLocaleString()}` },
+        { label: 'Gross Installed Valuation', value: `€${actualEarned.toLocaleString()}` },
+        { label: 'Net Budget Variance', value: `€${variance.toLocaleString()}` },
+      ],
+      columns: [
+        { key: 'code', label: 'BOQ Ref' },
+        { key: 'description', label: 'Work Item Description & Spec' },
+        { key: 'discipline', label: 'Trade' },
+        { key: 'unit', label: 'UOM', align: 'center' },
+        { key: 'qty', label: 'Contract Qty', align: 'right' },
+        { key: 'rate', label: 'Rate (€)', align: 'right' },
+        { key: 'total', label: 'Contract Sum (€)', align: 'right' },
+        { key: 'installed', label: 'Installed Qty', align: 'right' },
+        { key: 'earned', label: 'Earned Value (€)', align: 'right' },
+      ],
+      rows: filtered.map((i: any) => {
+        const q = Number(i.quantity ?? i.tender_quantity ?? 0);
+        const r = Number(i.unit_rate ?? i.tender_rate ?? 0);
+        const t = Number(i.total_amount ?? i.tender_amount ?? q * r);
+        const d = Number(i.completed_qty ?? i.installed_quantity ?? 0);
+        return {
+          code: i.item_code || i.item_number || i.id?.slice(0, 8),
+          description: i.description,
+          discipline: i.discipline || 'MEP',
+          unit: i.unit || 'Nos',
+          qty: q.toLocaleString(),
+          rate: r.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          total: t.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          installed: d.toLocaleString(),
+          earned: (d * r).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        };
+      }),
+      summaryTotals: [
+        { label: 'Original Contract Tender Total', value: `€${originalBudget.toLocaleString(undefined, { minimumFractionDigits: 2 })}` },
+        { label: 'Approved Variations / Change Orders', value: `€${approvedVariations.toLocaleString(undefined, { minimumFractionDigits: 2 })}` },
+        { label: 'Revised Contract Sum', value: `€${revisedBudget.toLocaleString(undefined, { minimumFractionDigits: 2 })}` },
+        { label: 'Gross Certified Valuation to Date', value: `€${actualEarned.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, highlight: true },
+      ],
+      notes:
+        'Quantities certified above are based on joint site measurement and QA/QC inspection records verified in MEP FieldHub ERP. Subject to standard contract retention provisions.',
+    });
+  };
+
   const handleConvertBoqToTasks = async () => {
     const targetProj = selectedProject || activeProject?.id;
     if (!targetProj) {
@@ -403,6 +507,13 @@ const BoqAndJobCostingWorkspace: React.FC<{
           >
             <Sparkles size={15} />
             Extract &amp; Review Contract
+          </button>
+          <button
+            onClick={exportValuationCertificatePdf}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold transition-colors cursor-pointer"
+            title="Generate formal A4 Interim Payment Valuation Certificate (PDF)"
+          >
+            <Printer size={14} /> Valuation Certificate (PDF)
           </button>
           <button
             onClick={exportCsv}
@@ -605,13 +716,51 @@ const BoqAndJobCostingWorkspace: React.FC<{
                       </td>
                       <td className="py-3 px-4 text-slate-500 font-mono">{item.unit || 'Nos'}</td>
                       <td className="py-3 px-4 text-right font-mono">{qty.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right font-mono">${rate.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">${total.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right font-mono">
-                        <span className="font-semibold text-slate-800">{doneQty.toLocaleString()}</span>
-                        <span className="ml-1.5 text-[10px] text-emerald-700 font-bold">({pct}%)</span>
+                      <td className="py-2 px-3 text-right font-mono" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="number"
+                          step="any"
+                          defaultValue={rate}
+                          key={`rate-${item.id}-${rate}`}
+                          onBlur={(e) => {
+                            if (Number(e.target.value) !== rate) {
+                              handleInlineBoqUpdate(item, 'tender_rate', e.target.value);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          title="Click to edit Tender Unit Rate inline (auto-saves on Enter or blur)"
+                          className="w-24 text-right font-mono text-xs px-2 py-1 rounded border border-transparent hover:border-slate-300 focus:border-blue-600 focus:bg-white bg-transparent text-slate-900 focus:outline-none"
+                        />
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">${earned.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">€{total.toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right font-mono" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <input
+                            type="number"
+                            step="any"
+                            defaultValue={doneQty}
+                            key={`done-${item.id}-${doneQty}`}
+                            onBlur={(e) => {
+                              if (Number(e.target.value) !== doneQty) {
+                                handleInlineBoqUpdate(item, 'installed_quantity', e.target.value);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            title="Click to edit Installed Quantity inline (auto-saves on Enter or blur)"
+                            className="w-20 text-right font-mono font-semibold text-xs px-2 py-1 rounded border border-slate-200 hover:border-slate-400 focus:border-blue-600 bg-slate-50/70 focus:bg-white text-slate-900 focus:outline-none"
+                          />
+                          <span className="text-[10px] text-emerald-700 font-bold w-9 text-right">({pct}%)</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-700">€{earned.toLocaleString()}</td>
                     </tr>
                   );
                 })
@@ -1124,16 +1273,73 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
               <p className="p-6 text-xs text-slate-500 text-center">No Purchase Orders recorded for this project.</p>
             ) : (
               orders.map((po: any) => (
-                <div key={po.id} className="p-4 flex items-center justify-between text-xs hover:bg-stone-50">
+                <div key={po.id} className="p-4 flex items-center justify-between gap-3 text-xs hover:bg-stone-50">
                   <div>
                     <p className="font-bold text-slate-900">{po.po_number || po.title || po.id.slice(0, 8)} — {po.vendor || po.supplier}</p>
                     <p className="text-slate-500 mt-0.5">{po.description || po.items_summary || 'MEP Equipment Supply'}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-mono font-bold text-slate-900">${Number(po.amount || po.total_amount || 0).toLocaleString()}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                      {po.status || 'Ordered'}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="font-mono font-bold text-slate-900">€{Number(po.amount || po.total_amount || 0).toLocaleString()}</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        {po.status || 'Ordered'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        exportFormalDocumentPdf({
+                          documentType: 'Official Purchase Order',
+                          referenceCode: po.po_number || `PO-${po.id?.slice(0, 8).toUpperCase()}`,
+                          title: `Purchase Order — ${po.vendor || po.supplier || 'Approved MEP Supplier'}`,
+                          subtitle: po.description || po.items_summary || 'Supply & Delivery of MEP Plant & Materials',
+                          projectCode: selectedProject,
+                          status: po.status || 'ISSUED',
+                          metadata: [
+                            { label: 'Supplier / Vendor', value: po.vendor || po.supplier || 'Approved MEP Supplier' },
+                            { label: 'PO Reference', value: po.po_number || po.id?.slice(0, 8) },
+                            { label: 'Discipline', value: po.discipline || 'MEP Building Services' },
+                            { label: 'Required Delivery Date', value: po.expected_delivery || po.delivery_date || 'As Per Programme' },
+                            { label: 'Delivery Location', value: 'Site Stores — BOV Head Office St Venera' },
+                            { label: 'Payment Terms', value: '60 Days End of Month (Subject to QA/QC Goods Receipt)' },
+                          ],
+                          columns: [
+                            { key: 'item', label: 'Line #', align: 'center' },
+                            { key: 'description', label: 'Material / Plant Description & Technical Spec' },
+                            { key: 'qty', label: 'Qty', align: 'right' },
+                            { key: 'uom', label: 'UOM', align: 'center' },
+                            { key: 'amount', label: 'Net Amount (€)', align: 'right' },
+                          ],
+                          rows: [
+                            {
+                              item: '01',
+                              description: po.description || po.items_summary || 'MEP Equipment & Material Package as per Approved Submittal',
+                              qty: po.quantity || '1',
+                              uom: po.unit || 'Lot',
+                              amount: Number(po.amount || po.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+                            },
+                          ],
+                          summaryTotals: [
+                            {
+                              label: 'Total Net Order Value (Excl. VAT)',
+                              value: `€${Number(po.amount || po.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                              highlight: true,
+                            },
+                          ],
+                          notes:
+                            'All equipment and materials must be delivered with factory test certificates (FAT), O&M manuals, and delivery notes referencing this Purchase Order number.',
+                          signatures: [
+                            { role: 'Prepared By (Procurement)', party: 'Enser Ltd Procurement Dept' },
+                            { role: 'Commercial Authorization', party: 'Commercial Manager / QS' },
+                            { role: 'Vendor Acceptance', party: po.vendor || po.supplier || 'Supplier Representative' },
+                          ],
+                        })
+                      }
+                      className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+                      title="Print / Export Formal Purchase Order (PDF)"
+                    >
+                      <Printer size={14} />
+                    </button>
                   </div>
                 </div>
               ))
@@ -2416,12 +2622,45 @@ const WorkflowRegisterWorkspace: React.FC<{
           <h1 className="text-2xl font-bold text-slate-900 mt-1">{meta.title}</h1>
           <p className="text-sm text-slate-500 mt-0.5">{meta.subtitle}</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm"
-        >
-          <Plus size={15} /> Create Record
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              exportFormalDocumentPdf({
+                documentType: `${meta.badge} Register`,
+                referenceCode: `REG-${moduleKey.toUpperCase().slice(0, 6)}-${new Date().toISOString().slice(0, 10)}`,
+                title: `${meta.title} — Official Controlled Register`,
+                subtitle: meta.subtitle,
+                projectCode: selectedProject,
+                status: `${filtered.length} RECORDS`,
+                columns: [
+                  { key: 'ref', label: 'Ref / ID' },
+                  { key: 'title', label: 'Title / Subject / Description' },
+                  { key: 'discipline', label: 'Discipline' },
+                  ...(moduleKey === 'change_orders' ? [{ key: 'amount', label: 'Amount (€)', align: 'right' as const }] : []),
+                  { key: 'status', label: 'Workflow Status', align: 'center' },
+                ],
+                rows: filtered.map((r: any) => ({
+                  ref: r.number || r.code || r.id?.slice(0, 8),
+                  title: r.title || r.question || r.description || 'Untitled Record',
+                  discipline: r.discipline || r.trade || 'MEP',
+                  amount: `€${Number(r.amount || r.cost_impact || 0).toLocaleString()}`,
+                  status: r.status || 'Draft',
+                })),
+              })
+            }
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-sm"
+            title="Export Formal A4 Register (PDF)"
+          >
+            <Printer size={14} /> Export Formal PDF
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm"
+          >
+            <Plus size={15} /> Create Record
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm flex items-center justify-between gap-3">
@@ -2901,6 +3140,13 @@ const AuditTrailWorkspace: React.FC<{ selectedProject: string }> = ({ selectedPr
 
   useEffect(() => {
     loadLogs();
+  }, [loadLogs]);
+
+  // Real-time SSE stream for Audit Trail
+  useEffect(() => {
+    const onRealtime = () => loadLogs();
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
   }, [loadLogs]);
 
   const filtered = logs.filter(l => {

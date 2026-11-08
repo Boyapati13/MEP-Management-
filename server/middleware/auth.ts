@@ -343,7 +343,8 @@ export function canAccessRecord(
 // Authentication Helper & Middleware
 export function getCurrentUser(req: Request): AuthenticatedUser | null {
   const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const queryToken = typeof req.query?.token === "string" ? req.query.token.trim() : "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim() || queryToken;
   if (!token) return null;
 
   const session = db.prepare("SELECT * FROM sessions WHERE token=?").get(token) as any;

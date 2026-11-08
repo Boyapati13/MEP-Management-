@@ -36,7 +36,7 @@ import {
   externalRecordDto,
   canAccessRecord,
 } from "../middleware/auth";
-import { auditSafeValue, writeAudit, createNotification } from "../services/auditService";
+import { auditSafeValue, writeAudit, createNotification, registerSseClient, getActiveSseClientCount } from "../services/auditService";
 import {
   normaliseHeader,
   extractDocumentText,
@@ -84,6 +84,46 @@ import {
 } from "../services/contractorDocIntelligence";
 
 export function registerOperationsController(app: Express): void {
+  // Real-Time Server-Sent Events (SSE) Event Bus
+  app.get("/api/events/stream", authRequired, (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    const clientId = crypto.randomUUID();
+    const unregister = registerSseClient({
+      id: clientId,
+      userId: req.user!.user_id,
+      role: req.user!.role,
+      res,
+    });
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: "connected",
+        clientId,
+        activeClients: getActiveSseClientCount(),
+        timestamp: new Date().toISOString(),
+      })}\n\n`
+    );
+
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`: heartbeat ${Date.now()}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+        unregister();
+      }
+    }, 20000);
+
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unregister();
+    });
+  });
+
   // Project Subcontractors & Team Members
   app.get("/api/projects/:id/subcontractors", authRequired, (req, res) => {
     if (!hasProjectAccess(req.user!, req.params.id)) {

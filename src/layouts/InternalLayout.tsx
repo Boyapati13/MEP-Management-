@@ -8,6 +8,7 @@ import {
   DOMAINS, ROUTE_ITEMS, NavigationDomain
 } from '../app/routes';
 import { AppearanceModal, AppearanceSettings } from '../components/AppearanceModal';
+import { subscribeRealtimeEvents } from '../api';
 
 interface InternalLayoutProps {
   user: any;
@@ -39,6 +40,24 @@ export function InternalLayout({
   const [appearanceModalOpen, setAppearanceModalOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
+  const [sseConnected, setSseConnected] = useState(false);
+  const [lastLiveEvent, setLastLiveEvent] = useState<{ module?: string; action?: string; timestamp?: string } | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = subscribeRealtimeEvents(
+      (evt) => {
+        if (evt.type === 'mutation' || evt.type === 'notification') {
+          setLastLiveEvent({
+            module: evt.module,
+            action: evt.action || evt.title,
+            timestamp: evt.timestamp,
+          });
+        }
+      },
+      (connected) => setSseConnected(connected)
+    );
+    return unsubscribe;
+  }, []);
   const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({
     [activeDomain]: true,
     dashboard: true,
@@ -546,8 +565,28 @@ export function InternalLayout({
                 )}
               </div>
 
-              {/* Right: Quick Module Jump (Ctrl+K), Correspondence, Display, Copilot */}
+              {/* Right: Live Sync Status, Quick Module Jump (Ctrl+K), Correspondence, Display, Copilot */}
               <div className="flex items-center gap-2 flex-shrink-0">
+                <div
+                  className={`hidden lg:inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-[11px] font-mono font-semibold border ${
+                    sseConnected
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/70'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                  }`}
+                  title={
+                    lastLiveEvent
+                      ? `Live Event Bus Active · Last sync: ${lastLiveEvent.module || 'system'} (${lastLiveEvent.action || 'update'})`
+                      : 'Real-Time Server-Sent Events (SSE) Telemetry Stream'
+                  }
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                    }`}
+                  />
+                  <span>{sseConnected ? 'LIVE SYNC' : 'SYNCING'}</span>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setCommandOpen(true)}

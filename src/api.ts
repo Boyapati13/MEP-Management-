@@ -430,3 +430,54 @@ export const messagesApi = {
     api.delete<any>(`/api/projects/${projectId}/messages/${messageId}`),
 };
 
+// Real-Time Server-Sent Events (SSE) Event Bus Client
+export function subscribeRealtimeEvents(
+  onEvent: (event: any) => void,
+  onStatusChange?: (connected: boolean) => void
+): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    return () => {};
+  }
+  const token = getToken();
+  if (!token) {
+    return () => {};
+  }
+  const baseUrl = getApiBaseUrl();
+  const streamUrl = `${baseUrl}/api/events/stream?token=${encodeURIComponent(token)}`;
+  let es: EventSource | null = null;
+  let closed = false;
+
+  const connect = () => {
+    if (closed) return;
+    try {
+      es = new EventSource(streamUrl);
+      es.onopen = () => {
+        onStatusChange?.(true);
+      };
+      es.onmessage = (msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          onEvent(data);
+          window.dispatchEvent(new CustomEvent('mep-realtime-event', { detail: data }));
+        } catch {}
+      };
+      es.onerror = () => {
+        onStatusChange?.(false);
+      };
+    } catch {
+      onStatusChange?.(false);
+    }
+  };
+
+  connect();
+
+  return () => {
+    closed = true;
+    if (es) {
+      es.close();
+      es = null;
+    }
+  };
+}
+
+

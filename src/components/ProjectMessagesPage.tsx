@@ -155,6 +155,24 @@ export function ProjectMessagesPage({ projectId: rawProjectId, navigate, addToas
 
   useEffect(() => { loadThreads(); }, [loadThreads]);
 
+  // Real-Time SSE synchronization for instant message & reply updates
+  useEffect(() => {
+    const onRealtime = (e: any) => {
+      const detail = e?.detail;
+      if (!detail || !validProject) return;
+      if (detail.module === 'project_messages' && (!detail.projectId || detail.projectId === projectId)) {
+        loadThreads();
+        if (selectedId) {
+          messagesApi.getReplies(projectId, selectedId)
+            .then(res => setReplies(res.replies || []))
+            .catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime as EventListener);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime as EventListener);
+  }, [projectId, validProject, selectedId, loadThreads]);
+
   const active = useMemo(() => threads.find(t => t.id === selectedId) || null, [threads, selectedId]);
 
   useEffect(() => {

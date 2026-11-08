@@ -694,6 +694,19 @@ export function TasksBoardPage({
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
+  // Real-Time SSE sync for Tasks & Master Schedule
+  useEffect(() => {
+    const onRealtime = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      if (detail.module === 'tasks' && (!selectedProject || !detail.projectId || detail.projectId === selectedProject)) {
+        loadTasks();
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime as EventListener);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime as EventListener);
+  }, [selectedProject, loadTasks]);
+
   const [groupByPackage, setGroupByPackage] = useState(false);
   const [collapsedPackages, setCollapsedPackages] = useState<Record<string, boolean>>({});
 

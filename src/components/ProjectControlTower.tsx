@@ -78,6 +78,27 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
     loadData();
   }, [loadData]);
 
+  // Real-Time SSE background refresh when project state mutates
+  useEffect(() => {
+    const onRealtime = (e: any) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      if (!projectId || !detail.projectId || detail.projectId === projectId) {
+        Promise.all([
+          controlTowerApi.get(projectId).catch(() => null),
+          lookaheadApi.get(projectId, lookaheadDays).catch(() => null),
+          blockersApi.list(projectId ? { project_id: projectId } : undefined).catch(() => []),
+        ]).then(([tower, lookahead, blockers]) => {
+          if (tower) setTowerData(tower);
+          if (lookahead) setLookaheadData(lookahead);
+          if (Array.isArray(blockers)) setActiveBlockers(blockers);
+        });
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime as EventListener);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime as EventListener);
+  }, [projectId, lookaheadDays]);
+
   const handleRaiseBlocker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTaskForBlocker || !blockerForm.description) {
