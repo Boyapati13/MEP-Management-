@@ -1,12 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  MessageSquare, Plus, Search, Filter, Pin, Paperclip, Send, CheckCircle2,
-  AlertCircle, Clock, User, Building2, ChevronRight, Hash, Tag, FileText,
-  Sliders, ShieldAlert, Check, X, ArrowRight, CornerDownRight, ExternalLink,
-  Layers, RefreshCw, Calendar, MoreVertical, Trash2, SendHorizontal, Users,
-  HardHat, Briefcase, Award, CheckCircle
+  MessageSquare, Plus, Search, Pin, Paperclip, Send, Tag, X, ArrowRight,
+  RefreshCw, Trash2, Inbox, Lock, Users, Building2, HardHat, AlertTriangle
 } from 'lucide-react';
-import { messagesApi, tasksApi, api } from '../api';
+import { messagesApi, tasksApi } from '../api';
 
 export interface ProjectMessagesPageProps {
   projectId: string;
@@ -15,10 +12,12 @@ export interface ProjectMessagesPageProps {
   user?: any;
 }
 
-interface MessageThread {
+type Channel = 'team' | 'subcontractor' | 'client';
+
+interface Message {
   id: string;
   project_id: string;
-  channel: 'team' | 'subcontractor' | 'client';
+  channel: Channel;
   parent_id?: string | null;
   subject: string;
   body: string;
@@ -26,1059 +25,657 @@ interface MessageThread {
   sender_name: string;
   sender_role: string;
   priority: 'Normal' | 'Urgent' | 'Info';
-  linked_item_type?: 'task' | 'selection' | 'drawing' | 'rfi' | 'change_order' | 'po';
-  linked_item_id?: string;
-  linked_item_label?: string;
-  attachment_name?: string;
-  attachment_url?: string;
-  attachment_type?: string;
+  linked_item_type?: string | null;
+  linked_item_label?: string | null;
+  attachment_name?: string | null;
   is_pinned: number;
   is_unread: number;
   reply_count: number;
-  last_reply_at?: string;
+  last_reply_at?: string | null;
   created_at: string;
 }
 
-interface Stakeholder {
-  id: string;
-  name: string;
-  role: string;
-  company: string;
-  channel: 'client' | 'subcontractor' | 'team';
-  status: string;
-  badge: string;
-  badgeColor: string;
-  icon: any;
-  avatarColor: string;
+interface Participant { id: string; name: string; role: string; company?: string; channels: string[] }
+
+const CHANNEL_META: Record<Channel, { label: string; description: string; icon: any }> = {
+  team: { label: 'Internal team', description: 'Visible to internal staff and consultants only', icon: Lock },
+  subcontractor: { label: 'Subcontractors', description: 'Visible to internal staff and project subcontractors', icon: HardHat },
+  client: { label: 'Client', description: 'Visible to internal staff and the client', icon: Building2 },
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  Admin: 'Administrator',
+  ProjectManager: 'Project Manager',
+  SiteEngineer: 'Site Engineer',
+  SiteSupervisor: 'Site Supervisor',
+  CommercialManager: 'Commercial Manager',
+  SafetyOfficer: 'Safety Officer',
+  QAQC: 'QA/QC',
+  Subcontractor: 'Subcontractor',
+  Consultant: 'Consultant',
+  Client: 'Client',
+};
+const roleLabel = (r?: string) => (r ? ROLE_LABELS[r] || r : '');
+
+const initials = (name?: string) =>
+  (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]!.toUpperCase()).join('');
+
+function formatWhen(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString(undefined, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const STAKEHOLDERS: Stakeholder[] = [
-  {
-    id: 'usr-client-01',
-    name: 'Mark Farrugia',
-    role: 'Client Project Manager',
-    company: 'Bank of Valletta (BOV Property Dept)',
-    channel: 'client',
-    status: 'Active on Client Portal',
-    badge: 'Client / Owner',
-    badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
-    icon: Building2,
-    avatarColor: 'bg-emerald-600'
-  },
-  {
-    id: 'usr-sub-01',
-    name: 'Kevin Bonnici',
-    role: 'Lead Electrical Subcontractor',
-    company: 'ElectroData Ltd',
-    channel: 'subcontractor',
-    status: 'On Site · Shaft B / Level 2',
-    badge: 'Subcontractor',
-    badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-800',
-    icon: HardHat,
-    avatarColor: 'bg-amber-600'
-  },
-  {
-    id: 'usr-enser-01',
-    name: 'Ing. Christian Borg',
-    role: 'Consultant Electrical Engineer',
-    company: 'Enser Ltd Consulting Engineers',
-    channel: 'team',
-    status: 'Engineering Review',
-    badge: 'MEP Consultant',
-    badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300 dark:border-blue-800',
-    icon: Award,
-    avatarColor: 'bg-blue-600'
-  },
-  {
-    id: 'usr-eng-01',
-    name: 'Marco Vella',
-    role: 'MEP Site Lead & Mechanical Eng.',
-    company: 'Internal Engineering Team',
-    channel: 'team',
-    status: 'On Site · Level 1 Fit-out',
-    badge: 'Site Team',
-    badgeColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800',
-    icon: Users,
-    avatarColor: 'bg-indigo-600'
-  }
-];
+const fullDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
-export function ProjectMessagesPage({ projectId, navigate, addToast, user }: ProjectMessagesPageProps) {
-  // Always ensure a fallback active project
-  const activeProjectId = (projectId && projectId !== 'ALL' && projectId !== 'undefined')
-    ? projectId
+function Avatar({ name, size = 32 }: { name?: string; size?: number }) {
+  return (
+    <div
+      className="rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      aria-hidden="true"
+    >
+      {initials(name)}
+    </div>
+  );
+}
+
+export function ProjectMessagesPage({ projectId: rawProjectId, navigate, addToast }: ProjectMessagesPageProps) {
+  const projectId = (rawProjectId && rawProjectId !== 'ALL' && rawProjectId !== 'undefined')
+    ? rawProjectId
     : 'bov-st-venera-2618';
+  const validProject = Boolean(projectId);
 
-  const [threads, setThreads] = useState<MessageThread[]>([]);
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [replies, setReplies] = useState<any[]>([]);
-  const [activeChannel, setActiveChannel] = useState<'all' | 'client' | 'subcontractor' | 'team'>('all');
+  const [me, setMe] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [channels, setChannels] = useState<Channel[]>(['team', 'subcontractor', 'client']);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [threads, setThreads] = useState<Message[]>([]);
+  const [stats, setStats] = useState<{ total: number; unread: number; byChannel: Record<string, any> }>({ total: 0, unread: 0, byChannel: {} });
+  const [activeChannel, setActiveChannel] = useState<'all' | Channel>('all');
   const [search, setSearch] = useState('');
-  const [itemTypeFilter, setItemTypeFilter] = useState<string>('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [replies, setReplies] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingReplies, setLoadingReplies] = useState(false);
-  const [stats, setStats] = useState<{ total: number; unread: number; byChannel: any }>({
-    total: 0,
-    unread: 0,
-    byChannel: { client: 0, subcontractor: 0, team: 0 }
-  });
-
-  // Reply state
+  const [loadError, setLoadError] = useState('');
   const [replyText, setReplyText] = useState('');
-  const [replySending, setReplySending] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const streamEnd = useRef<HTMLDivElement>(null);
 
-  // New Thread Form (for right panel direct compose or modal)
-  const [newModalOpen, setNewModalOpen] = useState(false);
-  const [newChannel, setNewChannel] = useState<'client' | 'subcontractor' | 'team'>('subcontractor');
-  const [newSubject, setNewSubject] = useState('');
-  const [newBody, setNewBody] = useState('');
-  const [newPriority, setNewPriority] = useState<'Normal' | 'Urgent' | 'Info'>('Normal');
-  const [newLinkedType, setNewLinkedType] = useState<string>('task');
-  const [newLinkedLabel, setNewLinkedLabel] = useState<string>('');
-  const [newAttachmentName, setNewAttachmentName] = useState('');
-  const [projectTasks, setProjectTasks] = useState<any[]>([]);
+  const isModerator = me?.role === 'Admin' || me?.role === 'ProjectManager';
 
-  // Load project tasks for quick linking
   useEffect(() => {
-    if (activeProjectId) {
-      tasksApi.list({ project_id: activeProjectId })
-        .then((res: any) => { if (Array.isArray(res)) setProjectTasks(res); })
-        .catch(() => {});
-    }
-  }, [activeProjectId]);
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  // Load threads and stats
+  // Reset when project changes
+  useEffect(() => {
+    setThreads([]); setReplies([]); setSelectedId(null); setActiveChannel('all'); setLoadError('');
+    if (!validProject) return;
+    messagesApi.participants(projectId)
+      .then(res => {
+        setMe(res.me);
+        setChannels(res.channels as Channel[]);
+        setParticipants(res.participants);
+      })
+      .catch((err: any) => setLoadError(err.message || 'Unable to load project messaging'));
+  }, [projectId, validProject]);
+
   const loadThreads = useCallback(async () => {
-    if (!activeProjectId) return;
+    if (!validProject) return;
     setLoading(true);
     try {
-      const [threadList, threadStats] = await Promise.all([
-        messagesApi.list(activeProjectId, {
+      const [list, s] = await Promise.all([
+        messagesApi.list(projectId, {
           channel: activeChannel !== 'all' ? activeChannel : undefined,
-          search: search || undefined,
-          linked_item_type: itemTypeFilter !== 'all' ? itemTypeFilter : undefined
+          search: debouncedSearch || undefined,
         }),
-        messagesApi.getStats(activeProjectId)
+        messagesApi.getStats(projectId),
       ]);
-      setThreads(Array.isArray(threadList) ? threadList : []);
-      if (threadStats) setStats(threadStats);
-
-      // Auto-select first thread if none selected or current invalid
-      if (Array.isArray(threadList) && threadList.length > 0) {
-        setSelectedThreadId(prev => {
-          if (!prev || !threadList.find(t => t.id === prev)) {
-            return threadList[0].id;
-          }
-          return prev;
-        });
-      }
+      const rows = Array.isArray(list) ? list : [];
+      setThreads(rows);
+      setStats(s as any);
+      setSelectedId(prev => (prev && rows.some(r => r.id === prev) ? prev : rows[0]?.id ?? null));
+      setLoadError('');
     } catch (err: any) {
-      if (addToast) addToast('error', err.message || 'Failed to load messages');
+      setLoadError(err.message || 'Unable to load messages');
     } finally {
       setLoading(false);
     }
-  }, [activeProjectId, activeChannel, search, itemTypeFilter, addToast]);
+  }, [projectId, validProject, activeChannel, debouncedSearch]);
+
+  useEffect(() => { loadThreads(); }, [loadThreads]);
+
+  const active = useMemo(() => threads.find(t => t.id === selectedId) || null, [threads, selectedId]);
 
   useEffect(() => {
-    loadThreads();
-  }, [loadThreads]);
-
-  // Load replies whenever selected thread changes
-  useEffect(() => {
-    if (!activeProjectId || !selectedThreadId) {
-      setReplies([]);
-      return;
-    }
+    if (!validProject || !selectedId) { setReplies([]); return; }
+    let cancelled = false;
     setLoadingReplies(true);
-    messagesApi.getReplies(activeProjectId, selectedThreadId)
+    messagesApi.getReplies(projectId, selectedId)
       .then(res => {
+        if (cancelled) return;
         setReplies(res.replies || []);
-        // Mark thread as read
-        messagesApi.markRead(activeProjectId, selectedThreadId).then(() => {
-          setThreads(prev => prev.map(t => t.id === selectedThreadId ? { ...t, is_unread: 0 } : t));
-          setStats(prev => ({
-            ...prev,
-            unread: Math.max(0, prev.unread - 1)
-          }));
-        }).catch(() => {});
+        const wasUnread = threads.find(t => t.id === selectedId)?.is_unread;
+        if (wasUnread) {
+          messagesApi.markRead(projectId, selectedId).then(() => {
+            setThreads(prev => prev.map(t => (t.id === selectedId ? { ...t, is_unread: 0 } : t)));
+            setStats(prev => {
+              const ch = threads.find(t => t.id === selectedId)?.channel;
+              const byChannel = { ...prev.byChannel };
+              if (ch && byChannel[ch] && typeof byChannel[ch] === 'object') {
+                byChannel[ch] = { ...byChannel[ch], unread: Math.max(0, (byChannel[ch].unread || 0) - 1) };
+              }
+              return { ...prev, unread: Math.max(0, prev.unread - 1), byChannel };
+            });
+          }).catch(() => {});
+        }
       })
-      .catch(err => {
-        if (addToast) addToast('error', err.message || 'Failed to load replies');
-      })
-      .finally(() => setLoadingReplies(false));
-  }, [activeProjectId, selectedThreadId, addToast]);
+      .catch((err: any) => { if (!cancelled) addToast?.('error', err.message || 'Unable to load conversation'); })
+      .finally(() => { if (!cancelled) setLoadingReplies(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, validProject, selectedId]);
 
-  const activeThread = useMemo(() => {
-    return threads.find(t => t.id === selectedThreadId) || null;
-  }, [threads, selectedThreadId]);
+  useEffect(() => { streamEnd.current?.scrollIntoView({ block: 'end' }); }, [replies.length, selectedId]);
 
-  // Handle post reply
-  const handleSendReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!replyText.trim() || !selectedThreadId) return;
+  const audience = useMemo(
+    () => (active ? participants.filter(p => p.channels.includes(active.channel)) : []),
+    [participants, active]
+  );
 
-    setReplySending(true);
+  const sendReply = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!active || !replyText.trim() || sending) return;
+    setSending(true);
     try {
-      const rep = await messagesApi.reply(activeProjectId, selectedThreadId, {
-        body: replyText.trim()
-      });
+      const rep = await messagesApi.reply(projectId, active.id, { body: replyText.trim() });
       setReplies(prev => [...prev, rep]);
       setReplyText('');
-      setThreads(prev => prev.map(t => {
-        if (t.id === selectedThreadId) {
-          return {
-            ...t,
-            reply_count: t.reply_count + 1,
-            last_reply_at: rep.created_at
-          };
-        }
-        return t;
-      }));
-      if (addToast) addToast('success', 'Reply posted');
+      setThreads(prev => prev.map(t => (t.id === active.id ? { ...t, reply_count: t.reply_count + 1, last_reply_at: rep.created_at } : t)));
     } catch (err: any) {
-      if (addToast) addToast('error', err.message || 'Failed to post reply');
+      addToast?.('error', err.message || 'Reply could not be sent');
     } finally {
-      setReplySending(false);
+      setSending(false);
     }
   };
 
-  // Quick reply prompt insert
-  const insertQuickReply = (text: string) => {
-    setReplyText(prev => prev ? `${prev} ${text}` : text);
-  };
-
-  // Handle create new thread
-  const handleCreateThread = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubject.trim() || !newBody.trim()) {
-      if (addToast) addToast('error', 'Subject and message body are required');
-      return;
-    }
-
+  const togglePin = async () => {
+    if (!active) return;
     try {
-      const created = await messagesApi.create(activeProjectId, {
-        channel: newChannel,
-        subject: newSubject.trim(),
-        body: newBody.trim(),
-        priority: newPriority,
-        linked_item_type: newLinkedType || undefined,
-        linked_item_label: newLinkedLabel || undefined,
-        attachment_name: newAttachmentName || undefined
-      });
-
-      setThreads(prev => [created, ...prev]);
-      setSelectedThreadId(created.id);
-      setNewModalOpen(false);
-      setNewSubject('');
-      setNewBody('');
-      setNewPriority('Normal');
-      setNewLinkedLabel('');
-      setNewAttachmentName('');
-      if (addToast) addToast('success', 'New conversation started');
-      loadThreads();
+      const updated = await messagesApi.togglePin(projectId, active.id);
+      setThreads(prev => prev.map(t => (t.id === active.id ? { ...t, is_pinned: updated.is_pinned } : t)));
     } catch (err: any) {
-      if (addToast) addToast('error', err.message || 'Failed to create message thread');
+      addToast?.('error', err.message || 'Unable to update pin');
     }
   };
 
-  // Switch to stakeholder conversation or composer
-  const handleSelectStakeholder = (stk: Stakeholder) => {
-    setActiveChannel(stk.channel);
-    // Find if there is an existing thread from or involving this stakeholder
-    const matchingThread = threads.find(t =>
-      t.sender_name.toLowerCase().includes(stk.name.toLowerCase()) ||
-      t.channel === stk.channel
+  const deleteMessage = async (msg: Message) => {
+    const isThread = !msg.parent_id;
+    if (!window.confirm(isThread ? 'Delete this conversation and all replies? This cannot be undone.' : 'Delete this reply? This cannot be undone.')) return;
+    try {
+      await messagesApi.delete(projectId, msg.id);
+      if (isThread) {
+        setThreads(prev => prev.filter(t => t.id !== msg.id));
+        setSelectedId(null);
+        loadThreads();
+      } else {
+        setReplies(prev => prev.filter(r => r.id !== msg.id));
+        setThreads(prev => prev.map(t => (t.id === msg.parent_id ? { ...t, reply_count: Math.max(0, t.reply_count - 1) } : t)));
+      }
+      addToast?.('success', isThread ? 'Conversation deleted' : 'Reply deleted');
+    } catch (err: any) {
+      addToast?.('error', err.message || 'Unable to delete');
+    }
+  };
+
+  const canDelete = (m: Message) => isModerator || (me && m.sender_id === me.id);
+
+  if (!validProject) {
+    return (
+      <div className="max-w-xl mx-auto mt-16 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-10">
+        <Inbox size={28} className="mx-auto text-slate-400" />
+        <h1 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Select a project</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Messages are scoped to a single project. Choose a project from the project selector to view its conversations.</p>
+      </div>
     );
-    if (matchingThread) {
-      setSelectedThreadId(matchingThread.id);
-    } else {
-      setSelectedThreadId(null);
-      setNewChannel(stk.channel);
-      setNewSubject(`Coordination with ${stk.name} (${stk.company})`);
-    }
-  };
-
-  // Handle pin toggle
-  const handleTogglePin = async (e: React.MouseEvent, threadId: string) => {
-    e.stopPropagation();
-    try {
-      const updated = await messagesApi.togglePin(activeProjectId, threadId);
-      setThreads(prev => prev.map(t => t.id === threadId ? { ...t, is_pinned: updated.is_pinned } : t));
-      if (addToast) addToast('info', updated.is_pinned ? 'Thread pinned to top' : 'Thread unpinned');
-    } catch (err: any) {
-      if (addToast) addToast('error', err.message || 'Failed to toggle pin');
-    }
-  };
-
-  // Channel Pills styling
-  const channelBadge = (channel: string) => {
-    switch (channel) {
-      case 'client':
-        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">Client / Owner</span>;
-      case 'subcontractor':
-        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">Subcontractor</span>;
-      default:
-        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800">Internal Team</span>;
-    }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-5 h-full max-w-[1600px] mx-auto">
-      {/* ── Top Header Bar ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="flex flex-col gap-4 h-full max-w-[1600px] mx-auto">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-sm">
-              <MessageSquare size={20} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Project Messages &amp; Discussions</h1>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  Buildertrend Hub
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Centralized multi-party communication hub · Client, Subcontractor &amp; Engineering Team channels
-              </p>
-            </div>
-          </div>
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Messages</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Project correspondence by audience. {stats.unread > 0 ? `${stats.unread} unread.` : 'No unread conversations.'}
+          </p>
         </div>
-
         <div className="flex items-center gap-2">
           <button
-            onClick={loadThreads}
-            className="flex items-center gap-1.5 px-3 py-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 rounded-xl transition-colors border border-slate-200 dark:border-slate-700 text-xs font-semibold shadow-xs"
-            title="Refresh messages"
+            type="button"
+            onClick={() => setShowMembers(v => !v)}
+            className="inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
           >
-            <RefreshCw size={13} />
-            <span>Refresh</span>
+            <Users size={15} /> Members ({participants.length})
           </button>
           <button
-            onClick={() => {
-              setSelectedThreadId(null);
-              setNewSubject('');
-              setNewBody('');
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 shadow-sm transition-all"
+            type="button"
+            onClick={loadThreads}
+            aria-label="Refresh"
+            className="inline-flex items-center justify-center h-9 w-9 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
           >
-            <Plus size={14} /> New Conversation
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setComposeOpen(true)}
+            disabled={channels.length === 0}
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800 disabled:opacity-50"
+          >
+            <Plus size={15} /> New message
           </button>
         </div>
       </div>
 
-      {/* ── Active Stakeholders & Testing Directory ─────────────────────────────── */}
-      <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md border border-slate-800 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              Active Project Stakeholders &amp; Testing Directory
-            </span>
-            <span className="text-[11px] bg-slate-800 px-2 py-0.5 rounded-full font-medium text-slate-300">
-              BOV St. Venera Level 1 &amp; 2 Fit-out
-            </span>
-          </div>
-          <div className="text-xs text-slate-300 flex items-center gap-1.5">
-            <span>You are testing as:</span>
-            <span className="bg-blue-600/30 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded-md font-semibold text-[11px]">
-              {user?.name || 'David Spiteri'} ({user?.role || 'MEP Project Manager'})
-            </span>
-          </div>
+      {loadError && (
+        <div role="alert" className="flex items-start gap-2 p-3 text-sm rounded-md border border-red-200 bg-red-50 text-red-800 dark:bg-red-950/40 dark:border-red-900 dark:text-red-300">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" /> {loadError}
         </div>
+      )}
 
-        {/* 4 Interactive Stakeholder Direct Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {STAKEHOLDERS.map(stk => {
+      <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(300px,380px)_1fr] border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 overflow-hidden min-h-[640px] lg:h-[calc(100vh-230px)]">
+        {/* Channels */}
+        <nav aria-label="Channels" className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 p-2 bg-slate-50/60 dark:bg-slate-950/40">
+          <p className="px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Channels</p>
+          {[{ id: 'all' as const, label: 'All messages', icon: Inbox, total: stats.total, unread: stats.unread },
+            ...channels.map(c => {
+              const chStat = stats.byChannel[c];
+              const total = typeof chStat === 'number' ? chStat : (chStat?.total || 0);
+              const unread = typeof chStat === 'object' ? (chStat?.unread || 0) : 0;
+              return { id: c, label: CHANNEL_META[c].label, icon: CHANNEL_META[c].icon, total, unread };
+            })
+          ].map(item => {
+            const Icon = item.icon;
+            const selected = activeChannel === item.id;
             return (
-              <div
-                key={stk.id}
-                onClick={() => handleSelectStakeholder(stk)}
-                className="bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/80 rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.01] hover:border-blue-400 group flex flex-col justify-between"
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveChannel(item.id)}
+                aria-current={selected ? 'true' : undefined}
+                className={`w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm text-left ${
+                  selected ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium shadow-sm border border-slate-200 dark:border-slate-700'
+                           : 'text-slate-600 dark:text-slate-400 hover:bg-white/70 dark:hover:bg-slate-800/60 border border-transparent'
+                }`}
               >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-xl ${stk.avatarColor} text-white font-bold flex items-center justify-center text-xs shadow-xs`}>
-                        {stk.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors leading-tight">
-                          {stk.name}
-                        </h4>
-                        <p className="text-[10px] text-slate-400 line-clamp-1">{stk.role}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-300 font-medium mt-2 flex items-center gap-1 truncate">
-                    <Building2 size={11} className="text-slate-400 flex-shrink-0" />
-                    <span className="truncate">{stk.company}</span>
-                  </p>
-                </div>
-
-                <div className="mt-3 pt-2 border-t border-slate-700/60 flex items-center justify-between">
-                  <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${stk.badgeColor}`}>
-                    {stk.badge}
-                  </span>
-                  <span className="text-[10px] font-bold text-blue-400 group-hover:underline flex items-center gap-0.5">
-                    Chat <ArrowRight size={10} />
-                  </span>
-                </div>
-              </div>
+                <Icon size={15} className="flex-shrink-0" />
+                <span className="flex-1 truncate">{item.label}</span>
+                {item.unread > 0
+                  ? <span className="min-w-[20px] text-center text-[11px] font-semibold px-1.5 rounded-full bg-blue-700 text-white">{item.unread}</span>
+                  : <span className="text-[11px] text-slate-400 tabular-nums">{item.total}</span>}
+              </button>
             );
           })}
-        </div>
-      </div>
+          {activeChannel !== 'all' && (
+            <p className="px-2 pt-3 text-xs text-slate-500 leading-relaxed">{CHANNEL_META[activeChannel].description}.</p>
+          )}
+        </nav>
 
-      {/* ── Metrics Cards ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">All Discussions</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{threads.length || stats.total}</p>
+        {/* Thread list */}
+        <section aria-label="Conversations" className="flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 min-h-0">
+          <div className="p-2 border-b border-slate-200 dark:border-slate-800">
+            <label className="relative block">
+              <span className="sr-only">Search messages</span>
+              <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+              <input
+                type="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search subject, text, sender or linked item"
+                className="w-full h-9 pl-8 pr-3 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </label>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
-            <MessageSquare size={18} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">Client / Owner</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-              {threads.filter(t => t.channel === 'client').length}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
-            <Building2 size={18} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">Subcontractors</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-              {threads.filter(t => t.channel === 'subcontractor').length}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center justify-center">
-            <HardHat size={18} />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">Internal Team &amp; Enser</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
-              {threads.filter(t => t.channel === 'team').length}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
-            <Layers size={18} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Channel Tabs & Search Filter ─────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        {/* Channel Selector */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-          {[
-            { id: 'all', label: 'All Channels', count: threads.length },
-            { id: 'client', label: 'Client / Owner', count: threads.filter(t => t.channel === 'client').length },
-            { id: 'subcontractor', label: 'Subcontractors', count: threads.filter(t => t.channel === 'subcontractor').length },
-            { id: 'team', label: 'Internal Team', count: threads.filter(t => t.channel === 'team').length },
-          ].map(ch => (
-            <button
-              key={ch.id}
-              onClick={() => setActiveChannel(ch.id as any)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                activeChannel === ch.id
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <span>{ch.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                activeChannel === ch.id ? 'bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-200' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-500'
-              }`}>{ch.count}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Search & Tag filter */}
-        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md">
-          <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search discussions, subjects, or linked tags..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
-          <select
-            value={itemTypeFilter}
-            onChange={e => setItemTypeFilter(e.target.value)}
-            className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none"
-          >
-            <option value="all">All Linked Types</option>
-            <option value="task">Linked to Task</option>
-            <option value="drawing">Linked to Drawing</option>
-            <option value="selection">Linked to Selection</option>
-          </select>
-        </div>
-      </div>
-
-      {/* ── Master-Detail Workspace ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[580px]">
-        {/* Left Column: Thread List (5 cols) */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col overflow-hidden max-h-[780px]">
-          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Conversations ({threads.length})
-            </h2>
-            <span className="text-[11px] text-slate-400 font-medium">Click to open &amp; type reply</span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
-            {loading ? (
-              <div className="py-20 text-center space-y-2">
-                <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs text-slate-400">Loading conversation threads...</p>
-              </div>
+          <ul className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 min-h-0">
+            {loading && threads.length === 0 ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <li key={i} className="p-3 space-y-2 animate-pulse">
+                  <div className="h-3 w-2/3 bg-slate-200 dark:bg-slate-800 rounded" />
+                  <div className="h-3 w-full bg-slate-100 dark:bg-slate-800/60 rounded" />
+                </li>
+              ))
             ) : threads.length === 0 ? (
-              <div className="py-20 text-center px-4 space-y-3">
-                <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
-                  <MessageSquare size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">No discussions found</p>
-                  <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1">Start a message with one of the stakeholders above.</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setSelectedThreadId(null);
-                    setNewSubject('Site Coordination Query');
-                    setNewBody('');
-                  }}
-                  className="px-3.5 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-blue-700"
-                >
-                  Compose Message
-                </button>
-              </div>
-            ) : (
-              threads.map(thread => {
-                const isSelected = thread.id === selectedThreadId;
-                const isUrgent = thread.priority === 'Urgent';
-
-                return (
-                  <div
-                    key={thread.id}
-                    onClick={() => setSelectedThreadId(thread.id)}
-                    className={`p-4 cursor-pointer transition-all border-l-4 ${
-                      isSelected
-                        ? 'bg-blue-50/80 dark:bg-slate-800/90 border-l-blue-600'
-                        : isUrgent
-                        ? 'border-l-rose-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                        : thread.is_pinned
-                        ? 'border-l-amber-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                        : 'border-l-transparent hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {channelBadge(thread.channel)}
-                        {isUrgent && (
-                          <span className="text-[10px] font-black uppercase px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300">
-                            Urgent
-                          </span>
-                        )}
-                        {thread.is_pinned === 1 && (
-                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5" title="Pinned Announcement">
-                            <Pin size={10} className="fill-amber-600" />
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {thread.is_unread === 1 && (
-                          <span className="w-2 h-2 rounded-full bg-blue-600" title="Unread" />
-                        )}
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          {new Date(thread.last_reply_at || thread.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </span>
-                      </div>
-                    </div>
-
-                    <h3 className="text-xs font-bold text-slate-900 dark:text-white mt-1.5 line-clamp-1 leading-snug">
-                      {thread.subject}
-                    </h3>
-
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                      {thread.body}
-                    </p>
-
-                    {/* Linked Record Tag */}
-                    {thread.linked_item_label && (
-                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-blue-700 dark:text-blue-300 font-medium bg-blue-50/60 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-900/40 w-fit max-w-full truncate">
-                        <Tag size={10} className="flex-shrink-0" />
-                        <span className="truncate">{thread.linked_item_label}</span>
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100/60 dark:border-slate-800/60">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[9px] font-bold">
-                          {thread.sender_name.charAt(0)}
-                        </div>
-                        <span className="truncate font-medium text-slate-700 dark:text-slate-300">{thread.sender_name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-mono font-semibold">
-                        <MessageSquare size={11} />
-                        <span>{thread.reply_count}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Active Thread Stream & Reply (7 cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col overflow-hidden max-h-[780px]">
-          {activeThread ? (
-            <>
-              {/* Thread Header */}
-              <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {channelBadge(activeThread.channel)}
-                    {activeThread.priority === 'Urgent' && (
-                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-200 border border-rose-300 dark:border-rose-800">
-                        Urgent Action
-                      </span>
-                    )}
-                    <span className="text-xs text-slate-400">
-                      Started {new Date(activeThread.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                    </span>
-                  </div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
-                    {activeThread.subject}
-                  </h2>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+              <li className="p-8 text-center text-sm text-slate-500">
+                {debouncedSearch ? 'No conversations match your search.' : 'No conversations yet.'}
+              </li>
+            ) : threads.map(t => {
+              const selected = t.id === selectedId;
+              return (
+                <li key={t.id}>
                   <button
-                    onClick={(e) => handleTogglePin(e, activeThread.id)}
-                    className={`p-2 rounded-xl border transition-colors ${
-                      activeThread.is_pinned
-                        ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 border-amber-300 dark:border-amber-800'
-                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border-slate-200 dark:border-slate-700'
-                    }`}
-                    title={activeThread.is_pinned ? 'Unpin thread' : 'Pin thread to top'}
+                    type="button"
+                    onClick={() => setSelectedId(t.id)}
+                    aria-current={selected ? 'true' : undefined}
+                    className={`w-full text-left px-3 py-3 border-l-2 ${selected ? 'bg-blue-50 dark:bg-slate-800 border-l-blue-700' : 'border-l-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
                   >
-                    <Pin size={14} className={activeThread.is_pinned ? 'fill-amber-500' : ''} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Linked Record Banner */}
-              {activeThread.linked_item_label && (
-                <div className="px-4 py-2 bg-blue-50/70 dark:bg-slate-800/60 border-b border-blue-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 text-blue-900 dark:text-blue-300 font-medium">
-                    <Tag size={13} className="text-blue-600 dark:text-blue-400" />
-                    <span>Linked to: <strong>{activeThread.linked_item_label}</strong></span>
-                  </div>
-                  {navigate && (
-                    <button
-                      onClick={() => {
-                        if (activeThread.linked_item_type === 'task') navigate('tasks');
-                        else if (activeThread.linked_item_type === 'drawing') navigate('documents');
-                        else if (activeThread.linked_item_type === 'selection') navigate('selections');
-                        else navigate('tasks');
-                      }}
-                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                    >
-                      Open Record <ArrowRight size={11} />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Messages Timeline Stream */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {/* Root Message Bubble */}
-                <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                        {activeThread.sender_name.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">{activeThread.sender_name}</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">({activeThread.sender_role})</span>
-                        </div>
-                        <p className="text-[10px] text-slate-400">{new Date(activeThread.created_at).toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-normal">
-                    {activeThread.body}
-                  </p>
-
-                  {/* Attachment */}
-                  {activeThread.attachment_name && (
-                    <div className="mt-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between max-w-sm">
-                      <div className="flex items-center gap-2 truncate">
-                        <Paperclip size={14} className="text-blue-600 flex-shrink-0" />
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{activeThread.attachment_name}</span>
-                      </div>
-                      <span className="text-[10px] font-bold text-blue-600 uppercase">Attached</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Replies Divider */}
-                {replies.length > 0 && (
-                  <div className="relative text-center my-4">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-800" /></div>
-                    <span className="relative bg-white dark:bg-slate-900 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {replies.length} {replies.length === 1 ? 'Response' : 'Responses'}
-                    </span>
-                  </div>
-                )}
-
-                {/* Replies */}
-                {loadingReplies ? (
-                  <div className="py-6 text-center text-xs text-slate-400">Loading replies...</div>
-                ) : (
-                  replies.map(rep => (
-                    <div
-                      key={rep.id}
-                      className="ml-4 sm:ml-8 bg-slate-50/70 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/60 space-y-2 relative"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs">
-                            {rep.sender_name.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white">{rep.sender_name}</span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">({rep.sender_role})</span>
-                            </div>
-                            <span className="text-[10px] text-slate-400">{new Date(rep.created_at).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
-                        {rep.body}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* ── HIGH VISIBILITY REPLY COMPOSER ("WHERE I CAN TYPE") ─────────── */}
-              <div className="p-4 bg-slate-100/90 dark:bg-slate-950 border-t-2 border-blue-500 dark:border-blue-600">
-                <form onSubmit={handleSendReply} className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        Type reply as <span className="text-blue-600 dark:text-blue-400 font-black">{user?.name || 'David Spiteri'}</span> (MEP PM):
-                      </label>
+                      {t.is_unread ? <span className="w-2 h-2 rounded-full bg-blue-700 flex-shrink-0" aria-label="Unread" /> : null}
+                      <span className={`flex-1 truncate text-sm ${t.is_unread ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
+                        {t.sender_name}
+                      </span>
+                      {t.is_pinned ? <Pin size={12} className="text-slate-500 flex-shrink-0" aria-label="Pinned" /> : null}
+                      <time className="text-xs text-slate-500 tabular-nums flex-shrink-0" dateTime={t.last_reply_at || t.created_at}>
+                        {formatWhen(t.last_reply_at || t.created_at)}
+                      </time>
                     </div>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Notifying {activeThread.sender_name} &amp; {activeThread.channel} channel
-                    </span>
-                  </div>
+                    <p className={`mt-0.5 text-sm truncate ${t.is_unread ? 'font-medium text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-200'}`}>
+                      {t.priority === 'Urgent' && <span className="text-red-700 dark:text-red-400 font-semibold">Urgent · </span>}
+                      {t.subject}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{t.body}</p>
+                    <div className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-500">
+                      <span>{CHANNEL_META[t.channel]?.label}</span>
+                      {t.reply_count > 0 && <span>{t.reply_count} {t.reply_count === 1 ? 'reply' : 'replies'}</span>}
+                      {t.linked_item_label && <span className="truncate">{t.linked_item_label}</span>}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
 
-                  {/* Quick-reply chip suggestions */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase flex-shrink-0">Quick reply:</span>
-                    {[
-                      '✅ Approved - Proceed with installation',
-                      '📸 Please send site photos',
-                      '⚠️ Pending Enser Ltd sign-off',
-                      '📅 Meeting on site tomorrow 09:00',
-                      '📦 Delivery confirmed for Friday'
-                    ].map((chip, idx) => (
-                      <button
-                        type="button"
-                        key={idx}
-                        onClick={() => insertQuickReply(chip)}
-                        className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 whitespace-nowrap text-[10px] font-medium transition-all"
-                      >
-                        {chip}
-                      </button>
+        {/* Conversation */}
+        <section aria-label="Conversation" className="flex flex-col min-h-0">
+          {showMembers ? (
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Project members you can message</h2>
+                <button type="button" onClick={() => setShowMembers(false)} aria-label="Close members" className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X size={16} /></button>
+              </div>
+              {participants.length === 0 ? (
+                <p className="p-6 text-sm text-slate-500">No other active members are assigned to this project. An administrator can add members under Users &amp; Access.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-950/40">
+                    <tr><th className="px-5 py-2 font-medium">Name</th><th className="px-3 py-2 font-medium">Role</th><th className="px-3 py-2 font-medium">Company</th><th className="px-3 py-2 font-medium">Channels</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {participants.map(p => (
+                      <tr key={p.id}>
+                        <td className="px-5 py-2.5"><div className="flex items-center gap-2"><Avatar name={p.name} size={26} /><span className="text-slate-900 dark:text-white">{p.name}{p.id === me?.id ? ' (you)' : ''}</span></div></td>
+                        <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{roleLabel(p.role)}</td>
+                        <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{p.company || '—'}</td>
+                        <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">{p.channels.map(c => CHANNEL_META[c as Channel]?.label).join(', ')}</td>
+                      </tr>
                     ))}
-                  </div>
-
-                  <div className="relative">
-                    <textarea
-                      rows={3}
-                      placeholder="Type your message or response here... (e.g. 'We reviewed drawing 2618-S-ELE-01 with Enser Ltd and approved the bracket offset.')"
-                      value={replyText}
-                      onChange={e => setReplyText(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-blue-300 dark:border-blue-700 focus:border-blue-600 focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white placeholder-slate-400 resize-none shadow-sm"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Press <strong>Send Reply</strong> to post to this conversation thread.
-                    </p>
-
-                    <button
-                      type="submit"
-                      disabled={replySending || !replyText.trim()}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all hover:scale-[1.02]"
-                    >
-                      <Send size={14} />
-                      <span>{replySending ? 'Sending...' : 'Send Message'}</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </>
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ) : !active ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+              <MessageSquare size={28} className="text-slate-300 dark:text-slate-600" />
+              <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-300">No conversation selected</p>
+              <p className="mt-1 text-sm text-slate-500">Choose a conversation from the list, or start a new one.</p>
+              <button type="button" onClick={() => setComposeOpen(true)} className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800">
+                <Plus size={15} /> New message
+              </button>
+            </div>
           ) : (
-            /* ── DIRECT MESSAGE COMPOSER WHEN NO THREAD IS SELECTED ───────────── */
-            <div className="h-full flex flex-col p-6 space-y-5 overflow-y-auto">
-              <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 rounded-xl">
-                    <SendHorizontal size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                      Start a New Project Discussion
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Select a recipient below and type your message to begin testing.
+            <>
+              <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-white leading-snug">{active.subject}</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {CHANNEL_META[active.channel]?.label} · Visible to {audience.length} {audience.length === 1 ? 'member' : 'members'}
+                      {active.priority === 'Urgent' && <span className="ml-2 text-red-700 dark:text-red-400 font-semibold">Urgent</span>}
                     </p>
                   </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {isModerator && (
+                      <button type="button" onClick={togglePin} title={active.is_pinned ? 'Unpin' : 'Pin to top'} aria-pressed={!!active.is_pinned}
+                        className={`p-2 rounded-md border ${active.is_pinned ? 'border-slate-400 text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>
+                        <Pin size={14} />
+                      </button>
+                    )}
+                    {canDelete(active) && (
+                      <button type="button" onClick={() => deleteMessage(active)} title="Delete conversation"
+                        className="p-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-700 hover:border-red-300">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {active.linked_item_label && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <Tag size={12} /> <span className="truncate">{active.linked_item_label}</span>
+                    {navigate && active.linked_item_type && (
+                      <button type="button" className="inline-flex items-center gap-0.5 text-blue-700 dark:text-blue-400 hover:underline"
+                        onClick={() => navigate(active.linked_item_type === 'drawing' ? 'documents' : active.linked_item_type === 'selection' ? 'selections' : 'tasks')}>
+                        Open <ArrowRight size={11} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </header>
+
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0">
+                {[active, ...replies].map((m, idx) => (
+                  <article key={m.id} className="flex gap-3 group">
+                    <Avatar name={m.sender_name} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">{m.sender_name}{me && m.sender_id === me.id ? ' (you)' : ''}</span>
+                        <span className="text-xs text-slate-500">{roleLabel(m.sender_role)}</span>
+                        <time className="text-xs text-slate-400" dateTime={m.created_at}>{fullDate(m.created_at)}</time>
+                        {idx > 0 && canDelete(m) && (
+                          <button type="button" onClick={() => deleteMessage(m)} className="ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100 text-xs text-slate-500 hover:text-red-700">
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words leading-relaxed">{m.body}</p>
+                      {m.attachment_name && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded px-2 py-1">
+                          <Paperclip size={12} /> {m.attachment_name}
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+                {loadingReplies && <p className="text-xs text-slate-500">Loading replies…</p>}
+                <div ref={streamEnd} />
               </div>
 
-              <form onSubmit={handleCreateThread} className="space-y-4 flex-1 flex flex-col justify-between">
-                <div className="space-y-4">
-                  {/* Stakeholder Target Pills */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                      Who would you like to message?
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {[
-                        { id: 'client', label: 'Mark Farrugia', sub: 'Client (BOV Property)' },
-                        { id: 'subcontractor', label: 'Kevin Bonnici', sub: 'Subcontractor (ElectroData)' },
-                        { id: 'team', label: 'Ing. Christian Borg', sub: 'Enser Ltd Consultant / Team' },
-                      ].map(target => (
-                        <button
-                          type="button"
-                          key={target.id}
-                          onClick={() => setNewChannel(target.id as any)}
-                          className={`p-3 rounded-xl border text-left transition-all ${
-                            newChannel === target.id
-                              ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 font-bold shadow-xs'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
-                          }`}
-                        >
-                          <p className="text-xs font-bold leading-tight">{target.label}</p>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">{target.sub}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Subject line */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Subject / Topic *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Level 2 Containment Routing & Riser Approvals"
-                      value={newSubject}
-                      onChange={e => setNewSubject(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Optional Task Linking */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Link to Project Task (Optional)
-                      </label>
-                      <select
-                        value={newLinkedLabel}
-                        onChange={e => setNewLinkedLabel(e.target.value)}
-                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
-                      >
-                        <option value="">No task linked</option>
-                        {projectTasks.map(t => (
-                          <option key={t.id} value={`${t.wbs_code || ''} ${t.title}`}>
-                            {t.wbs_code ? `[${t.wbs_code}] ` : ''}{t.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Priority
-                      </label>
-                      <select
-                        value={newPriority}
-                        onChange={e => setNewPriority(e.target.value as any)}
-                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none"
-                      >
-                        <option value="Normal">Normal</option>
-                        <option value="Urgent">Urgent Action Required</option>
-                        <option value="Info">Information Only</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* THE MAIN TYPE AREA */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
-                      Type your message content *
-                    </label>
-                    <textarea
-                      required
-                      rows={5}
-                      placeholder="Type your message here... (e.g. 'Hello Kevin, please confirm when ElectroData can begin pulling the secondary Cat 6 feeders in Shaft B.')"
-                      value={newBody}
-                      onChange={e => setNewBody(e.target.value)}
-                      className="w-full text-xs p-3 rounded-xl bg-white dark:bg-slate-900 border-2 border-blue-400 dark:border-blue-600 focus:border-blue-700 focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white placeholder-slate-400 resize-none shadow-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Posting as: <strong>David Spiteri (MEP Project Manager)</strong>
+              <form onSubmit={sendReply} className="border-t border-slate-200 dark:border-slate-800 p-3">
+                <label htmlFor="reply-box" className="sr-only">Reply</label>
+                <textarea
+                  id="reply-box"
+                  rows={3}
+                  maxLength={10000}
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendReply(); }}
+                  placeholder={`Reply to ${CHANNEL_META[active.channel]?.label.toLowerCase()} conversation`}
+                  className="w-full text-sm p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder:text-slate-400 resize-y focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-xs text-slate-500 truncate">
+                    Replying as {me?.name} · {audience.length} {audience.length === 1 ? 'member' : 'members'} can see this · Ctrl+Enter to send
                   </p>
-                  <button
-                    type="submit"
-                    disabled={!newSubject.trim() || !newBody.trim()}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all hover:scale-[1.02]"
-                  >
-                    <Send size={14} />
-                    <span>Send Message</span>
+                  <button type="submit" disabled={sending || !replyText.trim()}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800 disabled:opacity-50">
+                    <Send size={14} /> {sending ? 'Sending…' : 'Send'}
                   </button>
                 </div>
               </form>
-            </div>
+            </>
           )}
-        </div>
+        </section>
       </div>
 
-      {/* ── New Conversation Modal (if opened via button) ────────────────────── */}
-      {newModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-2xl w-full overflow-hidden animate-fadeIn">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <MessageSquare size={18} className="text-amber-400" />
-                <h2 className="text-base font-bold">New Project Conversation</h2>
-              </div>
-              <button onClick={() => setNewModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={18} />
+      {composeOpen && (
+        <ComposeDialog
+          projectId={projectId}
+          channels={channels}
+          defaultChannel={activeChannel !== 'all' ? activeChannel : channels[0]}
+          participants={participants}
+          me={me}
+          onClose={() => setComposeOpen(false)}
+          onCreated={(m) => {
+            setComposeOpen(false);
+            setShowMembers(false);
+            setActiveChannel('all');
+            setThreads(prev => [m, ...prev.filter(t => t.id !== m.id)]);
+            setSelectedId(m.id);
+            addToast?.('success', 'Message sent');
+            loadThreads();
+          }}
+          addToast={addToast}
+        />
+      )}
+    </div>
+  );
+}
+
+function ComposeDialog({ projectId, channels, defaultChannel, participants, me, onClose, onCreated, addToast }: {
+  projectId: string;
+  channels: Channel[];
+  defaultChannel?: Channel;
+  participants: Participant[];
+  me: { id: string; name: string; role: string } | null;
+  onClose: () => void;
+  onCreated: (m: Message) => void;
+  addToast?: (type: 'success' | 'error' | 'info', message: string) => void;
+}) {
+  const [channel, setChannel] = useState<Channel>(defaultChannel || channels[0]);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [priority, setPriority] = useState<'Normal' | 'Urgent' | 'Info'>('Normal');
+  const [linkedTask, setLinkedTask] = useState('');
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const firstField = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    firstField.current?.focus();
+    tasksApi.list({ project_id: projectId }).then((r: any) => Array.isArray(r) && setTasks(r)).catch(() => {});
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [projectId, onClose]);
+
+  const audience = participants.filter(p => p.channels.includes(channel));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subject.trim() || !body.trim()) { setError('Subject and message are required.'); return; }
+    setSaving(true); setError('');
+    try {
+      const task = tasks.find(t => t.id === linkedTask);
+      const created = await messagesApi.create(projectId, {
+        channel, subject: subject.trim(), body: body.trim(), priority,
+        linked_item_type: task ? 'task' : undefined,
+        linked_item_id: task?.id,
+        linked_item_label: task ? `${task.wbs_code ? task.wbs_code + ' · ' : ''}${task.title}` : undefined,
+      });
+      onCreated(created);
+    } catch (err: any) {
+      setError(err.message || 'Message could not be sent');
+      addToast?.('error', err.message || 'Message could not be sent');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = 'w-full h-9 px-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600';
+  const label = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="compose-title" className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+          <h2 id="compose-title" className="text-base font-semibold text-slate-900 dark:text-white">New message</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-4">
+          <div>
+            <span className={label}>Audience</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Audience">
+              {channels.map(c => {
+                const Icon = CHANNEL_META[c].icon;
+                const count = participants.filter(p => p.channels.includes(c)).length;
+                return (
+                  <button key={c} type="button" role="radio" aria-checked={channel === c} onClick={() => setChannel(c)}
+                    className={`text-left p-2.5 rounded-md border ${channel === c ? 'border-blue-700 ring-1 ring-blue-700 bg-blue-50/50 dark:bg-blue-950/30' : 'border-slate-300 dark:border-slate-700 hover:border-slate-400'}`}>
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-white"><Icon size={14} /> {CHANNEL_META[c].label}</span>
+                    <span className="block mt-0.5 text-xs text-slate-500">{count} {count === 1 ? 'member' : 'members'}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500">
+              {audience.length > 0
+                ? `Recipients: ${audience.filter(p => p.id !== me?.id).slice(0, 6).map(p => p.name).join(', ')}${audience.length > 7 ? ` and ${audience.length - 7} more` : ''}`
+                : 'No members are assigned to this audience yet.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px] gap-3">
+            <div>
+              <label htmlFor="compose-subject" className={label}>Subject</label>
+              <input id="compose-subject" ref={firstField} maxLength={300} value={subject} onChange={e => setSubject(e.target.value)} className={field} />
+            </div>
+            <div>
+              <label htmlFor="compose-priority" className={label}>Priority</label>
+              <select id="compose-priority" value={priority} onChange={e => setPriority(e.target.value as any)} className={field}>
+                <option value="Normal">Normal</option>
+                <option value="Urgent">Urgent</option>
+                <option value="Info">For information</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="compose-task" className={label}>Related task <span className="font-normal text-slate-500">(optional)</span></label>
+            <select id="compose-task" value={linkedTask} onChange={e => setLinkedTask(e.target.value)} className={field}>
+              <option value="">None</option>
+              {tasks.map(t => <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} · ` : ''}{t.title}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="compose-body" className={label}>Message</label>
+            <textarea id="compose-body" rows={6} maxLength={10000} value={body} onChange={e => setBody(e.target.value)}
+              className="w-full text-sm p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-slate-900 dark:text-white resize-y focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </div>
+
+          {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
+
+          <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+            <p className="text-xs text-slate-500">Sending as {me?.name}</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 h-9 px-4 text-sm font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800 disabled:opacity-50">
+                <Send size={14} /> {saving ? 'Sending…' : 'Send'}
               </button>
             </div>
-
-            <form onSubmit={handleCreateThread} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Audience Channel
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'client', label: 'Client / Owner', desc: 'Mark Farrugia (BOV)' },
-                    { id: 'subcontractor', label: 'Subcontractor', desc: 'Kevin Bonnici (ElectroData)' },
-                    { id: 'team', label: 'Internal Team', desc: 'Ing. Borg (Enser) / Site' },
-                  ].map(ch => (
-                    <button
-                      type="button"
-                      key={ch.id}
-                      onClick={() => setNewChannel(ch.id as any)}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        newChannel === ch.id
-                          ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-bold'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <p className="text-xs">{ch.label}</p>
-                      <p className="text-[10px] text-slate-400 font-normal">{ch.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Subject Topic *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Level 1 Cable Tray Coordination & Clearances"
-                  value={newSubject}
-                  onChange={e => setNewSubject(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Message Content *
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Type your message here..."
-                  value={newBody}
-                  onChange={e => setNewBody(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setNewModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition-colors"
-                >
-                  Post Message
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   );
 }

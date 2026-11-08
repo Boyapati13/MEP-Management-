@@ -123,195 +123,212 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
   if (loading && !towerData) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-medium text-slate-500 mt-3">Synthesizing Project Control Tower...</p>
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-medium text-slate-500 mt-3 uppercase tracking-wider">Loading Executive Telemetry...</p>
       </div>
     );
   }
 
-  if (loadError && !towerData) return <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-900"><p className="font-semibold">Command Center unavailable</p><p className="text-sm mt-1">{loadError}</p><button className="mt-3 rounded-lg bg-rose-900 px-4 py-2 text-sm text-white" onClick={loadData}>Retry</button></div>;
+  if (loadError && !towerData) return <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-rose-900"><p className="font-semibold">Executive Control Tower Unavailable</p><p className="text-sm mt-1">{loadError}</p><button className="mt-3 rounded-md bg-rose-900 px-4 py-2 text-sm text-white" onClick={loadData}>Retry</button></div>;
 
-  const radar = towerData?.radar || { present_count: 0, expected_count: 0, present_by_trade: {}, expected_by_trade: {}, present_workers: [] };
+  const radar = towerData?.radar || { present_count: 0, expected_count: 0, variance_percent: 0, present_by_trade: {}, expected_by_trade: {}, present_workers: [] };
   const attentionItems = (towerData?.attention_items || []).filter((item: any) => {
     if (activeTab === 'all') return true;
     return item.severity.toLowerCase() === activeTab;
   });
   const lookaheadTasks = lookaheadData?.tasks || [];
-  const lookaheadMetrics = lookaheadData?.metrics || { total_lookahead_tasks: 0, blocked_tasks: 0, predecessor_risk_tasks: 0 };
+  const lookaheadMetrics = lookaheadData?.metrics || { total_lookahead_tasks: 0, blocked_tasks: 0, predecessor_risk_tasks: 0, in_progress_tasks: 0 };
+  const activeBlockerCount = activeBlockers.filter(b => b.status === 'Active').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Toast Notification */}
       {toastMsg && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium flex items-center gap-2 ${
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-md shadow-lg border text-xs font-semibold flex items-center gap-2 ${
           toastMsg.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
         }`}>
-          {toastMsg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {toastMsg.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />}
           {toastMsg.text}
         </div>
       )}
 
-      {/* Control Tower Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-3xl text-white shadow-xl border border-slate-800">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+      {/* Enterprise Executive Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 px-5 py-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Operational Telemetry Active
             </span>
-            <span className="text-xs uppercase tracking-widest font-extrabold text-emerald-400">Live Control Tower</span>
-            <span className="text-xs bg-slate-800/80 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">Phase 7 &bull; v1.3</span>
+            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+              {projectId ? `SCOPE: ${projectId.toUpperCase()}` : 'SCOPE: ENTERPRISE PORTFOLIO'}
+            </span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-            Project Operations & Lookahead Command
+          <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white mt-1">
+            Executive Operations &amp; Lookahead Control Tower
           </h1>
-          <p className="text-xs text-slate-400">
-            Deterministic priority queue, live manpower radar, and 14-day trade lookahead
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Real-time field attendance verification, exception queue, critical-path lookahead schedule, and trade constraint register
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('messages')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-colors"
+          >
+            <MessageSquare size={13} /> Correspondence
+          </button>
           <button
             onClick={() => loadData()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-colors"
           >
-            <RefreshCw size={14} /> Refresh
+            <RefreshCw size={13} /> Refresh
           </button>
           <button
             onClick={() => setShowRaiseBlockerModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors"
           >
-            <ShieldAlert size={15} /> Raise Blocker
+            <ShieldAlert size={14} /> Log Site Constraint
           </button>
         </div>
       </div>
 
-      {/* ── SECTION A: LIVE MANPOWER RADAR ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl">
-              <Users size={18} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Live Site Manpower Radar</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Real-time GPS attendance punches vs. scheduled roster today</p>
-            </div>
+      {/* 6-Column Enterprise KPI Telemetry Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>Site Headcount</span>
+            <HardHat size={14} className="text-emerald-600" />
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowRosterModal(true)}
-              className="text-xs text-blue-600 hover:text-blue-700 font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
-            >
-              View Active Roster ({radar.present_count}) <ChevronRight size={14} />
+          <div className="mt-1.5 flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{radar.present_count}</span>
+            <button onClick={() => setShowRosterModal(true)} className="text-[11px] font-semibold text-blue-600 hover:underline">
+              Roster &rarr;
             </button>
           </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">Active GPS clock-ins</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Present Count */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-2xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Present on Site</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-black text-slate-900 dark:text-slate-100">{radar.present_count}</span>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                  Live Clocked In
-                </span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold">
-              <HardHat size={24} />
-            </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>Planned Allocation</span>
+            <Users size={14} className="text-blue-600" />
           </div>
-
-          {/* Expected Count */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-2xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Scheduled Today</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-black text-slate-900 dark:text-slate-100">{radar.expected_count}</span>
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full">
-                  Planned Crew
-                </span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 flex items-center justify-center font-bold">
-              <Calendar size={24} />
-            </div>
+          <div className="mt-1.5 flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{radar.expected_count}</span>
+            <span className={`text-[11px] font-semibold tabular-nums ${radar.variance_percent >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {radar.variance_percent > 0 ? `+${radar.variance_percent}%` : `${radar.variance_percent}%`}
+            </span>
           </div>
-
-          {/* Attendance Variance */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-2xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Staffing Variance</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className={`text-3xl font-black ${
-                  radar.variance_percent >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
-                }`}>
-                  {radar.variance_percent > 0 ? `+${radar.variance_percent}%` : `${radar.variance_percent}%`}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                  {radar.variance_percent >= 0 ? 'Adequate Coverage' : 'Understaffed'}
-                </span>
-              </div>
-            </div>
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold ${
-              radar.variance_percent >= 0 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
-            }`}>
-              <Activity size={24} />
-            </div>
-          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">Scheduled crew today</p>
         </div>
 
-        {/* Trade Distribution Chips */}
-        <div>
-          <p className="text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Live Headcount by Trade</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.keys(radar.present_by_trade).length === 0 ? (
-              <span className="text-xs text-slate-400 dark:text-slate-400 italic">No workers currently clocked in.</span>
-            ) : (
-              Object.entries(radar.present_by_trade).map(([trade, count]) => {
-                const expected = radar.expected_by_trade[trade] || 0;
-                return (
-                  <div
-                    key={trade}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-blue-600" />
-                    <span>{trade}</span>
-                    <span className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 font-black text-slate-900 dark:text-slate-100">
-                      {count as number} / {expected}
-                    </span>
-                  </div>
-                );
-              })
-            )}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>{lookaheadDays}d Lookahead</span>
+            <Calendar size={14} className="text-indigo-600" />
           </div>
+          <div className="mt-1.5 flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{lookaheadMetrics.total_lookahead_tasks}</span>
+            <span className="text-[11px] font-semibold text-emerald-600 tabular-nums">{lookaheadMetrics.in_progress_tasks || 0} active</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">Scheduled WBS activities</p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>Blocked Tasks</span>
+            <ShieldAlert size={14} className="text-rose-600" />
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between">
+            <span className={`text-2xl font-bold tabular-nums ${lookaheadMetrics.blocked_tasks > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+              {lookaheadMetrics.blocked_tasks}
+            </span>
+            <span className="text-[11px] font-semibold text-slate-500 tabular-nums">{activeBlockerCount} open</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">Work-stoppage constraints</p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>Predecessor Risk</span>
+            <AlertTriangle size={14} className="text-amber-600" />
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between">
+            <span className={`text-2xl font-bold tabular-nums ${lookaheadMetrics.predecessor_risk_tasks > 0 ? 'text-amber-600' : 'text-slate-900 dark:text-white'}`}>
+              {lookaheadMetrics.predecessor_risk_tasks}
+            </span>
+            <button onClick={() => navigate('tasks')} className="text-[11px] font-semibold text-blue-600 hover:underline">
+              WBS &rarr;
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">Cascading logic warnings</p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>Action Queue</span>
+            <Activity size={14} className="text-blue-600" />
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{(towerData?.attention_items || []).length}</span>
+            <span className="text-[11px] font-semibold text-rose-600 tabular-nums">
+              {(towerData?.attention_items || []).filter((i: any) => i.severity === 'CRITICAL').length} critical
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">Pending engineering review</p>
         </div>
       </div>
 
-      {/* ── SECTION B: DETERMINISTIC ATTENTION ENGINE ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+      {/* Trade Headcount Allocation Strip */}
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Trade Allocation (Actual / Planned):</span>
+          {Object.keys(radar.present_by_trade).length === 0 ? (
+            <span className="text-xs text-slate-500">No active trade attendance punches recorded for current shift.</span>
+          ) : (
+            Object.entries(radar.present_by_trade).map(([trade, count]) => {
+              const expected = radar.expected_by_trade[trade] || 0;
+              return (
+                <div
+                  key={trade}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                  <span>{trade}</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white tabular-nums">
+                    {count as number}/{expected}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <button
+          onClick={() => setShowRosterModal(true)}
+          className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+        >
+          Inspect Shift Roster ({radar.present_count}) <ChevronRight size={13} />
+        </button>
+      </div>
+
+      {/* ── SECTION B: EXCEPTION & ACTION REGISTER ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
-              <Zap size={18} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Deterministic Attention Stream</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Prioritized operational blockers requiring immediate engineering action</p>
-            </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Engineering Exception &amp; Action Queue</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Prioritized operational constraints, overdue approvals, and site directives requiring disposition</p>
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-md">
             {(['all', 'critical', 'high', 'medium'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg capitalize transition-all ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded capitalize transition-all ${
                   activeTab === tab
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -322,12 +339,9 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
         </div>
 
         {attentionItems.length === 0 ? (
-          <div className="py-10 text-center space-y-2">
-            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
-              <Check size={24} />
-            </div>
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Clear Skies in Attention Engine</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">No active blockers, urgent instructions, or overdue approvals in this filter</p>
+          <div className="py-6 text-center">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">No Open Exceptions in Selected Filter</p>
+            <p className="text-xs text-slate-500 mt-0.5">All tracked blockers, site instructions, and approvals are within normal operating thresholds.</p>
           </div>
         ) : (
           <div className="space-y-2.5">

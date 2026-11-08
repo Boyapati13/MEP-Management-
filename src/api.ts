@@ -399,8 +399,12 @@ export const selectionsApi = {
     api.post<any>(`/api/projects/${projectId}/selections/seed-defaults${force ? '?force=true' : ''}`, {}),
 };
 
-// Buildertrend Project Messages & Communication Hub API
+// Project Messages API (role-scoped channels, per-user read receipts)
 export const messagesApi = {
+  participants: (projectId: string) =>
+    api.get<{ me: { id: string; name: string; role: string }; channels: string[]; participants: { id: string; name: string; role: string; company?: string; channels: string[] }[] }>(
+      `/api/projects/${encodeURIComponent(projectId)}/messages/participants`
+    ),
   list: (projectId: string, params?: { channel?: string; search?: string; linked_item_type?: string }) => {
     const sp = new URLSearchParams();
     if (params?.channel) sp.set('channel', params.channel);

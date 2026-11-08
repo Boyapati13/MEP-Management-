@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Building2, LogOut, Sparkles, ChevronRight, Calendar, DollarSign, ShieldCheck,
+  Building2, LogOut, Sparkles, ChevronRight, ChevronDown, Calendar, DollarSign, ShieldCheck,
   Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers, Palette, Check,
-  RotateCcw, Sliders, MessageSquare
+  RotateCcw, Sliders, MessageSquare, Search, Command, ArrowUpRight
 } from 'lucide-react';
 import {
   DOMAINS, ROUTE_ITEMS, NavigationDomain
@@ -37,22 +37,30 @@ export function InternalLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [appearanceModalOpen, setAppearanceModalOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({
+    [activeDomain]: true,
+    dashboard: true,
+    delivery: true,
+    commercial: true,
+  });
 
-  // Active Appearance Settings (Persisted in localStorage)
+  // Active Appearance Settings — defaults to clean neutral enterprise Slate with grid OFF
   const [workspaceTheme, setWorkspaceTheme] = useState<AppearanceSettings['theme']>(() => {
     try {
       const saved = localStorage.getItem('mep-workspace-theme');
-      return (saved as AppearanceSettings['theme']) || 'blueprint';
+      return (saved as AppearanceSettings['theme']) || 'slate';
     } catch {
-      return 'blueprint';
+      return 'slate';
     }
   });
 
   const [gridEnabled, setGridEnabled] = useState(() => {
     try {
-      return localStorage.getItem('mep-workspace-grid') !== 'off';
+      return localStorage.getItem('mep-workspace-grid') === 'on';
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -74,7 +82,6 @@ export function InternalLayout({
     }
   });
 
-  // Global document & DOM synchronization for themes, dark class, and grids
   useEffect(() => {
     if (workspaceTheme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -91,14 +98,30 @@ export function InternalLayout({
     document.documentElement.setAttribute('data-workspace-density', workspaceDensity);
   }, [workspaceTheme, gridEnabled, gridStrength, workspaceDensity]);
 
-  // Sidebar Inline Draft State (Allows users to change options and explicitly click APPLY)
+  useEffect(() => {
+    setExpandedDomains(prev => ({ ...prev, [activeDomain]: true }));
+  }, [activeDomain]);
+
+  // Global Ctrl+K shortcut for Enterprise Command Palette
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandOpen(prev => !prev);
+      } else if (e.key === 'Escape') {
+        setCommandOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const [sidebarDraftTheme, setSidebarDraftTheme] = useState<AppearanceSettings['theme']>(workspaceTheme);
   const [sidebarDraftGrid, setSidebarDraftGrid] = useState(gridEnabled);
   const [sidebarDraftStrength, setSidebarDraftStrength] = useState<AppearanceSettings['gridStrength']>(gridStrength);
   const [sidebarDraftDensity, setSidebarDraftDensity] = useState<AppearanceSettings['density']>(workspaceDensity);
   const [sidebarAppliedFeedback, setSidebarAppliedFeedback] = useState(false);
 
-  // Keep sidebar drafts synced with active settings
   useEffect(() => {
     setSidebarDraftTheme(workspaceTheme);
     setSidebarDraftGrid(gridEnabled);
@@ -106,7 +129,6 @@ export function InternalLayout({
     setSidebarDraftDensity(workspaceDensity);
   }, [workspaceTheme, gridEnabled, gridStrength, workspaceDensity, appearanceOpen]);
 
-  // Handle explicit sidebar Apply button
   const handleSidebarApply = () => {
     setWorkspaceTheme(sidebarDraftTheme);
     setGridEnabled(sidebarDraftGrid);
@@ -118,20 +140,15 @@ export function InternalLayout({
       localStorage.setItem('mep-workspace-grid', sidebarDraftGrid ? 'on' : 'off');
       localStorage.setItem('mep-workspace-grid-strength', sidebarDraftStrength);
       localStorage.setItem('mep-workspace-density', sidebarDraftDensity);
-    } catch {
-      /* browser storage may be unavailable */
-    }
+    } catch {}
 
     setSidebarAppliedFeedback(true);
-    setTimeout(() => {
-      setSidebarAppliedFeedback(false);
-    }, 2000);
+    setTimeout(() => setSidebarAppliedFeedback(false), 2000);
   };
 
-  // Handle sidebar Reset button
   const handleSidebarReset = () => {
-    const defaultTheme: AppearanceSettings['theme'] = 'blueprint';
-    const defaultGrid = true;
+    const defaultTheme: AppearanceSettings['theme'] = 'slate';
+    const defaultGrid = false;
     const defaultStrength: AppearanceSettings['gridStrength'] = 'subtle';
     const defaultDensity: AppearanceSettings['density'] = 'comfortable';
 
@@ -147,20 +164,15 @@ export function InternalLayout({
 
     try {
       localStorage.setItem('mep-workspace-theme', defaultTheme);
-      localStorage.setItem('mep-workspace-grid', 'on');
+      localStorage.setItem('mep-workspace-grid', 'off');
       localStorage.setItem('mep-workspace-grid-strength', defaultStrength);
       localStorage.setItem('mep-workspace-density', defaultDensity);
-    } catch {
-      /* browser storage may be unavailable */
-    }
+    } catch {}
 
     setSidebarAppliedFeedback(true);
-    setTimeout(() => {
-      setSidebarAppliedFeedback(false);
-    }, 2000);
+    setTimeout(() => setSidebarAppliedFeedback(false), 2000);
   };
 
-  // Handle Modal Apply
   const handleModalApply = (newSettings: AppearanceSettings) => {
     setWorkspaceTheme(newSettings.theme);
     setGridEnabled(newSettings.gridEnabled);
@@ -172,14 +184,7 @@ export function InternalLayout({
       localStorage.setItem('mep-workspace-grid', newSettings.gridEnabled ? 'on' : 'off');
       localStorage.setItem('mep-workspace-grid-strength', newSettings.gridStrength);
       localStorage.setItem('mep-workspace-density', newSettings.density);
-    } catch {
-      /* browser storage may be unavailable */
-    }
-  };
-
-  // Handle Modal Reset
-  const handleModalReset = () => {
-    handleSidebarReset();
+    } catch {}
   };
 
   const role = user?.role || 'Worker';
@@ -191,7 +196,24 @@ export function InternalLayout({
       r.domain === activeDomain &&
       (!r.allowedRoles || r.allowedRoles.includes(role))
   );
+  const allAccessibleRoutes = useMemo(() => {
+    return ROUTE_ITEMS.filter(r => !r.allowedRoles || r.allowedRoles.includes(role)).map(r => {
+      const dom = DOMAINS.find(d => d.id === r.domain);
+      return { ...r, domainLabel: dom?.label || r.domain };
+    });
+  }, [role]);
+
+  const filteredCommandRoutes = useMemo(() => {
+    if (!commandQuery.trim()) return allAccessibleRoutes;
+    const q = commandQuery.toLowerCase();
+    return allAccessibleRoutes.filter(
+      r => r.label.toLowerCase().includes(q) || r.domainLabel.toLowerCase().includes(q) || r.id.toLowerCase().includes(q)
+    );
+  }, [allAccessibleRoutes, commandQuery]);
+
   const activeProject = selectedProject ? projects.find((p: any) => p.id === selectedProject) || null : null;
+  const activeDomainObj = visibleDomains.find((d) => d.id === activeDomain);
+  const activeRouteObj = ROUTE_ITEMS.find((r) => r.id === activeRoute);
 
   const handleDomainSelect = (domainId: NavigationDomain, defaultRoute: string) => {
     const routes = ROUTE_ITEMS.filter(
@@ -199,8 +221,8 @@ export function InternalLayout({
         r.domain === domainId &&
         (!r.allowedRoles || r.allowedRoles.includes(role))
     );
+    setExpandedDomains(prev => ({ ...prev, [domainId]: !prev[domainId] }));
     onNavigate(domainId, routes[0]?.id || defaultRoute);
-    setMobileMenuOpen(false);
   };
 
   return (
@@ -212,57 +234,63 @@ export function InternalLayout({
       data-workspace-grid={gridEnabled ? gridStrength : 'off'}
       data-workspace-density={workspaceDensity}
     >
-      {/* Mobile Backdrop Overlay */}
+      {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-950/60 z-40 lg:hidden transition-opacity"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Deep Slate Architectural Sidebar (Slide-over drawer on mobile/tablet, permanent on laptop/desktop) */}
+      {/* Enterprise Left Navigation Rail */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-[#0f172a] border-r border-slate-800 flex flex-col text-slate-200 shadow-2xl transition-transform duration-300 ease-in-out lg:static lg:w-64 xl:w-72 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] bg-[#0b1120] border-r border-slate-800/90 flex flex-col text-slate-300 transition-transform duration-200 ease-out lg:static lg:w-64 lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-900/30 flex-shrink-0">
-              <Building2 size={20} />
+        {/* Brand Identity Header */}
+        <div className="h-14 px-4 border-b border-slate-800/90 flex items-center justify-between gap-2 bg-[#090d16]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center flex-shrink-0 font-bold shadow-xs">
+              <Building2 size={17} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <div className="font-bold text-white leading-tight tracking-tight truncate">MEP FieldHub</div>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30 flex-shrink-0">
-                  v1.5.0
+                <span className="font-semibold text-sm text-white tracking-tight truncate">MEP FieldHub</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                  ERP
                 </span>
               </div>
-              <div className="text-[11px] text-slate-400 truncate">Construction Operations</div>
+              <div className="text-[10px] text-slate-400 truncate">Engineering &amp; Construction</div>
             </div>
           </div>
-          {/* Close button on mobile/tablet */}
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="lg:hidden p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800"
             aria-label="Close sidebar"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Project Switcher */}
-        <div className="p-3 border-b border-slate-800/80 bg-slate-900/50">
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-400/90 mb-1.5">
-            Active Job Context
-          </label>
+        {/* Active Project Selector */}
+        <div className="p-3 border-b border-slate-800/80 bg-slate-900/40">
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="sidebar-project-select" className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Project Context
+            </label>
+            {activeProject?.code && (
+              <span className="text-[10px] font-mono text-blue-400">{activeProject.code}</span>
+            )}
+          </div>
           <select
+            id="sidebar-project-select"
             value={selectedProject}
             onChange={(e) => onSelectProject(e.target.value)}
-            className="w-full text-xs font-semibold border border-slate-700 rounded-xl px-2.5 py-2.5 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 touch-manipulation"
+            className="w-full text-xs font-medium border border-slate-700/90 rounded px-2.5 py-2 bg-[#090d16] text-slate-100 focus:outline-none focus:border-blue-500"
           >
-            <option value="">All Assigned Projects</option>
+            <option value="">All Assigned Projects (Portfolio)</option>
             {projects.map((p: any) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -271,100 +299,130 @@ export function InternalLayout({
           </select>
         </div>
 
-        {/* Domain Navigation */}
-        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
-          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            ERP Operational Pillars
-          </div>
+        {/* Hierarchical Module Tree Navigation */}
+        <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto" aria-label="Primary Navigation">
           {visibleDomains.map((domain: any) => {
             const Icon = domain.icon;
-            const isActive = domain.id === activeDomain;
+            const isDomainActive = domain.id === activeDomain;
+            const isExpanded = Boolean(expandedDomains[domain.id]);
+            const domainRoutes = ROUTE_ITEMS.filter(
+              (r) => r.domain === domain.id && (!r.allowedRoles || r.allowedRoles.includes(role))
+            );
+
             return (
-              <button
-                key={domain.id}
-                onClick={() => handleDomainSelect(domain.id, domain.defaultRoute)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all touch-manipulation ${
-                  isActive
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Icon size={18} className="flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold leading-tight truncate">{domain.label}</div>
-                    <div className={`text-[10px] truncate ${isActive ? 'text-amber-100' : 'text-slate-500'}`}>
-                      {domain.pillar || 'Operational Scope'}
-                    </div>
+              <div key={domain.id} className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleDomainSelect(domain.id, domain.defaultRoute)}
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded text-left text-xs font-semibold transition-colors ${
+                    isDomainActive
+                      ? 'bg-slate-800/90 text-white'
+                      : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon size={15} className={isDomainActive ? 'text-blue-400 flex-shrink-0' : 'text-slate-500 flex-shrink-0'} />
+                    <span className="truncate">{domain.label}</span>
                   </div>
-                </div>
-                <ChevronRight size={14} className={isActive ? 'text-amber-100 flex-shrink-0' : 'text-slate-600 flex-shrink-0'} />
-              </button>
+                  {isExpanded ? (
+                    <ChevronDown size={13} className="text-slate-500 flex-shrink-0" />
+                  ) : (
+                    <ChevronRight size={13} className="text-slate-500 flex-shrink-0" />
+                  )}
+                </button>
+
+                {isExpanded && domainRoutes.length > 0 && (
+                  <div className="ml-3 pl-2.5 border-l border-slate-800 space-y-0.5 py-0.5">
+                    {domainRoutes.map((route) => {
+                      const RIcon = route.icon;
+                      const isRouteActive = activeRoute === route.id;
+                      return (
+                        <button
+                          key={route.id}
+                          type="button"
+                          onClick={() => {
+                            onNavigate(domain.id, route.id);
+                            setMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left text-xs transition-colors ${
+                            isRouteActive
+                              ? 'bg-blue-600/15 text-blue-300 font-semibold border-l-2 border-blue-500 -ml-[1px]'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <RIcon size={13} className={isRouteActive ? 'text-blue-400 flex-shrink-0' : 'text-slate-500 flex-shrink-0'} />
+                          <span className="truncate">{route.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
 
-        {/* Appearance Section in Sidebar */}
-        <div className="px-3 pb-2 border-t border-slate-800 pt-2">
+        {/* Workspace Display Preferences */}
+        <div className="px-2 py-2 border-t border-slate-800/90">
           <button
             type="button"
             onClick={() => setAppearanceOpen(!appearanceOpen)}
             aria-expanded={appearanceOpen}
             aria-controls="workspace-appearance"
-            className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            className="w-full flex items-center justify-between rounded px-2.5 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Palette size={17} className="text-amber-400" />
-              <span>Appearance</span>
+              <Sliders size={14} className="text-slate-400" />
+              <span>Display &amp; Density</span>
             </span>
             <ChevronRight
-              size={14}
-              className={`transition-transform duration-200 ${appearanceOpen ? 'rotate-90' : ''}`}
+              size={13}
+              className={`transition-transform duration-150 ${appearanceOpen ? 'rotate-90' : ''}`}
             />
           </button>
 
           {appearanceOpen && (
-            <div id="workspace-appearance" className="mt-2 p-3 bg-slate-800/90 rounded-xl space-y-3 border border-slate-700/60 shadow-inner">
+            <div id="workspace-appearance" className="mt-1.5 p-2.5 bg-[#090d16] rounded border border-slate-800 space-y-2.5">
               <div>
-                <label htmlFor="workspace-theme" className="block text-[11px] font-medium text-slate-200 mb-1">
-                  Graph paper colour
+                <label htmlFor="workspace-theme" className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Color Theme
                 </label>
                 <select
                   id="workspace-theme"
                   value={sidebarDraftTheme}
                   onChange={(e) => setSidebarDraftTheme(e.target.value as any)}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full rounded bg-slate-900 border border-slate-700 p-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                 >
-                  <option value="blueprint">Blueprint Blue</option>
-                  <option value="slate">Slate Grey</option>
-                  <option value="sage">Sage Green</option>
-                  <option value="sand">Warm Sand</option>
-                  <option value="dark">Dark Obsidian</option>
+                  <option value="slate">Enterprise Neutral (Light)</option>
+                  <option value="dark">Obsidian Slate (Dark)</option>
+                  <option value="blueprint">Technical Blueprint</option>
+                  <option value="sage">Architectural Sage</option>
+                  <option value="sand">Warm Stone</option>
                 </select>
               </div>
 
-              <div className="flex items-center justify-between pt-0.5">
-                <label className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={sidebarDraftGrid}
                     onChange={(e) => setSidebarDraftGrid(e.target.checked)}
-                    className="rounded border-slate-600 text-amber-600 focus:ring-0"
+                    className="rounded border-slate-600 text-blue-600 focus:ring-0"
                   />
-                  <span>Show background grid</span>
+                  <span>CAD Engineering Grid</span>
                 </label>
               </div>
 
               {sidebarDraftGrid && (
                 <div>
-                  <label htmlFor="workspace-grid-strength" className="block text-[11px] font-medium text-slate-200 mb-1">
-                    Grid intensity
+                  <label htmlFor="workspace-grid-strength" className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Grid Opacity
                   </label>
                   <select
                     id="workspace-grid-strength"
                     value={sidebarDraftStrength}
                     onChange={(e) => setSidebarDraftStrength(e.target.value as any)}
-                    className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full rounded bg-slate-900 border border-slate-700 p-1.5 text-xs text-white focus:outline-none"
                   >
                     <option value="subtle">Subtle (25%)</option>
                     <option value="standard">Standard (50%)</option>
@@ -374,187 +432,187 @@ export function InternalLayout({
               )}
 
               <div>
-                <label htmlFor="workspace-density" className="block text-[11px] font-medium text-slate-200 mb-1">
-                  Display Density
+                <label htmlFor="workspace-density" className="block text-[11px] font-medium text-slate-300 mb-1">
+                  Table &amp; Layout Density
                 </label>
                 <select
                   id="workspace-density"
                   value={sidebarDraftDensity}
                   onChange={(e) => setSidebarDraftDensity(e.target.value as any)}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-600 p-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  className="w-full rounded bg-slate-900 border border-slate-700 p-1.5 text-xs text-white focus:outline-none"
                 >
-                  <option value="comfortable">Comfortable (Standard)</option>
-                  <option value="compact">Compact (Data Heavy)</option>
+                  <option value="comfortable">Standard Density</option>
+                  <option value="compact">Compact (High-Density Tables)</option>
                 </select>
               </div>
 
-              {/* THE APPLY BUTTON IN SIDEBAR */}
-              <div className="pt-2 border-t border-slate-700/80 space-y-2">
+              <div className="pt-2 border-t border-slate-800 space-y-1.5">
                 <button
                   type="button"
                   onClick={handleSidebarApply}
-                  className={`w-full py-2 px-3 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 shadow-md transition-all touch-manipulation ${
-                    sidebarAppliedFeedback
-                      ? 'bg-emerald-600 ring-2 ring-emerald-400'
-                      : 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800'
+                  className={`w-full py-1.5 px-3 rounded text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-colors ${
+                    sidebarAppliedFeedback ? 'bg-emerald-600' : 'bg-blue-600 hover:bg-blue-700'
                   }`}
                 >
-                  <Check size={14} strokeWidth={2.5} />
-                  <span>{sidebarAppliedFeedback ? 'Applied & Saved!' : 'Apply Appearance'}</span>
+                  <Check size={13} />
+                  <span>{sidebarAppliedFeedback ? 'Preferences Applied' : 'Apply Preferences'}</span>
                 </button>
-
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={handleSidebarReset}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center justify-center gap-1 transition-colors"
-                    title="Reset to default settings"
+                    className="flex-1 py-1 px-2 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-[11px] flex items-center justify-center gap-1"
                   >
-                    <RotateCcw size={12} />
+                    <RotateCcw size={11} />
                     <span>Reset</span>
                   </button>
-
                   <button
                     type="button"
                     onClick={() => {
                       setAppearanceOpen(false);
                       setAppearanceModalOpen(true);
                     }}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors"
-                    title="Open full customizer dialog"
+                    className="flex-1 py-1 px-2 rounded bg-slate-900 hover:bg-slate-800 text-blue-400 hover:text-blue-300 text-[11px] flex items-center justify-center gap-1"
                   >
-                    <Sliders size={12} />
-                    <span>Customizer ↗</span>
+                    <Sliders size={11} />
+                    <span>Advanced</span>
                   </button>
                 </div>
               </div>
-
-              <p className="text-[10px] text-slate-400 text-center">
-                Saved on this device.
-              </p>
             </div>
           )}
         </div>
 
-        {/* User Identity Footer */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-xs font-bold text-white truncate">{user?.name || user?.username}</div>
-            <div className="text-[11px] text-amber-400 font-medium truncate">{role}</div>
+        {/* User Identity & Session Footer */}
+        <div className="p-3 border-t border-slate-800/90 bg-[#090d16] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+              {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-slate-100 truncate">{user?.name || user?.username}</div>
+              <div className="text-[10px] text-slate-400 truncate">{role}</div>
+            </div>
           </div>
           <button
             onClick={logout}
-            className="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors touch-manipulation"
+            className="p-1.5 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
             title="Sign out"
             aria-label="Sign out"
           >
-            <LogOut size={16} />
+            <LogOut size={15} />
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Header / Job Context Ribbon */}
-        <header className="bg-white/95 backdrop-blur border-b border-[#e5e0d5] px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 sticky top-0 z-20 shadow-xs">
-          <div className="flex flex-col gap-2.5">
-            {/* Top row: Hamburger (mobile/tablet), Title, Project & Assistant */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                {/* Mobile / Tablet Menu Button */}
+        {/* Enterprise Top Header & Telemetry Bar */}
+        <header className="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 px-3 sm:px-5 py-2 sticky top-0 z-20">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              {/* Left: Hamburger + Breadcrumb + Active Project Pill */}
+              <div className="flex items-center gap-2.5 min-w-0">
                 <button
                   onClick={() => setMobileMenuOpen(true)}
-                  className="lg:hidden p-2 rounded-xl text-slate-700 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 transition-colors touch-manipulation flex-shrink-0"
+                  className="lg:hidden p-1.5 rounded text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex-shrink-0"
                   aria-label="Open navigation menu"
                 >
-                  <Menu size={20} />
+                  <Menu size={18} />
                 </button>
 
-                {/* Domain & Project Title */}
-                <div className="min-w-0 flex items-center gap-2">
-                  <span className="font-bold text-slate-900 text-sm sm:text-base truncate">
-                    {visibleDomains.find((d) => d.id === activeDomain)?.label || 'Overview'}
+                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs min-w-0">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
+                    {activeDomainObj?.label || 'Operations'}
                   </span>
-                  {activeProject && (
-                    <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-0.5 truncate max-w-[180px] md:max-w-[280px]">
-                      <ShieldCheck size={12} className="text-amber-600 flex-shrink-0" />
+                  <ChevronRight size={13} className="text-slate-400 hidden sm:inline flex-shrink-0" />
+                  <span className="font-semibold text-slate-900 dark:text-white text-sm truncate">
+                    {activeRouteObj?.label || 'Dashboard'}
+                  </span>
+                </nav>
+
+                {activeProject && (
+                  <div className="hidden md:flex items-center gap-2 ml-2 pl-2.5 border-l border-slate-200 dark:border-slate-700 text-xs">
+                    <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 truncate max-w-[260px]">
+                      <ShieldCheck size={12} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
                       <span className="truncate">{activeProject.name}</span>
                     </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Right actions: Project Budget, Appearance Quick Button & AI Copilot */}
-              <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
-                {activeProject && (
-                  <div className="hidden xl:flex items-center gap-3 px-3 py-1 rounded-xl bg-[#f6f4ee] border border-[#e5e0d5] text-xs">
-                    {activeProject.budget !== undefined && (
-                      <span className="font-mono font-semibold text-emerald-800 flex items-center gap-0.5">
-                        <DollarSign size={12} />
-                        {Number(activeProject.budget || 0).toLocaleString()}
-                      </span>
-                    )}
-                    {activeProject.end_date && (
-                      <span className="font-mono text-slate-500 flex items-center gap-1">
-                        <Calendar size={12} />
-                        Target: {activeProject.end_date}
+                    {activeProject.budget !== undefined && Number(activeProject.budget) > 0 && (
+                      <span className="hidden xl:inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5">
+                        €{Number(activeProject.budget).toLocaleString()}
                       </span>
                     )}
                   </div>
                 )}
+              </div>
 
-                {/* Quick Messages Button in Header */}
+              {/* Right: Quick Module Jump (Ctrl+K), Correspondence, Display, Copilot */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCommandOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-2 h-8 px-2.5 rounded text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
+                  title="Jump to module (Ctrl+K)"
+                >
+                  <Search size={13} />
+                  <span>Go to module...</span>
+                  <kbd className="text-[10px] font-mono px-1.5 py-0.2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-500">
+                    Ctrl K
+                  </kbd>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => onNavigate('delivery', 'messages')}
-                  className="relative inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-stone-100 dark:bg-slate-800 hover:bg-stone-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-stone-200 dark:border-slate-700 transition-colors touch-manipulation"
-                  title="Project Messages & Discussions"
-                  aria-label="Project Messages & Discussions"
+                  className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-medium border transition-colors ${
+                    activeRoute === 'messages'
+                      ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                      : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  }`}
+                  title="Project Messages & Correspondence"
+                  aria-label="Project Messages & Correspondence"
                 >
-                  <MessageSquare size={14} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                  <span className="hidden md:inline">Messages</span>
-                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                  <MessageSquare size={13} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                  <span className="hidden md:inline">Correspondence</span>
                 </button>
 
-                {/* Quick Appearance Customizer Button in Header */}
                 <button
                   type="button"
                   onClick={() => setAppearanceModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-slate-700 border border-stone-200 transition-colors touch-manipulation"
-                  title="Customize Workspace Appearance & Theme"
-                  aria-label="Customize Workspace Appearance & Theme"
+                  className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs font-medium bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors"
+                  title="Display & Theme Preferences"
+                  aria-label="Display & Theme Preferences"
                 >
-                  <Palette size={14} className="text-amber-600 flex-shrink-0" />
-                  <span className="hidden md:inline">Appearance</span>
+                  <Palette size={13} className="text-slate-500 flex-shrink-0" />
+                  <span className="hidden md:inline">Display</span>
                 </button>
 
                 {onOpenAssistant && (
                   <button
                     onClick={onOpenAssistant}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800 shadow-xs transition-colors touch-manipulation"
-                    title="Open MEP AI Copilot"
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded text-xs font-semibold bg-slate-900 dark:bg-blue-600 text-white hover:bg-slate-800 dark:hover:bg-blue-700 transition-colors"
+                    title="Open MEP Engineering Copilot"
                   >
-                    <Sparkles size={14} className="flex-shrink-0" />
-                    <span className="hidden sm:inline">MEP AI Copilot</span>
-                    <span className="sm:hidden">Copilot</span>
+                    <Sparkles size={13} className="flex-shrink-0" />
+                    <span className="hidden sm:inline">Engineering AI</span>
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Subroute Navigation Tabs - Horizontal Scroll on small screens */}
+            {/* Domain Sub-Module Tab Strip */}
             {subRoutes.length > 0 && (
-              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5 -mx-1 px-1">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1 border-t border-slate-100 dark:border-slate-800/80">
                 {subRoutes.map((r) => {
                   const active = r.id === activeRoute;
                   return (
                     <button
                       key={r.id}
                       onClick={() => onNavigate(activeDomain, r.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all touch-manipulation flex-shrink-0 ${
+                      className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
                         active
-                          ? 'bg-[#0f172a] text-white shadow-xs'
-                          : 'text-slate-600 hover:bg-stone-100 hover:text-slate-900 bg-stone-50/50'
+                          ? 'bg-slate-900 dark:bg-blue-600 text-white font-semibold'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
                       {r.label}
@@ -566,64 +624,114 @@ export function InternalLayout({
           </div>
         </header>
 
-        {/* Content Container with responsive padding and mobile bottom-bar buffer */}
-        <main className="flex-1 p-3 sm:p-4 md:p-6 pb-20 sm:pb-6 overflow-y-auto">
+        {/* Main Workspace Container */}
+        <main className="flex-1 p-3 sm:p-5 pb-20 sm:pb-6 overflow-y-auto">
           {children}
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Dock (Phones < 640px) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-800 text-slate-300 flex items-center justify-around py-1.5 px-2 shadow-2xl">
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#090d16] border-t border-slate-800 text-slate-300 flex items-center justify-around py-1.5 px-2">
         <button
-          onClick={() => handleDomainSelect('dashboard', 'dashboard')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium touch-manipulation ${
-            activeDomain === 'dashboard' ? 'text-amber-400 font-bold' : 'text-slate-400'
+          onClick={() => onNavigate('dashboard', 'dashboard')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded text-[10px] font-medium ${
+            activeDomain === 'dashboard' ? 'text-blue-400 font-semibold' : 'text-slate-400'
           }`}
         >
-          <LayoutDashboard size={18} />
-          <span>Dashboard</span>
+          <LayoutDashboard size={17} />
+          <span>Overview</span>
         </button>
 
         <button
-          onClick={() => handleDomainSelect('delivery', 'tasks')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium touch-manipulation ${
-            activeDomain === 'delivery' ? 'text-amber-400 font-bold' : 'text-slate-400'
+          onClick={() => onNavigate('delivery', 'tasks')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded text-[10px] font-medium ${
+            activeDomain === 'delivery' ? 'text-blue-400 font-semibold' : 'text-slate-400'
           }`}
         >
-          <Truck size={18} />
+          <Truck size={17} />
           <span>Delivery</span>
         </button>
 
         <button
-          onClick={() => handleDomainSelect('delivery', 'workforce')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium touch-manipulation ${
-            activeDomain === 'delivery' && activeRoute === 'workforce' ? 'text-amber-400 font-bold' : 'text-slate-400'
+          onClick={() => onNavigate('commercial', 'boq')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded text-[10px] font-medium ${
+            activeDomain === 'commercial' ? 'text-blue-400 font-semibold' : 'text-slate-400'
           }`}
         >
-          <HardHat size={18} />
-          <span>Site</span>
-        </button>
-
-        <button
-          onClick={() => handleDomainSelect('commercial', 'boq')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium touch-manipulation ${
-            activeDomain === 'commercial' ? 'text-amber-400 font-bold' : 'text-slate-400'
-          }`}
-        >
-          <Receipt size={18} />
-          <span>Cost/BOQ</span>
+          <Receipt size={17} />
+          <span>Commercial</span>
         </button>
 
         <button
           onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium text-slate-400 touch-manipulation"
+          className="flex flex-col items-center gap-0.5 py-1 px-2 rounded text-[10px] font-medium text-slate-400"
         >
-          <Menu size={18} />
-          <span>More</span>
+          <Menu size={17} />
+          <span>Modules</span>
         </button>
       </nav>
 
-      {/* Full Dedicated Appearance & Drafting Theme Modal */}
+      {/* Enterprise Command Palette Modal (Ctrl+K) */}
+      {commandOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-[1px] flex items-start justify-center pt-20 p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setCommandOpen(false); }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Module Command Palette"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-800">
+              <Search size={15} className="text-slate-400" />
+              <input
+                type="text"
+                autoFocus
+                value={commandQuery}
+                onChange={(e) => setCommandQuery(e.target.value)}
+                placeholder="Jump to module (e.g. BOQ, Gantt, Submittals, Messages, Payroll)..."
+                className="w-full text-sm bg-transparent text-slate-900 dark:text-white focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setCommandOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700"
+              >
+                ESC
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredCommandRoutes.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onNavigate(item.domain, item.id);
+                      setCommandOpen(false);
+                      setCommandQuery('');
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon size={15} className="text-slate-500 dark:text-slate-400" />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900 dark:text-white">{item.label}</p>
+                        <p className="text-[10px] text-slate-500">{item.domainLabel}</p>
+                      </div>
+                    </div>
+                    <ArrowUpRight size={13} className="text-slate-400" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Display & Theme Preferences Modal */}
       <AppearanceModal
         isOpen={appearanceModalOpen}
         onClose={() => setAppearanceModalOpen(false)}
@@ -634,7 +742,7 @@ export function InternalLayout({
           density: workspaceDensity,
         }}
         onApply={handleModalApply}
-        onReset={handleModalReset}
+        onReset={handleSidebarReset}
       />
     </div>
   );
