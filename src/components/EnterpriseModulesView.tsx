@@ -84,12 +84,14 @@ export const EnterpriseModulesView: React.FC<EnterpriseModuleProps> = ({
     case 'procurement':
       return <ProcurementWorkspace selectedProject={selectedProject} />;
     case 'documents':
+    case 'drawings':
       return (
         <DocumentsAndSetupExtractionWorkspace
           selectedProject={selectedProject}
           activeProject={activeProject}
           user={user}
           onProjectUpdated={onProjectUpdated}
+          initialCategory={page === 'drawings' ? 'Drawings' : 'All'}
         />
       );
     case 'risks':
@@ -1541,7 +1543,8 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   activeProject: any;
   user: any;
   onProjectUpdated?: () => void;
-}> = ({ selectedProject, activeProject, user, onProjectUpdated }) => {
+  initialCategory?: string;
+}> = ({ selectedProject, activeProject, user, onProjectUpdated, initialCategory = 'All' }) => {
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
@@ -1551,20 +1554,33 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   const [showContractorModal, setShowContractorModal] = useState(false);
   const [selectedDrawing, setSelectedDrawing] = useState<any | null>(null);
   const [drawingZoom, setDrawingZoom] = useState(1);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('All');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>(initialCategory);
+
+  useEffect(() => {
+    setActiveCategoryFilter(initialCategory);
+  }, [initialCategory]);
   const [linkedTasks, setLinkedTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [docSearch, setDocSearch] = useState('');
   const [docForm, setDocForm] = useState({
     name: '',
-    category: 'Contract',
-    discipline: 'General',
-    version: '1.0',
+    document_number: '',
+    category: 'Drawing',
+    discipline: 'Electrical',
+    version: 'Rev A',
     status: 'Approved',
-    client_visible: 0,
+    client_visible: 1,
     attachment_name: '',
     attachment_data: '',
   });
+  const [batchFiles, setBatchFiles] = useState<Array<{
+    name: string;
+    document_number: string;
+    attachment_name: string;
+    attachment_data: string;
+    discipline: string;
+  }>>([]);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
 
   const canManage = user?.role === 'Admin' || user?.role === 'ProjectManager';
 
@@ -1621,47 +1637,139 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     loadDocs();
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
+  const inferDisciplineFromSheet = (sheetCode: string, fileName: string, fallback: string) => {
+    const upper = `${sheetCode} ${fileName}`.toUpperCase();
+    if (upper.includes('-ACO-') || upper.includes('-VEN-') || upper.includes('HVAC') || upper.includes('VENT')) return 'HVAC';
+    if (upper.includes('-FAS-') || upper.includes('FIRE')) return 'Fire';
+    if (upper.includes('-DTA-') || upper.includes('-SEC-') || upper.includes('-CTV-') || upper.includes('ELV')) return 'ELV / Data & Security';
+    if (upper.includes('-ELE-') || upper.includes('-LTG-') || upper.includes('-PWR-') || upper.includes('-CON-') || upper.includes('-DB-')) return 'Electrical';
+    return fallback || 'Electrical';
+  };
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files: File[] = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const readOne = (f: File) =>
+      new Promise<{
+        name: string;
+        document_number: string;
+        attachment_name: string;
+        attachment_data: string;
+        discipline: string;
+      }>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const baseName = f.name.replace(/\.[^.]+$/, '');
+          const codeMatch = baseName.match(/(2618-[A-Z0-9-]+|[A-Z]{2,4}-[A-Z0-9-]+)/i);
+          const docNum = codeMatch ? codeMatch[1].toUpperCase() : baseName.slice(0, 24).toUpperCase();
+          resolve({
+            name: baseName,
+            document_number: docNum,
+            attachment_name: f.name,
+            attachment_data: String(reader.result || ''),
+            discipline: inferDisciplineFromSheet(docNum, baseName, docForm.discipline),
+          });
+        };
+        reader.readAsDataURL(f);
+      });
+
+    const loaded = await Promise.all(files.map(readOne));
+    if (loaded.length === 1) {
+      const first = loaded[0];
+      setBatchFiles([]);
       setDocForm(s => ({
         ...s,
-        name: s.name || f.name.replace(/\.[^.]+$/, ''),
-        attachment_name: f.name,
-        attachment_data: String(reader.result || ''),
+        name: s.name || first.name,
+        document_number: s.document_number || first.document_number,
+        discipline: first.discipline,
+        attachment_name: first.attachment_name,
+        attachment_data: first.attachment_data,
       }));
-    };
-    reader.readAsDataURL(f);
+    } else {
+      setBatchFiles(loaded);
+      setDocForm(s => ({
+        ...s,
+        name: `${loaded.length} Engineering Drawings Selected`,
+        document_number: loaded[0].document_number,
+        attachment_name: `${loaded.length} files`,
+        attachment_data: loaded[0].attachment_data,
+      }));
+    }
   };
 
   const handleCreateDoc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
-    const created = await api.post<any>('/api/documents', {
-      project_id: selectedProject,
-      ...docForm,
-      revision: docForm.version || '1.0',
-    });
-    if (docForm.client_visible && canManage && created?.id) {
-      await api.put(`/api/documents/${created.id}`, {
-        visibility: 'Client',
+    setUploadingDocs(true);
+    try {
+      const itemsToCreate =
+        batchFiles.length > 0
+          ? batchFiles.map(bf => ({
+              name: bf.name,
+              document_number: bf.document_number,
+              category: docForm.category || 'Drawing',
+              discipline: bf.discipline || docForm.discipline || 'Electrical',
+              revision: docForm.version || 'Rev A',
+              status: docForm.status || 'Approved',
+              attachment_name: bf.attachment_name,
+              attachment_data: bf.attachment_data,
+            }))
+          : [
+              {
+                name: docForm.name,
+                document_number: docForm.document_number || undefined,
+                category: docForm.category,
+                discipline: docForm.discipline,
+                revision: docForm.version || 'Rev A',
+                status: docForm.status,
+                attachment_name: docForm.attachment_name,
+                attachment_data: docForm.attachment_data,
+              },
+            ];
+
+      for (const item of itemsToCreate) {
+        // Check if an existing sheet with the same document_number exists so re-uploading updates it cleanly
+        const existingSheet =
+          item.document_number &&
+          docs.find((d: any) => d.document_number && d.document_number.toUpperCase() === item.document_number.toUpperCase());
+
+        if (existingSheet?.id) {
+          await api.put(`/api/documents/${existingSheet.id}`, {
+            ...item,
+            visibility: docForm.client_visible ? 'Client' : existingSheet.visibility || 'Internal',
+          });
+        } else {
+          const created = await api.post<any>('/api/documents', {
+            project_id: selectedProject,
+            ...item,
+          });
+          if (docForm.client_visible && canManage && created?.id) {
+            await api.put(`/api/documents/${created.id}`, {
+              visibility: 'Client',
+              status: 'Approved',
+            }).catch(() => {});
+          }
+        }
+      }
+
+      setShowUploadDoc(false);
+      setBatchFiles([]);
+      setDocForm({
+        name: '',
+        document_number: '',
+        category: 'Drawing',
+        discipline: 'Electrical',
+        version: 'Rev A',
         status: 'Approved',
-      }).catch(() => {});
+        client_visible: 1,
+        attachment_name: '',
+        attachment_data: '',
+      });
+      loadDocs();
+    } finally {
+      setUploadingDocs(false);
     }
-    setShowUploadDoc(false);
-    setDocForm({
-      name: '',
-      category: 'Contract',
-      discipline: 'General',
-      version: '1.0',
-      status: 'Approved',
-      client_visible: 0,
-      attachment_name: '',
-      attachment_data: '',
-    });
-    loadDocs();
   };
 
   const openDrawingViewer = async (doc: any) => {
@@ -1685,25 +1793,29 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
 
   const drawingDocs = docs.filter(
     (d: any) =>
-      d.document_number?.startsWith('2618-') ||
+      (d.document_number?.startsWith('2618-') && !d.document_number?.endsWith('-FULL')) ||
       d.category === 'Plan' ||
       d.category === 'Schematic' ||
       d.category === 'Drawing' ||
       d.category === 'Drawings / BIM' ||
+      d.category === 'Schedule' ||
+      d.attachment_name?.endsWith('.png') ||
       d.attachment_name?.endsWith('.svg')
   );
 
   const displayedDocs = docs.filter((d: any) => {
     const isDrawing =
-      d.document_number?.startsWith('2618-') ||
+      (d.document_number?.startsWith('2618-') && !d.document_number?.endsWith('-FULL')) ||
       d.category === 'Plan' ||
       d.category === 'Schematic' ||
       d.category === 'Drawing' ||
       d.category === 'Drawings / BIM' ||
+      d.category === 'Schedule' ||
+      d.attachment_name?.endsWith('.png') ||
       d.attachment_name?.endsWith('.svg');
 
     if (activeCategoryFilter === 'Drawings' && !isDrawing) return false;
-    if (activeCategoryFilter === 'Contracts' && d.category !== 'Contract' && d.category !== 'BOQ') return false;
+    if (activeCategoryFilter === 'Contracts' && d.category !== 'Contract' && d.category !== 'BOQ' && d.category !== 'Programme') return false;
     if (activeCategoryFilter === 'Specifications' && isDrawing) return false;
 
     if (docSearch) {
@@ -1717,6 +1829,15 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     }
     return true;
   });
+
+  const getDrawingMeta = (doc: any) => {
+    if (!doc?.markup_data) return null;
+    try {
+      return typeof doc.markup_data === 'string' ? JSON.parse(doc.markup_data) : doc.markup_data;
+    } catch {
+      return null;
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1750,10 +1871,14 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
             </>
           )}
           <button
-            onClick={() => setShowUploadDoc(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
+            onClick={() => {
+              setBatchFiles([]);
+              setDocForm(s => ({ ...s, category: 'Drawing', version: 'Rev A' }));
+              setShowUploadDoc(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
           >
-            <Plus size={15} /> Upload Document
+            <Plus size={15} /> Upload Separate Drawings / Docs
           </button>
         </div>
       </div>
@@ -1865,6 +1990,103 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
         </div>
       )}
 
+      {/* Original Enser Ltd CAD Drawing Sheets Visual Grid + Original PDFs */}
+      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3.5">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                ORIGINAL ENSER LTD CAD SHEETS (JOB 2618)
+              </span>
+              <span className="text-[11px] font-semibold text-slate-500">
+                BOV Operations Centre, Level 2 Area K, St. Venera • 1:100 @ A1 &amp; A2
+              </span>
+            </div>
+            <h2 className="text-sm font-bold text-slate-900 mt-1">
+              Original Engineering Drawings &amp; Distribution Board Schedules ({drawingDocs.length} Sheets)
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/original_drawings/BOV-St-Venera-2618-Original-Tender-and-Drawings.pdf#page=58"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 text-xs font-bold transition-colors"
+            >
+              <FileText size={13} /> Open Original Drawings PDF (Pages 52–67)
+            </a>
+            <a
+              href="/original_drawings/BOV-St-Venera-2618-Original-Master-Programme.pdf"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition-colors"
+            >
+              <FileText size={13} /> Open Original Master Programme PDF
+            </a>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+          {drawingDocs.map((sheet: any) => {
+            const meta = getDrawingMeta(sheet);
+            return (
+              <div
+                key={sheet.id}
+                onClick={() => openDrawingViewer(sheet)}
+                className="group rounded-xl border border-stone-200 hover:border-blue-500 bg-stone-50/60 hover:bg-white shadow-2xs hover:shadow-md transition-all overflow-hidden flex flex-col cursor-pointer"
+              >
+                <div className="relative h-44 bg-white border-b border-stone-200 overflow-hidden flex items-center justify-center p-1.5">
+                  {sheet.attachment_data ? (
+                    <img
+                      src={sheet.attachment_data}
+                      alt={sheet.name}
+                      loading="lazy"
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                    />
+                  ) : (
+                    <Eye size={28} className="text-slate-300" />
+                  )}
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-900/90 text-white shadow-xs">
+                    {sheet.document_number}
+                  </span>
+                  {meta?.pdfPage && (
+                    <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-blue-600/90 text-white">
+                      PDF p.{meta.pdfPage}
+                    </span>
+                  )}
+                </div>
+                <div className="p-3 flex-1 flex flex-col justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 line-clamp-1" title={sheet.name}>
+                      {sheet.name}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {sheet.discipline} • {meta?.scale || '1:100 (A1)'} • Enser Ltd
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between pt-1.5 border-t border-stone-200/70">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 group-hover:text-blue-700">
+                      <Eye size={12} /> Inspect CAD Sheet
+                    </span>
+                    {meta?.originalPdfUrl && (
+                      <a
+                        href={meta.originalPdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-[10px] font-semibold text-slate-500 hover:text-blue-700 underline"
+                      >
+                        Open PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Documents & Drawings Table */}
       <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
@@ -1892,11 +2114,13 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               displayedDocs.map((doc: any) => {
                 const isClientVisible = doc.visibility === 'Client' || doc.visibility === 'All' || (Number(doc.client_visible) === 1 && doc.status === 'Approved');
                 const isDrawing =
-                  doc.document_number?.startsWith('2618-') ||
+                  (doc.document_number?.startsWith('2618-') && !doc.document_number?.endsWith('-FULL')) ||
                   doc.category === 'Plan' ||
                   doc.category === 'Schematic' ||
                   doc.category === 'Drawing' ||
                   doc.category === 'Drawings / BIM' ||
+                  doc.category === 'Schedule' ||
+                  doc.attachment_name?.endsWith('.png') ||
                   doc.attachment_name?.endsWith('.svg');
 
                 return (
@@ -2042,13 +2266,24 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   </button>
                 </div>
 
+                {getDrawingMeta(selectedDrawing)?.originalPdfUrl && (
+                  <a
+                    href={getDrawingMeta(selectedDrawing).originalPdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    <FileText size={14} /> Open Original PDF (Page {getDrawingMeta(selectedDrawing).pdfPage})
+                  </a>
+                )}
+
                 {selectedDrawing.attachment_data && (
                   <a
                     href={selectedDrawing.attachment_data}
-                    download={selectedDrawing.attachment_name || `${selectedDrawing.document_number || 'drawing'}.svg`}
+                    download={selectedDrawing.attachment_name || `${selectedDrawing.document_number || 'drawing'}.png`}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
                   >
-                    <Download size={14} /> Download SVG
+                    <Download size={14} /> Download Original CAD Sheet
                   </a>
                 )}
 
@@ -2067,16 +2302,26 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               {/* Drawing Sheet Canvas (Left 72%) */}
               <div className="flex-1 bg-[#090d16] overflow-auto relative p-4 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800">
                 {selectedDrawing.attachment_data ? (
-                  <div
-                    className="transition-transform duration-150 ease-out origin-center"
-                    style={{ transform: `scale(${drawingZoom})`, transformOrigin: 'center center' }}
-                  >
-                    <img
+                  selectedDrawing.attachment_data.startsWith('data:application/pdf') ||
+                  selectedDrawing.attachment_data.toLowerCase().endsWith('.pdf') ||
+                  selectedDrawing.attachment_name?.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
                       src={selectedDrawing.attachment_data}
-                      alt={selectedDrawing.name}
-                      className="max-w-[1300px] w-full shadow-2xl rounded border border-slate-800 pointer-events-auto"
+                      title={selectedDrawing.name}
+                      className="w-full h-full rounded border border-slate-800 bg-white"
                     />
-                  </div>
+                  ) : (
+                    <div
+                      className="transition-transform duration-150 ease-out origin-center"
+                      style={{ transform: `scale(${drawingZoom})`, transformOrigin: 'center center' }}
+                    >
+                      <img
+                        src={selectedDrawing.attachment_data}
+                        alt={selectedDrawing.name}
+                        className="max-w-[1300px] w-full shadow-2xl rounded border border-slate-800 pointer-events-auto"
+                      />
+                    </div>
+                  )
                 ) : (
                   <div className="text-center p-8 text-slate-400">
                     <FileText size={48} className="mx-auto mb-3 opacity-40 text-blue-400" />
@@ -2195,31 +2440,72 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
         </div>
       )}
 
-      {/* Upload Standard Controlled Document Modal */}
+      {/* Upload Separate Engineering Drawings or Controlled Documents Modal */}
       {showUploadDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreateDoc} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md p-6 space-y-4">
+          <form onSubmit={handleCreateDoc} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-base">Upload Controlled Document</h3>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Upload Separate Engineering Drawings / Documents</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Select one or multiple separate CAD sheets (PNG, JPG, PDF, SVG) or contract files. Re-uploading an existing Sheet Number updates it automatically.
+                </p>
+              </div>
               <button type="button" onClick={() => setShowUploadDoc(false)} className="text-slate-400 hover:text-slate-700">
                 <X size={18} />
               </button>
             </div>
             <div>
-              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Attach File (PDF, DOCX, TXT, CSV)</label>
-              <input type="file" onChange={handleFileInput} className="w-full text-xs" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Document Title</label>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">
+                Select Drawing Sheet(s) or Document File(s) (Multi-Select Supported)
+              </label>
               <input
-                required
-                value={docForm.name}
-                onChange={e => setDocForm(s => ({ ...s, name: e.target.value }))}
-                placeholder="Main MEP Subcontract Agreement"
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                type="file"
+                multiple
+                accept=".png,.jpg,.jpeg,.pdf,.svg,.webp,.docx,.xlsx,.csv,.txt"
+                onChange={handleFileInput}
+                className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            {batchFiles.length > 1 ? (
+              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 space-y-1.5 max-h-40 overflow-y-auto">
+                <p className="text-[11px] font-bold text-blue-900">
+                  Batch Upload Ready ({batchFiles.length} separate sheets selected):
+                </p>
+                {batchFiles.map((bf, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[11px] bg-white px-2.5 py-1.5 rounded-lg border border-blue-100">
+                    <span className="font-mono font-bold text-blue-700">{bf.document_number}</span>
+                    <span className="text-slate-700 truncate max-w-[200px]">{bf.name}</span>
+                    <span className="text-[10px] font-semibold text-amber-700">{bf.discipline}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Sheet / Doc No.</label>
+                  <input
+                    value={docForm.document_number}
+                    onChange={e => setDocForm(s => ({ ...s, document_number: e.target.value }))}
+                    placeholder="2618-L-LTG-01"
+                    className="w-full px-3 py-2 text-xs font-mono border border-stone-300 rounded-xl"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Drawing / Document Title</label>
+                  <input
+                    required
+                    value={docForm.name}
+                    onChange={e => setDocForm(s => ({ ...s, name: e.target.value }))}
+                    placeholder="e.g. Lighting Layout Level 2 Area K"
+                    className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Category</label>
                 <select
@@ -2227,23 +2513,40 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   onChange={e => setDocForm(s => ({ ...s, category: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
                 >
-                  <option>Contract</option>
-                  <option>Drawing</option>
-                  <option>Specification</option>
-                  <option>BOQ</option>
-                  <option>Method Statement</option>
+                  <option value="Drawing">Drawing / Layout</option>
+                  <option value="Schematic">Schematic</option>
+                  <option value="Schedule">DB Schedule</option>
+                  <option value="Contract">Contract</option>
+                  <option value="Specification">Specification</option>
+                  <option value="BOQ">BOQ</option>
+                  <option value="Method Statement">Method Statement</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Status</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Discipline</label>
+                <select
+                  value={docForm.discipline}
+                  onChange={e => setDocForm(s => ({ ...s, discipline: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                >
+                  <option value="Electrical">Electrical</option>
+                  <option value="HVAC">HVAC</option>
+                  <option value="Fire">Fire</option>
+                  <option value="ELV / Data & Security">ELV / Data &amp; Security</option>
+                  <option value="Plumbing">Plumbing</option>
+                  <option value="Multi-Discipline MEP">Multi-Discipline MEP</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Revision / Status</label>
                 <select
                   value={docForm.status}
                   onChange={e => setDocForm(s => ({ ...s, status: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
                 >
-                  <option value="Draft">Draft</option>
+                  <option value="Approved">Approved (AFC)</option>
                   <option value="Submitted">Submitted</option>
-                  <option value="Approved">Approved</option>
+                  <option value="Draft">Draft / WIP</option>
                 </select>
               </div>
             </div>
@@ -2256,11 +2559,19 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               Publish to Client Portal (requires Approved status)
             </label>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowUploadDoc(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">
+              <button type="button" onClick={() => setShowUploadDoc(false)} className="px-4 py-2 text-xs font-semibold text-slate-600 cursor-pointer">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold">
-                Upload Document
+              <button
+                type="submit"
+                disabled={uploadingDocs}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold cursor-pointer"
+              >
+                {uploadingDocs
+                  ? 'Uploading...'
+                  : batchFiles.length > 1
+                  ? `Upload ${batchFiles.length} Drawings`
+                  : 'Upload Drawing / Document'}
               </button>
             </div>
           </form>

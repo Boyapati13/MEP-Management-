@@ -1007,9 +1007,24 @@ export function seedUsers() {
 }
 
 export function seedData() {
-  // Intentionally a no-op: no demo/sample projects, tasks, RFIs, etc.
-  // are created on startup. New installs start with zero projects;
-  // the bootstrap admin account creates real projects from the UI.
+  // Ensure any 2618-* drawing records point to the authentic original Enser Ltd CAD sheets in /original_drawings/
+  // rather than legacy synthetic data:image/svg+xml strings.
+  try {
+    db.exec(`
+      UPDATE documents
+      SET document_number = '2618-L-ACO-01',
+          attachment_name = '2618-L-ACO-01.png',
+          attachment_data = '/original_drawings/2618-L-ACO-01.png'
+      WHERE document_number = '2618-L-ACD-01';
+
+      UPDATE documents
+      SET attachment_name = document_number || '.png',
+          attachment_data = '/original_drawings/' || document_number || '.png'
+      WHERE document_number LIKE '2618-%'
+        AND document_number NOT LIKE '%-FULL'
+        AND (attachment_data LIKE 'data:image/svg+xml%' OR attachment_data IS NULL OR attachment_data = '');
+    `);
+  } catch {}
 }
 
 export function seedLeaveTypes() {
