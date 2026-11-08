@@ -9,7 +9,7 @@ export function registerSelectionsController(app: Express): void {
   app.get("/api/projects/:projectId/selections", authRequired, (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied to project selections" });
       }
 
@@ -111,7 +111,7 @@ export function registerSelectionsController(app: Express): void {
   app.post("/api/projects/:projectId/selections/categories", authRequired, (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -141,10 +141,7 @@ export function registerSelectionsController(app: Express): void {
         now
       );
 
-      writeAudit(req, {
-        action: "CREATE_SELECTION_CATEGORY",
-        projectId,
-        recordId: id,
+      writeAudit(req.user!.user_id, "selections", id, projectId, "CREATE_SELECTION_CATEGORY", null, {
         details: `Created selection allowance category: ${name} (€${allowance_amount})`,
       });
 
@@ -163,7 +160,7 @@ export function registerSelectionsController(app: Express): void {
       const existing: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(categoryId);
       if (!existing) return res.status(404).json({ error: "Category not found" });
 
-      if (!hasProjectAccess(req, existing.project_id)) {
+      if (!hasProjectAccess(req.user!, existing.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -208,7 +205,7 @@ export function registerSelectionsController(app: Express): void {
       const existing: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(categoryId);
       if (!existing) return res.status(404).json({ error: "Category not found" });
 
-      if (!hasProjectAccess(req, existing.project_id)) {
+      if (!hasProjectAccess(req.user!, existing.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -229,7 +226,7 @@ export function registerSelectionsController(app: Express): void {
       const category: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(categoryId);
       if (!category) return res.status(404).json({ error: "Category not found" });
 
-      if (!hasProjectAccess(req, category.project_id)) {
+      if (!hasProjectAccess(req.user!, category.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -303,7 +300,7 @@ export function registerSelectionsController(app: Express): void {
       if (!choice) return res.status(404).json({ error: "Choice not found" });
 
       const category: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(choice.category_id);
-      if (!category || !hasProjectAccess(req, category.project_id)) {
+      if (!category || !hasProjectAccess(req.user!, category.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -372,7 +369,7 @@ export function registerSelectionsController(app: Express): void {
       if (!choice) return res.status(404).json({ error: "Choice not found" });
 
       const category: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(choice.category_id);
-      if (!category || !hasProjectAccess(req, category.project_id)) {
+      if (!category || !hasProjectAccess(req.user!, category.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -398,7 +395,7 @@ export function registerSelectionsController(app: Express): void {
       const category: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(categoryId);
       if (!category) return res.status(404).json({ error: "Category not found" });
 
-      if (!hasProjectAccess(req, category.project_id)) {
+      if (!hasProjectAccess(req.user!, category.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -426,10 +423,7 @@ export function registerSelectionsController(app: Express): void {
         WHERE id = ?
       `).run(choice_id, status, signerName, now, approval_notes || null, sigToken, now, categoryId);
 
-      writeAudit(req, {
-        action: "APPROVE_SELECTION_CHOICE",
-        projectId: category.project_id,
-        recordId: categoryId,
+      writeAudit(req.user!.user_id, "selections", categoryId, category.project_id, "APPROVE_SELECTION_CHOICE", null, {
         details: `Client approved selection: ${choice.title} for category ${category.name} (${status})`,
       });
 
@@ -452,7 +446,7 @@ export function registerSelectionsController(app: Express): void {
       const category: any = db.prepare("SELECT * FROM selection_categories WHERE id = ?").get(categoryId);
       if (!category) return res.status(404).json({ error: "Category not found" });
 
-      if (!hasProjectAccess(req, category.project_id)) {
+      if (!hasProjectAccess(req.user!, category.project_id)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -487,10 +481,7 @@ export function registerSelectionsController(app: Express): void {
       // Link change order to category
       db.prepare("UPDATE selection_categories SET change_order_id = ? WHERE id = ?").run(coId, categoryId);
 
-      writeAudit(req, {
-        action: "CREATE_CHANGE_ORDER_FROM_SELECTION",
-        projectId: category.project_id,
-        recordId: coId,
+      writeAudit(req.user!.user_id, "change_orders", coId, category.project_id, "CREATE_CHANGE_ORDER_FROM_SELECTION", null, {
         details: `Generated change order ${coNumber} for €${variance} from selection overage`,
       });
 
@@ -510,7 +501,7 @@ export function registerSelectionsController(app: Express): void {
   app.post("/api/projects/:projectId/selections/seed-defaults", authRequired, (req: Request, res: Response) => {
     try {
       const { projectId } = req.params;
-      if (!hasProjectAccess(req, projectId)) {
+      if (!hasProjectAccess(req.user!, projectId)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -750,10 +741,7 @@ export function registerSelectionsController(app: Express): void {
         }
       }
 
-      writeAudit(req, {
-        action: "SEED_DEFAULT_SELECTIONS",
-        projectId,
-        recordId: projectId,
+      writeAudit(req.user!.user_id, "selections", projectId, projectId, "SEED_DEFAULT_SELECTIONS", null, {
         details: `Seeded ${seedData.length} commercial selection categories with full choice options`,
       });
 

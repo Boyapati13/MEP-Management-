@@ -569,7 +569,7 @@ function NavGroup({ icon: Icon, label, children, defaultOpen }: { icon: any; lab
 
 // ─── Main App Shell ───────────────────────────────────────────────────────────
 type Page =
-  | 'dashboard' | 'projects' | 'project-detail' | 'tasks' | 'updates'
+  | 'dashboard' | 'projects' | 'project-detail' | 'tasks' | 'messages' | 'updates'
   | 'actions' | 'decisions' | 'octo-inbox'
   | 'rfis' | 'submittals' | 'documents'
   | 'ncrs' | 'inspections' | 'commissioning' | 'handover' | 'progress'

@@ -283,7 +283,7 @@ export function registerMessagesController(app: Express): void {
         db.prepare("INSERT OR REPLACE INTO project_message_reads (message_id, user_id, read_at) VALUES (?, ?, ?)").run(id, ctx.user.user_id, now);
       });
 
-      writeAudit(req, ctx.projectId, "project_messages", id, "CREATE", { subject, channel });
+      writeAudit(ctx.user.user_id, "project_messages", id, ctx.projectId, "CREATE", null, { subject, channel });
       const created = rowToDict(db.prepare("SELECT * FROM project_messages WHERE id = ?").get(id));
       res.status(201).json(created);
     } catch (err: any) {
@@ -334,7 +334,7 @@ export function registerMessagesController(app: Express): void {
         db.prepare("INSERT OR REPLACE INTO project_message_reads (message_id, user_id, read_at) VALUES (?, ?, ?)").run(parent.id, ctx.user.user_id, now);
       });
 
-      writeAudit(req, ctx.projectId, "project_messages", replyId, "REPLY", { parent_id: parent.id });
+      writeAudit(ctx.user.user_id, "project_messages", replyId, ctx.projectId, "REPLY", null, { parent_id: parent.id });
       const reply = rowToDict(db.prepare("SELECT * FROM project_messages WHERE id = ?").get(replyId));
       res.status(201).json(reply);
     } catch (err: any) {
@@ -371,7 +371,7 @@ export function registerMessagesController(app: Express): void {
 
       db.prepare("UPDATE project_messages SET is_pinned = CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END WHERE id = ? AND project_id = ?").run(msg.id, ctx.projectId);
       const updated = db.prepare("SELECT * FROM project_messages WHERE id = ?").get(msg.id) as any;
-      writeAudit(req, ctx.projectId, "project_messages", msg.id, updated.is_pinned ? "PIN" : "UNPIN", {});
+      writeAudit(ctx.user.user_id, "project_messages", msg.id, ctx.projectId, updated.is_pinned ? "PIN" : "UNPIN", null, {});
       res.json(rowToDict(updated));
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to update pin" });
@@ -408,7 +408,7 @@ export function registerMessagesController(app: Express): void {
         }
       });
 
-      writeAudit(req, ctx.projectId, "project_messages", msg.id, "DELETE", { parent_id: msg.parent_id || null });
+      writeAudit(ctx.user.user_id, "project_messages", msg.id, ctx.projectId, "DELETE", null, { parent_id: msg.parent_id || null });
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to delete message" });
