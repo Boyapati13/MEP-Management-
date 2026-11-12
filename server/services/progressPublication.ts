@@ -135,7 +135,7 @@ export function createReportRevision(
         id, project_id, report_number, report_no, title, period_start, period_end,
         executive_summary, status, revision_no, supersedes_report_id,
         created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       newId,
       original.project_id,
@@ -145,6 +145,7 @@ export function createReportRevision(
       original.period_start,
       original.period_end,
       original.executive_summary,
+      'Draft',
       nextRev,
       originalReportId,
       user.user_id,
