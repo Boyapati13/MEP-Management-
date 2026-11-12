@@ -138,7 +138,7 @@ export function registerAiDrawingController(app: Express): void {
         document_category: documentCategory,
         extracted: {
           ...extracted,
-          budget: extracted.budget || (boqTotal > 0 ? boqTotal : 500000),
+          budget: extracted.budget ?? (boqTotal > 0 ? boqTotal : undefined),
         },
         boq_items: boqItems,
         boq_summary: {
