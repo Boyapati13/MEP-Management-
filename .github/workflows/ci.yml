@@ -87,6 +87,9 @@ jobs:
       - name: Run V1.4.1 Enterprise Hardening Suite (HARD-001 to HARD-015)
         run: npm run test:v1.4.1
 
+      - name: Run full engineering-to-commercial dataflow integration suite
+        run: npm run test:dataflow
+
       - name: Stop isolated server
         if: always()
         run: |
