@@ -290,6 +290,7 @@ export function registerAiDrawingController(app: Express): void {
       );
 
       let imported = 0;
+      let skippedInvalidQuantity = 0;
       let totalAmount = 0.0;
       const disciplines = new Set<string>();
       const systems = new Set<string>();
@@ -309,10 +310,20 @@ export function registerAiDrawingController(app: Express): void {
         const description = r.description || r.itemdescription || r.scope || r.name || r.material || r.item;
         if (!description) continue;
 
-        const qty = parseImportNumber(r.tenderquantity || r.quantity || r.qty) || 1;
-        const rate = parseImportNumber(r.tenderrate || r.rate || r.unitrate || r.price);
-        const amount = parseImportNumber(r.tenderamount || r.amount || r.total || r.value) || (qty * rate);
-        const calcRate = rate > 0 ? rate : (qty > 0 ? Math.round((amount / qty) * 100) / 100 : amount);
+        // Reject unmeasurable rows rather than inventing a quantity of 1.
+        // Do not silently treat zero or missing quantities as a valid measured BOQ item.
+        const rawQty = r.tenderquantity ?? r.quantity ?? r.qty;
+        const qty = parseImportNumber(rawQty);
+        if (rawQty === undefined || rawQty === null || String(rawQty).trim() === '' || !Number.isFinite(qty) || qty <= 0) {
+          skippedInvalidQuantity++;
+          continue;
+        }
+        const rate = parseImportNumber(r.tenderrate ?? r.rate ?? r.unitrate ?? r.price);
+        const rawAmount = r.tenderamount ?? r.amount ?? r.total ?? r.value;
+        const amount = rawAmount === undefined || rawAmount === null || String(rawAmount).trim() === ''
+          ? qty * rate
+          : parseImportNumber(rawAmount);
+        const calcRate = rate > 0 ? rate : (qty > 0 ? Math.round((amount / qty) * 100) / 100 : 0);
         const discipline = (r.discipline || r.trade || r.category || "MEP").trim();
         const system = (r.system || r.subsystem || `${discipline} System`).trim();
         const itemCode = r.itemnumber || r.itemno || r.code || r.number || `${imported + 1}.01`;
@@ -501,6 +512,8 @@ export function registerAiDrawingController(app: Express): void {
         filename,
         imported,
         imported_lines: imported,
+        skipped_invalid_quantity: skippedInvalidQuantity,
+        requires_review: skippedInvalidQuantity > 0,
         tender_amount: totalAmount,
         disciplines: Array.from(disciplines).sort(),
         systems: systems.size,
