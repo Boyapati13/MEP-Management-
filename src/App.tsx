@@ -52,6 +52,7 @@ import { SelectionsManagerView } from './components/SelectionsManagerView';
 import { ProjectMessagesPage } from './components/ProjectMessagesPage';
 import { MaterialSubmittalsView } from './components/MaterialSubmittalsView';
 import { AdminProfileHierarchyView } from './components/AdminProfileHierarchyView';
+import { SaasVendorPortal } from './components/SaasVendorPortal';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -980,8 +981,16 @@ function AppShell() {
   }, [navigate]);
 
   const role = user?.role || '';
+  const isSaasVendor =
+    user?.username === 'admin' ||
+    String(user?.email || '').toLowerCase() === 'admin@mepfieldhub.com' ||
+    user?.stakeholder_type === 'SaaS Vendor';
   const isWorkerOnly = role === 'Worker';
   const [workerMobileMode, setWorkerMobileMode] = useState(isWorkerOnly);
+
+  if (isSaasVendor) {
+    return <SaasVendorPortal user={user} logout={logout} />;
+  }
 
   if (isWorkerOnly || workerMobileMode) {
     return (

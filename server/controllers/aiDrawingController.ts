@@ -2487,6 +2487,19 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
 
+      if (action === "delete_main_admin") {
+        const { email } = req.body;
+        const cleanEmail = String(email || "").trim().toLowerCase();
+        const existing = db.prepare("SELECT * FROM authorized_main_admins WHERE LOWER(email)=?").get(cleanEmail) as any;
+        if (existing?.user_id) {
+          db.prepare("DELETE FROM sessions WHERE user_id=?").run(existing.user_id);
+          db.prepare("DELETE FROM users WHERE id=? AND username != 'admin'").run(existing.user_id);
+        }
+        db.prepare("DELETE FROM authorized_main_admins WHERE LOWER(email)=?").run(cleanEmail);
+        res.json({ success: true, email: cleanEmail });
+        return;
+      }
+
       if (action === "authorize_main_admin") {
         const { email, admin_name, company_name, plan, username, password, notes, provision_now } = req.body;
         const cleanEmail = String(email || "").trim().toLowerCase();

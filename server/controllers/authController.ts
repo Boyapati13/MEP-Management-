@@ -157,6 +157,7 @@ export function registerAuthController(app: Express): void {
       email: user.email || "",
       company: user.company || "",
       trade: user.trade || "",
+      stakeholder_type: user.username === "admin" ? "SaaS Vendor" : (user.stakeholder_type || ""),
       status: user.status || "Active",
       must_change_password: !!user.must_change_password,
       permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,
@@ -346,9 +347,12 @@ export function registerAuthController(app: Express): void {
 
   app.get("/api/me", authRequired, (req, res) => {
     const user = req.user!;
-    const uRow = db.prepare("SELECT email, company_id, company, trade, work_package_id, status, must_change_password FROM users WHERE id=?").get(user.user_id) as any;
+    const uRow = db.prepare("SELECT username, email, company_id, company, trade, work_package_id, stakeholder_type, status, must_change_password FROM users WHERE id=?").get(user.user_id) as any;
+    const uname = uRow?.username || "";
     res.json({
+      id: user.user_id,
       user_id: user.user_id,
+      username: uname,
       name: user.name,
       role: user.role,
       email: uRow?.email || "",
@@ -356,6 +360,7 @@ export function registerAuthController(app: Express): void {
       company: uRow?.company || "",
       trade: uRow?.trade || "",
       work_package_id: uRow?.work_package_id || "",
+      stakeholder_type: uname === "admin" ? "SaaS Vendor" : (uRow?.stakeholder_type || ""),
       status: uRow?.status || "Active",
       must_change_password: !!uRow?.must_change_password,
       permissions: ROLE_PERMS[user.role] || ROLE_PERMS.SiteEngineer,

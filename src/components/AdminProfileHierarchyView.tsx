@@ -339,6 +339,7 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
   const allWorkPackages: any[] = data?.workPackages || [];
 
   const filteredStakeholders = allUsers.filter((u: any) => {
+    if (u.username === 'admin') return false;
     if (stakeholderFilter === 'ALL') return true;
     const cat =
       u.stakeholder_type ||
@@ -489,179 +490,45 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
       )}
 
       {/* ======================================================================
-          3-TIER ENTERPRISE ERP ACCESS & ACCOUNT PROVISIONING HUB
-          Tier 1: Platform Owner (Our Company) -> Grants Permission to Main Admin (by Email ID)
-          Tier 2: Organization Main Admin -> Creates Accounts for Employees, Clients/Employers & Subcontractors
-          Tier 3: Project Delivery & External Portals -> PMs, Supervisors, Clients, Subcontractors & Workers
+          COMPANY MAIN ADMIN -> STAKEHOLDER ACCOUNT PROVISIONING HUB
+          Customer Main Admin creates accounts for Employees, Clients/Employers & Subcontractors
           ====================================================================== */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-blue-950 px-6 py-4 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
-                3-Tier Enterprise ERP Access Architecture
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/30 text-blue-200 border border-blue-400/40">
+                Organization Main Admin · User Provisioning Hub
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                Email ID Based Authorization
+                {user?.company || adminProfile.company || 'Licensed Organization'}
               </span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-1">
-              Tier 1: Our Company (Platform Owner) → Tier 2: Organization Main Admin (Email ID) → Tier 3: Employees, Clients &amp; Subcontractors
+              Create &amp; Manage Accounts for Employees, Clients/Employers &amp; Subcontractors
             </h2>
             <p className="text-xs text-slate-300 mt-0.5">
-              <strong>Tier 1 (Our Company)</strong> grants Main Admin permission to an Email ID. <strong>Tier 2 (Main Admin)</strong> signs in with their Email ID and creates accounts for <strong>Tier 3 (Employees/PMs/Supervisors, Clients/Employers, Consultants &amp; Subcontractors)</strong> scoped to their Project &amp; Work Package portals.
+              As your company&apos;s authorized <strong>Main Admin</strong>, create role-scoped accounts for your <strong>Internal Employees (PMs / Site Supervisors)</strong>, <strong>Clients / Employers</strong>, and <strong>Subcontractors</strong>.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowAuthorizeMainAdmin(true)}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <ShieldCheck size={14} /> + Tier 1→2: Authorize Main Admin (Email ID)
-            </button>
-            <button
-              type="button"
               onClick={() => openStakeholderModal('Employee (Internal)')}
               className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
-              <Plus size={14} /> + Tier 2→3: Create Employee / Client / Subcontractor
+              <Plus size={14} /> + Create Employee / Client / Subcontractor
             </button>
           </div>
         </div>
 
-        {/* 3-Tier Visual Architecture Strip */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-5 pt-4 bg-slate-50/50">
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
-            <div className="flex items-center justify-between">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-600 text-white">
-                Tier 1 · Platform Super Admin
-              </span>
-              <span className="text-[10px] font-mono font-bold text-indigo-800">Our Company</span>
-            </div>
-            <p className="text-xs font-bold text-slate-900 mt-1.5">Platform Owner &amp; Tenant Licensing</p>
-            <p className="text-[11px] text-slate-600 mt-0.5">
-              Whitelists &amp; grants <strong>Main Admin</strong> permission by <strong>Email ID</strong>, assigns Enterprise plans, and can activate or revoke tenant Main Admins.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
-            <div className="flex items-center justify-between">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-600 text-white">
-                Tier 2 · Organization Main Admin
-              </span>
-              <span className="text-[10px] font-mono font-bold text-blue-800">Email ID Verified</span>
-            </div>
-            <p className="text-xs font-bold text-slate-900 mt-1.5">Company / Tenant Main Administrator</p>
-            <p className="text-[11px] text-slate-600 mt-0.5">
-              Activates account via authorized <strong>Email ID</strong>, creates Projects &amp; Sites, and provisions accounts for <strong>Employees, Clients &amp; Subcontractors</strong>.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
-            <div className="flex items-center justify-between">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-600 text-white">
-                Tier 3 · Scoped Role Portals
-              </span>
-              <span className="text-[10px] font-mono font-bold text-emerald-800">Project &amp; WBS Scoped</span>
-            </div>
-            <p className="text-xs font-bold text-slate-900 mt-1.5">Employees, Clients &amp; Subcontractors</p>
-            <p className="text-[11px] text-slate-600 mt-0.5">
-              Routes on login to <strong>Internal ERP</strong> (PMs/Supervisors), <strong>Client Portal</strong> (Employers), <strong>Subcontractor Portal</strong> (WBS Package), or <strong>Worker Mobile App</strong>.
-            </p>
-          </div>
-        </div>
-
-        <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 bg-slate-50/50">
-          {/* Tier 1 Card: Our Company -> Main Admin Email ID Permissions */}
-          <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-4 flex flex-col justify-between space-y-3 shadow-2xs">
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                <div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 text-indigo-800 border border-indigo-200">
-                    Tier 1 → Tier 2 · Platform Owner (Our Company)
-                  </span>
-                  <h3 className="text-sm font-bold text-slate-900 mt-1">
-                    Authorized Main Admin Accounts (by Email ID)
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Main Admin Email IDs granted permission by Our Company to manage their organization and provision Tier 3 accounts.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAuthorizeMainAdmin(true)}
-                  className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold flex items-center gap-1 flex-shrink-0 cursor-pointer"
-                >
-                  <Plus size={12} /> Grant Email ID
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-[270px] overflow-y-auto pr-1">
-                {authorizedMainAdmins.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic py-4 text-center">No Main Admin Email IDs authorized yet.</p>
-                ) : (
-                  authorizedMainAdmins.map((adm: any) => (
-                    <div
-                      key={adm.id || adm.email}
-                      className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-start justify-between gap-2 text-xs"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-slate-900">{adm.admin_name}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                            {adm.plan || 'Enterprise'}
-                          </span>
-                        </div>
-                        <div className="font-mono text-[11px] text-indigo-700 font-semibold mt-0.5 flex items-center gap-1">
-                          <Mail size={11} /> {adm.email}
-                          {adm.username ? <span className="text-slate-400">(@{adm.username})</span> : null}
-                        </div>
-                        <div className="text-[11px] text-slate-600 mt-0.5">
-                          Company: <strong>{adm.company_name}</strong> · By: {adm.authorized_by || 'Our Company'}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            adm.status === 'Activated'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : adm.status === 'Revoked'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-amber-50 text-amber-800 border-amber-200'
-                          }`}
-                        >
-                          {adm.status || 'Authorized'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleMainAdminStatus(adm)}
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded border cursor-pointer transition-colors ${
-                            adm.status === 'Revoked'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                          }`}
-                        >
-                          {adm.status === 'Revoked' ? 'Restore Permission' : 'Revoke'}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-indigo-50/70 border border-indigo-200/80 p-2.5 text-[11px] text-indigo-950">
-              <strong>How Main Admin Signs In:</strong> The Main Admin can sign in on the Login screen using their <strong>Email ID</strong> (e.g. <code className="font-mono bg-white px-1 py-0.5 rounded border border-indigo-200">admin.bov@enser.com.mt</code>) or click <em>"Activate Main Admin (Email ID)"</em> on the Login page.
-            </div>
-          </div>
-
-          {/* Tier 2 Card: Main Admin -> Provision Employees, Clients/Employers & Subcontractors */}
-          <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-2xs">
+        <div className="p-5 bg-slate-50/50">
+          {/* Main Admin -> Provision Employees, Clients/Employers & Subcontractors */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-2xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
               <div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800 border border-blue-200">
-                  Tier 2 → Tier 3 · Main Admin Account Provisioning
+                  Company User Directory &amp; Role Portals
                 </span>
                 <h3 className="text-sm font-bold text-slate-900 mt-1">
                   Create Tier 3 Accounts for Employees, Clients/Employers &amp; Subcontractors
