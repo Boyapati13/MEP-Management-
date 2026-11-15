@@ -103,8 +103,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v1.5.0-latest"
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
             release-assets/MEP-FieldHub-Android.apk \
             release-assets/MEP-FieldHub-Windows.exe \
             --title "MEP FieldHub Enterprise ERP v1.5.0 (Android .apk & Windows .exe)" \
