@@ -99,6 +99,7 @@ export function registerUserController(app: Express): void {
     }
     const rows = db.prepare(`
       SELECT u.id, u.username, u.name, u.role, u.email, u.phone, u.company_id, u.company, u.trade, u.work_package_id,
+        u.stakeholder_type, u.created_by_admin,
         COALESCE(u.status, 'Active') as status, u.created_at, u.last_login,
         (SELECT COUNT(*) FROM project_memberships pm WHERE pm.user_id = u.id AND pm.active = 1) as project_count,
         (SELECT GROUP_CONCAT(p.name, ', ') FROM project_memberships pm JOIN projects p ON p.id = pm.project_id WHERE pm.user_id = u.id AND pm.active = 1) as project_names

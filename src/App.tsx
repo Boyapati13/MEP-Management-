@@ -341,13 +341,13 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
             <p className="mt-2 text-sm text-slate-600">Sign in to access your MEP project workspace</p>
             <form onSubmit={signIn} aria-busy={loading} className="mt-7 space-y-4">
               {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-              <div><label htmlFor="home-login-username" className="mb-1.5 block text-sm font-semibold text-slate-800">Username</label><input id="home-login-username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required disabled={loading} placeholder="Email or username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/></div>
+              <div><label htmlFor="home-login-username" className="mb-1.5 block text-sm font-semibold text-slate-800">Email ID or Username</label><input id="home-login-username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required disabled={loading} placeholder="Enter your Email ID (e.g. admin@mepfieldhub.com) or username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/></div>
               <div><label htmlFor="home-login-password" className="mb-1.5 block text-sm font-semibold text-slate-800">Password</label><div className="relative"><input id="home-login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={loading} placeholder="Password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 text-xs font-semibold text-blue-700 hover:text-blue-800">{showPassword ? 'Hide' : 'Show'}</button></div></div>
               <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-4 py-3.5 font-bold text-white shadow-md hover:bg-blue-700 disabled:opacity-60">{loading ? 'Signing in…' : 'Sign In'} <ChevronRight size={18}/></button>
             </form>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <button type="button" onClick={onSignIn} className="font-semibold text-blue-700 hover:underline">
-                Create Organization (Free Trial)
+              <button type="button" onClick={onSignIn} className="font-semibold text-indigo-700 hover:underline">
+                Activate Main Admin (Email ID) →
               </button>
               <button type="button" onClick={onSignIn} className="font-semibold text-slate-600 hover:text-slate-900 hover:underline">
                 Forgot password?
@@ -387,13 +387,40 @@ function LoginPage() {
   const [orgForm, setOrgForm] = useState({
     organization_name: '',
     country: 'Global',
-    currency: 'USD',
-    plan: 'Professional',
+    currency: 'EUR',
+    plan: 'Enterprise',
     admin_name: '',
     username: '',
     email: '',
     password: '',
   });
+  const [verifiedEmailInfo, setVerifiedEmailInfo] = useState<string>('');
+
+  async function verifyMainAdminEmail(emailToCheck?: string) {
+    const targetEmail = (emailToCheck ?? orgForm.email).trim();
+    if (!targetEmail) {
+      setLoginError('Please enter your Main Admin Email ID first.');
+      return;
+    }
+    setLoginError('');
+    setVerifiedEmailInfo('');
+    try {
+      const res: any = await api.get(`/api/auth/check-main-admin-email?email=${encodeURIComponent(targetEmail)}`);
+      if (res?.authorized) {
+        setOrgForm(s => ({
+          ...s,
+          email: res.email || targetEmail,
+          admin_name: res.admin_name || s.admin_name,
+          organization_name: res.company_name || s.organization_name,
+          username: res.username || s.username,
+          plan: res.plan || s.plan,
+        }));
+        setVerifiedEmailInfo(`✓ Permission Verified by Our Company: ${res.admin_name} · ${res.company_name} (${res.plan} Plan)`);
+      }
+    } catch (err: any) {
+      setLoginError(err?.message || 'This Email ID has not yet been granted Main Admin permission by Our Company.');
+    }
+  }
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
@@ -406,7 +433,7 @@ function LoginPage() {
       setUser(user);
       addToast('success', `Welcome back, ${user.name}!`);
     } catch (err: any) {
-      setLoginError('Unable to sign in. Check your credentials and try again.');
+      setLoginError('Unable to sign in. Check your Email ID / username and password.');
     } finally {
       setLoading(false);
     }
@@ -418,14 +445,17 @@ function LoginPage() {
     setLoginError('');
     setLoading(true);
     try {
-      const res: any = await api.post('/api/auth/register-organization', orgForm);
+      const res: any = await api.post('/api/auth/register-organization', {
+        ...orgForm,
+        require_preauth: true,
+      });
       if (res?.token && res?.user) {
         setToken(res.token);
         setUser(res.user);
-        addToast('success', `Organization "${orgForm.organization_name}" created!`);
+        addToast('success', `Main Admin account "${res.user.email || orgForm.email}" activated!`);
       }
     } catch (err: any) {
-      setLoginError(err?.message || 'Unable to register organization.');
+      setLoginError(err?.message || 'Unable to activate Main Admin account.');
     } finally {
       setLoading(false);
     }
@@ -611,14 +641,42 @@ function LoginPage() {
             <form onSubmit={handleOrgSignup} className="space-y-3 mt-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold uppercase text-indigo-700">Activate Authorized Main Admin (Email ID)</span>
-                <button type="button" onClick={() => setAuthMode('signin')} className="text-xs font-semibold text-blue-700 hover:underline">
+                <button type="button" onClick={() => { setAuthMode('signin'); setLoginError(''); setVerifiedEmailInfo(''); }} className="text-xs font-semibold text-blue-700 hover:underline">
                   Back to Sign In
                 </button>
               </div>
-              <p className="text-[11px] text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
-                Enter the <strong>Main Admin Email ID</strong> granted permission by Our Company to activate your Main Admin account and begin creating Employee, Client/Employer, and Subcontractor accounts.
-              </p>
-              <input required type="email" placeholder="Authorized Main Admin Email ID * (e.g. director@apexmep.com)" value={orgForm.email} onChange={e => setOrgForm(s => ({ ...s, email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 font-mono" />
+              <div className="text-[11px] text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-2.5 space-y-1.5">
+                <p>
+                  Enter the <strong>Main Admin Email ID</strong> granted permission by <strong>Our Company</strong>. Click <strong>Verify Email ID</strong> to load your authorized profile:
+                </p>
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] font-bold uppercase text-indigo-800">Authorized Demo Emails:</span>
+                  {['director@apexmep.com', 'admin.bov@enser.com.mt', 'admin@mepfieldhub.com'].map(em => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => {
+                        setOrgForm(s => ({ ...s, email: em }));
+                        verifyMainAdminEmail(em);
+                      }}
+                      className="px-2 py-0.5 rounded bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-300 font-mono text-[10px] font-semibold cursor-pointer"
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {verifiedEmailInfo && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                  {verifiedEmailInfo}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input required type="email" placeholder="Authorized Main Admin Email ID * (e.g. director@apexmep.com)" value={orgForm.email} onChange={e => { setOrgForm(s => ({ ...s, email: e.target.value })); setVerifiedEmailInfo(''); }} className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 font-mono" />
+                <button type="button" onClick={() => verifyMainAdminEmail()} className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold whitespace-nowrap cursor-pointer">
+                  Verify Email ID
+                </button>
+              </div>
               <input required placeholder="Main Admin Full Name *" value={orgForm.admin_name} onChange={e => setOrgForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
               <input required placeholder="Company / Organization Name *" value={orgForm.organization_name} onChange={e => setOrgForm(s => ({ ...s, organization_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
               <div className="grid grid-cols-2 gap-2">
@@ -631,7 +689,7 @@ function LoginPage() {
               </div>
               <input required type="password" minLength={6} placeholder="Set Main Admin Password (min 6 chars) *" value={orgForm.password} onChange={e => setOrgForm(s => ({ ...s, password: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
               <button type="submit" disabled={loading} className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 text-sm font-bold text-white shadow-md">
-                {loading ? 'Activating Main Admin Account...' : 'Activate Main Admin Account'}
+                {loading ? 'Activating Main Admin Account...' : 'Activate Authorized Main Admin Account'}
               </button>
             </form>
           )}

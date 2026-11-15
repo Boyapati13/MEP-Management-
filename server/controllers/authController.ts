@@ -406,13 +406,54 @@ export function registerAuthController(app: Express): void {
     res.json({ ok: true });
   });
 
+  // Check if an Email ID has been granted Main Admin permission by Our Company
+  app.get("/api/auth/check-main-admin-email", (req, res) => {
+    try {
+      const cleanEmail = String(req.query.email || "").trim().toLowerCase();
+      if (!cleanEmail) {
+        const list = db
+          .prepare("SELECT email, admin_name, company_name, plan, status, username FROM authorized_main_admins WHERE status != 'Revoked' ORDER BY created_at DESC")
+          .all();
+        res.json({ authorized: false, available_authorized_emails: list });
+        return;
+      }
+      const record = db.prepare("SELECT * FROM authorized_main_admins WHERE LOWER(email)=?").get(cleanEmail) as any;
+      if (!record || record.status === "Revoked") {
+        res.status(404).json({
+          authorized: false,
+          error: `Permission Denied: Our Company has not yet granted Main Admin permission to "${cleanEmail}". Please ask Our Company (Platform Owner) to authorize your Email ID in Step 1 first.`,
+        });
+        return;
+      }
+      res.json({
+        authorized: true,
+        email: record.email,
+        admin_name: record.admin_name,
+        company_name: record.company_name,
+        username: record.username || cleanEmail.split("@")[0],
+        plan: record.plan || "Enterprise",
+        status: record.status,
+        authorized_by: record.authorized_by || "Our Company (Platform Owner)",
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to verify Main Admin Email ID" });
+    }
+  });
+
   // Self-service SaaS Organization Signup & Authorized Main Admin Email ID Activation
   app.post("/api/auth/register-organization", (req, res) => {
-    const { organization_name, country, currency, plan, admin_name, username, email, password } = req.body || {};
+    const { organization_name, country, currency, plan, admin_name, username, email, password, require_preauth } = req.body || {};
     const cleanEmail = String(email || "").trim().toLowerCase();
     const preAuth = cleanEmail
       ? (db.prepare("SELECT * FROM authorized_main_admins WHERE LOWER(email)=?").get(cleanEmail) as any)
       : null;
+
+    if (require_preauth && (!preAuth || preAuth.status === "Revoked")) {
+      res.status(403).json({
+        error: `Access Denied: Our Company has not granted Main Admin permission to Email ID "${cleanEmail || "provided"}". Our Company must first authorize your Email ID in Step 1 before you can activate a Main Admin account.`,
+      });
+      return;
+    }
 
     const finalOrgName = String(organization_name || preAuth?.company_name || "MEP Enterprise Workspace").trim();
     const finalAdminName = String(admin_name || preAuth?.admin_name || "Main Administrator").trim();

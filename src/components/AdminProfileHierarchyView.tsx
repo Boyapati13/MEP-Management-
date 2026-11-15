@@ -53,6 +53,7 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
     company: 'Enser / BOV MEP Delivery',
     trade: 'Electrical & ELV',
     project_id: selectedProject || 'bov-st-venera-2618',
+    work_package_id: '',
   });
 
   const [staffForm, setStaffForm] = useState({
@@ -244,10 +245,42 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
         company: 'Enser / BOV MEP Delivery',
         trade: 'Electrical & ELV',
         project_id: selectedProject || 'bov-st-venera-2618',
+        work_package_id: '',
       });
       loadHierarchy();
     } catch (err: any) {
       setNotice({ type: 'error', text: err?.message || 'Failed to create user account' });
+    }
+  };
+
+  const handleToggleMainAdminStatus = async (adm: any) => {
+    const nextStatus = adm.status === 'Revoked' ? 'Authorized' : 'Revoked';
+    try {
+      await api.post('/api/admin/assign-hierarchy', {
+        action: 'toggle_main_admin_status',
+        email: adm.email,
+        status: nextStatus,
+      });
+      setNotice({
+        type: 'success',
+        text: `Main Admin Email ID "${adm.email}" status updated to ${nextStatus}.`,
+      });
+      loadHierarchy();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: err?.message || 'Failed to update Main Admin status' });
+    }
+  };
+
+  const handleToggleUserStatus = async (u: any) => {
+    try {
+      await api.put(`/api/users/${u.id}/toggle-status`, {});
+      setNotice({
+        type: 'success',
+        text: `Updated status for "${u.name}" (${u.email || u.username}).`,
+      });
+      loadHierarchy();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: err?.message || 'Failed to toggle user status' });
     }
   };
 
@@ -279,6 +312,7 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
       company: defaultCompany,
       trade: category === 'Client / Employer' ? 'Client / Employer Representative' : 'Electrical & ELV',
       project_id: selectedProject || allProjects[0]?.id || 'bov-st-venera-2618',
+      work_package_id: '',
     });
     setShowProvisionStakeholder(true);
   };
@@ -302,6 +336,7 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
   const allSites: any[] = data?.sites || [];
   const authorizedMainAdmins: any[] = data?.authorizedMainAdmins || [];
   const allUsers: any[] = data?.users || [];
+  const allWorkPackages: any[] = data?.workPackages || [];
 
   const filteredStakeholders = allUsers.filter((u: any) => {
     if (stakeholderFilter === 'ALL') return true;
@@ -543,15 +578,30 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
                           Company: <strong>{adm.company_name}</strong> · By: {adm.authorized_by || 'Our Company'}
                         </div>
                       </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 border ${
-                          adm.status === 'Activated'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-amber-50 text-amber-800 border-amber-200'
-                        }`}
-                      >
-                        {adm.status || 'Authorized'}
-                      </span>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            adm.status === 'Activated'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : adm.status === 'Revoked'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          {adm.status || 'Authorized'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMainAdminStatus(adm)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border cursor-pointer transition-colors ${
+                            adm.status === 'Revoked'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                          }`}
+                        >
+                          {adm.status === 'Revoked' ? 'Restore Permission' : 'Revoke'}
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -628,14 +678,15 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
             </div>
 
             {/* Provisioned Accounts Table */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[250px] overflow-y-auto">
+            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[260px] overflow-y-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase text-slate-500">
                     <th className="py-2 px-3">Name &amp; Company</th>
                     <th className="py-2 px-3">Login Email ID / Username</th>
                     <th className="py-2 px-3">Account Category &amp; Role</th>
-                    <th className="py-2 px-3">Portal Access</th>
+                    <th className="py-2 px-3">Portal &amp; Project Scope</th>
+                    <th className="py-2 px-3 text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -666,9 +717,12 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
                         ? 'Client / Employer Portal'
                         : u.role === 'Subcontractor'
                         ? 'Subcontractor Portal'
+                        : u.role === 'Worker'
+                        ? 'Worker Field Mobile App'
                         : u.role === 'Admin'
                         ? 'Full Main Admin Console'
                         : 'Internal Engineering ERP';
+                    const isSuspended = u.status === 'Suspended' || u.status === 'Inactive';
                     return (
                       <tr key={u.id} className="hover:bg-slate-50">
                         <td className="py-2 px-3">
@@ -683,9 +737,39 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${badgeCls}`}>
                             {cat} ({u.role})
                           </span>
+                          {u.created_by_admin && (
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              By: {u.created_by_admin}
+                            </div>
+                          )}
                         </td>
-                        <td className="py-2 px-3 text-[11px] font-semibold text-slate-700">
-                          {portalName}
+                        <td className="py-2 px-3 text-[11px]">
+                          <div className="font-semibold text-slate-800">{portalName}</div>
+                          <div className="text-[10px] text-slate-500 truncate max-w-[180px]">
+                            {u.project_names || (u.role === 'Admin' ? 'All Enterprise Projects' : 'BOV St. Venera (Job 2618)')}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                isSuspended
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              {u.status || 'Active'}
+                            </span>
+                            {u.username !== 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleUserStatus(u)}
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
+                              >
+                                {isSuspended ? 'Activate' : 'Suspend'}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1506,6 +1590,27 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
                   ))}
                 </select>
               </div>
+              {stakeholderForm.role === 'Subcontractor' && allWorkPackages.length > 0 && (
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                    Assigned Subcontractor Work Package (WBS Scope)
+                  </label>
+                  <select
+                    value={stakeholderForm.work_package_id}
+                    onChange={e => setStakeholderForm(s => ({ ...s, work_package_id: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white"
+                  >
+                    <option value="">Auto-Match by Trade ({stakeholderForm.trade || 'Electrical / HVAC'})</option>
+                    {allWorkPackages
+                      .filter((wp: any) => stakeholderForm.project_id === 'ALL' || wp.project_id === stakeholderForm.project_id)
+                      .map((wp: any) => (
+                        <option key={wp.id} value={wp.id}>
+                          [{wp.code || wp.id}] {wp.name} ({wp.discipline || wp.trade || 'MEP'})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">

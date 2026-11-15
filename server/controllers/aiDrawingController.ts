@@ -2058,10 +2058,17 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   // =========================================================================
   app.get("/api/admin/command-hierarchy", authRequired, (req: Request, res: Response) => {
     try {
-      const users = db.prepare("SELECT id, username, name, role, email, phone, company, trade, status, created_at FROM users ORDER BY name ASC").all().map(rowToDict);
+      const users = db.prepare(`
+        SELECT u.id, u.username, u.name, u.role, u.email, u.phone, u.company_id, u.company, u.trade,
+          u.work_package_id, u.worker_id, u.stakeholder_type, u.created_by_admin, u.status, u.created_at,
+          (SELECT GROUP_CONCAT(p.name, ', ') FROM project_memberships pm JOIN projects p ON p.id = pm.project_id WHERE pm.user_id = u.id AND pm.active = 1) as project_names
+        FROM users u
+        ORDER BY u.name ASC
+      `).all().map(rowToDict);
       const projects = db.prepare("SELECT * FROM projects ORDER BY name ASC").all().map(rowToDict);
       const sites = db.prepare("SELECT * FROM sites ORDER BY name ASC").all().map(rowToDict);
       const workers = db.prepare("SELECT * FROM workers ORDER BY name ASC").all().map(rowToDict);
+      const workPackages = db.prepare("SELECT * FROM work_packages ORDER BY code ASC").all().map(rowToDict);
 
       const adminUsers = users.filter((u: any) => u.role === "Admin");
       const pmUsers = users.filter((u: any) => u.role === "ProjectManager");
@@ -2171,6 +2178,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         projects,
         sites,
         workers,
+        workPackages,
         users,
       });
     } catch (err: any) {
@@ -2283,7 +2291,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
       }
 
       if (action === "create_staff" || action === "provision_stakeholder") {
-        const { name, username, role, email, phone, company, trade, project_id, stakeholder_type, password } = req.body;
+        const { name, username, role, email, phone, company, trade, project_id, stakeholder_type, password, work_package_id } = req.body;
         const cleanEmail = String(email || "").trim().toLowerCase();
         const cleanUsername = String(username || cleanEmail.split("@")[0] || name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14)).trim().toLowerCase();
         if (!name || !cleanEmail) {
@@ -2306,25 +2314,87 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
             ? "Main Admin"
             : "Employee (Internal)");
 
+        const targetProjectIds: string[] = [];
+        if (project_id && project_id !== "ALL") {
+          targetProjectIds.push(String(project_id));
+        } else {
+          const allProjs = db.prepare("SELECT id FROM projects").all() as any[];
+          for (const p of allProjs) targetProjectIds.push(p.id);
+        }
+        const primaryProjId = targetProjectIds[0] || "bov-st-venera-2618";
+
+        // Resolve or create company record for Subcontractor / Client / Consultant so company-scoped access checks succeed
+        let resolvedCompanyId: string | null = null;
+        if (company && (resolvedRole === "Subcontractor" || resolvedRole === "Client" || resolvedRole === "Consultant")) {
+          try {
+            const existingComp = db.prepare("SELECT id FROM companies WHERE LOWER(name)=LOWER(?) LIMIT 1").get(String(company).trim()) as any;
+            resolvedCompanyId = existingComp?.id || `comp-${crypto.randomUUID().slice(0, 8)}`;
+            if (!existingComp) {
+              db.prepare(`
+                INSERT OR IGNORE INTO companies (id, name, type, trade, contact_person, email, phone, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?)
+              `).run(
+                resolvedCompanyId,
+                String(company).trim(),
+                resolvedRole === "Client" ? "Client" : resolvedRole,
+                trade || "MEP",
+                name,
+                cleanEmail,
+                phone || "",
+                nowIso
+              );
+            }
+            for (const pid of targetProjectIds) {
+              const pcExists = db.prepare("SELECT 1 FROM project_companies WHERE project_id=? AND company_id=?").get(pid, resolvedCompanyId);
+              if (!pcExists) {
+                db.prepare("INSERT OR IGNORE INTO project_companies (id, project_id, company_id, role_in_project, created_at) VALUES (?, ?, ?, ?, ?)").run(
+                  `pc-${crypto.randomUUID().slice(0, 8)}`,
+                  pid,
+                  resolvedCompanyId,
+                  resolvedRole,
+                  nowIso
+                );
+              }
+            }
+          } catch {}
+        }
+
+        // Resolve work_package_id for Subcontractor so Subcontractor Portal Command Center works out of the box
+        let resolvedWpId: string | null = work_package_id || null;
+        if (resolvedRole === "Subcontractor" && !resolvedWpId) {
+          try {
+            const wpMatch = db.prepare(
+              "SELECT id FROM work_packages WHERE project_id=? AND (LOWER(discipline) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?)) LIMIT 1"
+            ).get(primaryProjId, `%${(trade || "Electrical").split(" ")[0]}%`, `%${(trade || "Electrical").split(" ")[0]}%`) as any;
+            const anyWp = wpMatch || (db.prepare("SELECT id FROM work_packages WHERE project_id=? LIMIT 1").get(primaryProjId) as any);
+            if (anyWp) resolvedWpId = anyWp.id;
+          } catch {}
+        }
+
         if (existingUser) {
           db.prepare(`
             UPDATE users
-            SET name=?, role=?, email=?, phone=?, company=?, trade=?, stakeholder_type=?, status='Active'
+            SET name=?, role=?, email=?, phone=?, company_id=COALESCE(?, company_id), company=?, trade=?,
+                work_package_id=COALESCE(?, work_package_id), stakeholder_type=?, status='Active'
             WHERE id=?
           `).run(
             name,
             resolvedRole,
             cleanEmail,
             phone || "",
+            resolvedCompanyId,
             company || "Enser / MEP Delivery",
             trade || "Multi-Discipline MEP",
+            resolvedWpId,
             resolvedStakeholder,
             newUserId
           );
         } else {
           db.prepare(`
-            INSERT INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, stakeholder_type, created_by_admin, created_at, must_change_password)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, 0)
+            INSERT INTO users (
+              id, username, name, password_hash, role, email, phone, company_id, company, trade,
+              work_package_id, access_scope, status, stakeholder_type, created_by_admin, created_at, must_change_password
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, 0)
           `).run(
             newUserId,
             cleanUsername,
@@ -2333,57 +2403,87 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
             resolvedRole,
             cleanEmail,
             phone || "",
+            resolvedCompanyId,
             company || "Enser / MEP Delivery",
             trade || "Multi-Discipline MEP",
+            resolvedWpId,
+            resolvedRole === "Subcontractor" ? "work_package" : "company",
             resolvedStakeholder,
             req.user?.name || "Main Admin",
             nowIso
           );
         }
 
-        // If Subcontractor or Client/Employer, also register in companies directory if not present
-        if (company && (resolvedRole === "Subcontractor" || resolvedRole === "Client" || resolvedRole === "Consultant")) {
+        // If role === 'Worker', also link/create a worker profile so WorkerMobileShell works immediately on login
+        if (resolvedRole === "Worker") {
           try {
-            const compId = `comp-${crypto.randomUUID().slice(0, 8)}`;
+            const wrkId = `wrk-${crypto.randomUUID().slice(0, 8)}`;
+            const firstSite = db.prepare("SELECT id, supervisor_id, supervisor_name FROM sites WHERE project_id=? LIMIT 1").get(primaryProjId) as any;
             db.prepare(`
-              INSERT OR IGNORE INTO companies (id, name, type, trade, contact_person, email, phone, status, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?)
+              INSERT OR IGNORE INTO workers (
+                id, user_id, project_id, site_id, name, employee_id, trade, employment_type,
+                nationality, phone, email, supervisor_id, supervisor_name, role_on_site, status, hired_date, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Permanent', 'Malta / EU', ?, ?, ?, ?, 'MEP Site Technician', 'Active', ?, ?)
             `).run(
-              compId,
-              company,
-              resolvedRole === "Client" ? "Client / Employer" : resolvedRole,
-              trade || "MEP",
+              wrkId,
+              newUserId,
+              primaryProjId,
+              firstSite?.id || "site-2618-l1",
               name,
-              cleanEmail,
+              `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+              trade || "Electrical",
               phone || "",
+              cleanEmail,
+              firstSite?.supervisor_id || "usr-sup-elec",
+              firstSite?.supervisor_name || "Carmelo Vella",
+              nowIso.slice(0, 10),
               nowIso
             );
+            db.prepare("UPDATE users SET worker_id=? WHERE id=?").run(wrkId, newUserId);
           } catch {}
         }
 
-        if (project_id && project_id !== "ALL") {
+        for (const pid of targetProjectIds) {
           db.prepare("INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active) VALUES (?, ?, ?, 1)").run(
             newUserId,
-            project_id,
+            pid,
             resolvedRole
           );
+        }
+        if (project_id && project_id !== "ALL") {
           if (resolvedRole === "ProjectManager" && action === "create_staff") {
             db.prepare("UPDATE projects SET project_manager_id = ?, project_manager_name = ? WHERE id = ?").run(newUserId, name, project_id);
           } else if (resolvedRole === "SiteEngineer" && action === "create_staff") {
             db.prepare("UPDATE projects SET site_supervisor_id = ?, site_supervisor_name = ? WHERE id = ?").run(newUserId, name, project_id);
           }
-        } else {
-          // Grant membership across active projects when 'ALL' is chosen
-          const allProjs = db.prepare("SELECT id FROM projects").all() as any[];
-          for (const p of allProjs) {
-            db.prepare("INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active) VALUES (?, ?, ?, 1)").run(
-              newUserId,
-              p.id,
-              resolvedRole
-            );
-          }
         }
-        res.status(201).json({ success: true, id: newUserId, username: cleanUsername, email: cleanEmail, role: resolvedRole, stakeholder_type: resolvedStakeholder });
+        res.status(201).json({
+          success: true,
+          id: newUserId,
+          username: cleanUsername,
+          email: cleanEmail,
+          role: resolvedRole,
+          stakeholder_type: resolvedStakeholder,
+          company_id: resolvedCompanyId,
+          work_package_id: resolvedWpId,
+        });
+        return;
+      }
+
+      if (action === "toggle_main_admin_status") {
+        const { email } = req.body;
+        const cleanEmail = String(email || "").trim().toLowerCase();
+        const existing = db.prepare("SELECT * FROM authorized_main_admins WHERE LOWER(email)=?").get(cleanEmail) as any;
+        if (!existing) {
+          res.status(404).json({ error: "Authorized Main Admin record not found" });
+          return;
+        }
+        const nextStatus = existing.status === "Revoked" ? (existing.user_id ? "Activated" : "Authorized") : "Revoked";
+        db.prepare("UPDATE authorized_main_admins SET status=? WHERE LOWER(email)=?").run(nextStatus, cleanEmail);
+        if (existing.user_id) {
+          db.prepare("UPDATE users SET status=? WHERE id=?").run(nextStatus === "Revoked" ? "Inactive" : "Active", existing.user_id);
+        }
+        res.json({ success: true, email: cleanEmail, status: nextStatus });
         return;
       }
 

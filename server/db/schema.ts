@@ -1519,11 +1519,18 @@ export function seedData() {
     upsertUser.run("usr-sub-hvac2618", "climate_sub", "Ing. Mario Cutajar (ClimateControl Subcontractor)", defaultPw, "Subcontractor", "m.cutajar@climatecontrol.com.mt", "+356 7900 3344", "ClimateControl Malta Ltd", "HVAC & VRF Subcontractor", "Subcontractor", nowIso);
     upsertUser.run("usr-cons-enser", "enser_consultant", "Ing. Robert Farrugia (Enser Consultant)", defaultPw, "Consultant", "r.farrugia@enser.com.mt", "+356 2144 2618", "Enser Ltd Consulting Engineers", "Lead MEP Consultant", "Consultant", nowIso);
 
+    // Ensure Subcontractor work_package_id and access_scope so Subcontractor Portal loads their trade packages out of the box
+    const wpElec = (db.prepare("SELECT id FROM work_packages WHERE project_id = 'bov-st-venera-2618' AND (discipline LIKE '%Elec%' OR name LIKE '%Elec%') LIMIT 1").get() as any)?.id || "wp-02";
+    const wpHvac = (db.prepare("SELECT id FROM work_packages WHERE project_id = 'bov-st-venera-2618' AND (discipline LIKE '%HVAC%' OR name LIKE '%HVAC%') LIMIT 1").get() as any)?.id || "wp-04";
+    db.prepare("UPDATE users SET work_package_id = COALESCE(work_package_id, ?), access_scope = 'work_package' WHERE id = 'usr-sub-elec2618'").run(wpElec);
+    db.prepare("UPDATE users SET work_package_id = COALESCE(work_package_id, ?), access_scope = 'work_package' WHERE id = 'usr-sub-hvac2618'").run(wpHvac);
+
     // Ensure project_memberships for PMs & Supervisors
     const upsertMembership = db.prepare(`
       INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active)
       VALUES (?, ?, ?, 1)
     `);
+    upsertMembership.run("usr-main-admin-enser", "bov-st-venera-2618", "Admin");
     upsertMembership.run("usr-pm-2618", "bov-st-venera-2618", "ProjectManager");
     upsertMembership.run("usr-sup-elec", "bov-st-venera-2618", "SiteSupervisor");
     upsertMembership.run("usr-sup-hvac", "bov-st-venera-2618", "SiteSupervisor");
