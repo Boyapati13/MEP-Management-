@@ -546,13 +546,13 @@ function LoginPage() {
           <form onSubmit={handleLogin} aria-busy={loading} className="space-y-4 sm:space-y-5">
             <div>
               <label htmlFor="mep-login-username" className="mb-1.5 block text-xs sm:text-sm font-semibold text-slate-700">
-                Username
+                Email ID or Username
               </label>
               <input
                 id="mep-login-username"
                 autoComplete="username"
                 className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 sm:px-4 sm:py-3.5 text-sm text-slate-900 shadow-xs outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 touch-manipulation"
-                placeholder="Your assigned username"
+                placeholder="Enter your Email ID (e.g. admin@mepfieldhub.com) or username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
@@ -600,9 +600,9 @@ function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setAuthMode('signup'); setLoginError(''); }}
-                className="font-semibold text-slate-700 hover:text-blue-700"
+                className="font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
               >
-                Create Organization (Free Trial) →
+                Activate Main Admin (Email ID) →
               </button>
             </div>
           )}
@@ -610,29 +610,28 @@ function LoginPage() {
           {authMode === 'signup' && (
             <form onSubmit={handleOrgSignup} className="space-y-3 mt-2">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold uppercase text-slate-500">New SaaS Organization</span>
+                <span className="text-xs font-bold uppercase text-indigo-700">Activate Authorized Main Admin (Email ID)</span>
                 <button type="button" onClick={() => setAuthMode('signin')} className="text-xs font-semibold text-blue-700 hover:underline">
                   Back to Sign In
                 </button>
               </div>
+              <p className="text-[11px] text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
+                Enter the <strong>Main Admin Email ID</strong> granted permission by Our Company to activate your Main Admin account and begin creating Employee, Client/Employer, and Subcontractor accounts.
+              </p>
+              <input required type="email" placeholder="Authorized Main Admin Email ID * (e.g. director@apexmep.com)" value={orgForm.email} onChange={e => setOrgForm(s => ({ ...s, email: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 font-mono" />
+              <input required placeholder="Main Admin Full Name *" value={orgForm.admin_name} onChange={e => setOrgForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
               <input required placeholder="Company / Organization Name *" value={orgForm.organization_name} onChange={e => setOrgForm(s => ({ ...s, organization_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
-              <div className="grid grid-cols-3 gap-2">
-                <input placeholder="Country" value={orgForm.country} onChange={e => setOrgForm(s => ({ ...s, country: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900" />
-                <select value={orgForm.currency} onChange={e => setOrgForm(s => ({ ...s, currency: e.target.value }))} className="rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 bg-white">
-                  <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="SGD">SGD</option>
-                </select>
-                <select value={orgForm.plan} onChange={e => setOrgForm(s => ({ ...s, plan: e.target.value }))} className="rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 bg-white">
-                  <option value="Starter">Starter</option><option value="Professional">Professional</option><option value="Enterprise">Enterprise</option>
-                </select>
-              </div>
-              <input required placeholder="Admin Full Name *" value={orgForm.admin_name} onChange={e => setOrgForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
               <div className="grid grid-cols-2 gap-2">
-                <input required placeholder="Admin Username *" value={orgForm.username} onChange={e => setOrgForm(s => ({ ...s, username: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
-                <input type="email" placeholder="Work Email" value={orgForm.email} onChange={e => setOrgForm(s => ({ ...s, email: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
+                <input placeholder="Optional Username" value={orgForm.username} onChange={e => setOrgForm(s => ({ ...s, username: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 font-mono" />
+                <select value={orgForm.plan} onChange={e => setOrgForm(s => ({ ...s, plan: e.target.value }))} className="rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 bg-white">
+                  <option value="Enterprise">Enterprise Plan</option>
+                  <option value="Professional">Professional Plan</option>
+                  <option value="Starter">Starter Plan</option>
+                </select>
               </div>
-              <input required type="password" minLength={8} placeholder="Password (min 8 chars) *" value={orgForm.password} onChange={e => setOrgForm(s => ({ ...s, password: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
-              <button type="submit" disabled={loading} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-bold text-white shadow-md">
-                {loading ? 'Provisioning Workspace...' : 'Start Free Trial Workspace'}
+              <input required type="password" minLength={6} placeholder="Set Main Admin Password (min 6 chars) *" value={orgForm.password} onChange={e => setOrgForm(s => ({ ...s, password: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+              <button type="submit" disabled={loading} className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 text-sm font-bold text-white shadow-md">
+                {loading ? 'Activating Main Admin Account...' : 'Activate Main Admin Account'}
               </button>
             </form>
           )}

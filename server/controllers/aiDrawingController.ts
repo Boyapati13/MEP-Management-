@@ -2142,14 +2142,19 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         };
       }).sort((a: any, b: any) => (b.total_workers - a.total_workers) || (b.total_projects - a.total_projects));
 
-      const currentAdmin = adminUsers[0] || {
+      const currentAdmin = adminUsers.find((u: any) => u.id === req.user?.user_id) || adminUsers[0] || {
         id: req.user?.user_id || "admin",
         name: req.user?.name || "Executive Administrator",
         username: "admin",
         role: "Admin",
-        email: "admin@mep.com",
+        email: "admin@mepfieldhub.com",
         company: "MEP FieldHub Enterprise",
       };
+
+      let authorizedMainAdmins: any[] = [];
+      try {
+        authorizedMainAdmins = db.prepare("SELECT * FROM authorized_main_admins ORDER BY created_at DESC").all().map(rowToDict);
+      } catch {}
 
       res.json({
         adminProfile: {
@@ -2160,6 +2165,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
           total_supervisors: supervisorUsers.length,
           total_workers: workers.length,
         },
+        authorizedMainAdmins,
         projectManagers,
         supervisors: supervisorUsers,
         projects,
@@ -2276,44 +2282,188 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
 
-      if (action === "create_staff") {
-        const { name, username, role, email, phone, company, trade, project_id } = req.body;
-        const newUserId = `usr-${crypto.randomUUID().slice(0, 8)}`;
-        const pwHash = hashPassword(req.body?.password || "admin123");
-        db.prepare(`
-          INSERT INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, created_at, must_change_password)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, 0)
-        `).run(
-          newUserId,
-          username || name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14),
-          name,
-          pwHash,
-          role || "ProjectManager",
-          email || "",
-          phone || "",
-          company || "Enser / MEP Delivery",
-          trade || "Multi-Discipline MEP",
-          nowIso
-        );
-        if (project_id) {
+      if (action === "create_staff" || action === "provision_stakeholder") {
+        const { name, username, role, email, phone, company, trade, project_id, stakeholder_type, password } = req.body;
+        const cleanEmail = String(email || "").trim().toLowerCase();
+        const cleanUsername = String(username || cleanEmail.split("@")[0] || name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14)).trim().toLowerCase();
+        if (!name || !cleanEmail) {
+          res.status(400).json({ error: "Full Name and Email ID are required to create a user account." });
+          return;
+        }
+        const existingUser = db.prepare("SELECT id FROM users WHERE LOWER(username)=? OR LOWER(email)=?").get(cleanUsername, cleanEmail) as any;
+        const newUserId = existingUser?.id || `usr-${crypto.randomUUID().slice(0, 8)}`;
+        const pwHash = hashPassword(password || "admin123");
+        const resolvedRole = role || "SiteEngineer";
+        const resolvedStakeholder =
+          stakeholder_type ||
+          (resolvedRole === "Client"
+            ? "Client / Employer"
+            : resolvedRole === "Subcontractor"
+            ? "Subcontractor"
+            : resolvedRole === "Consultant"
+            ? "Consultant"
+            : resolvedRole === "Admin"
+            ? "Main Admin"
+            : "Employee (Internal)");
+
+        if (existingUser) {
+          db.prepare(`
+            UPDATE users
+            SET name=?, role=?, email=?, phone=?, company=?, trade=?, stakeholder_type=?, status='Active'
+            WHERE id=?
+          `).run(
+            name,
+            resolvedRole,
+            cleanEmail,
+            phone || "",
+            company || "Enser / MEP Delivery",
+            trade || "Multi-Discipline MEP",
+            resolvedStakeholder,
+            newUserId
+          );
+        } else {
+          db.prepare(`
+            INSERT INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, stakeholder_type, created_by_admin, created_at, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, 0)
+          `).run(
+            newUserId,
+            cleanUsername,
+            name,
+            pwHash,
+            resolvedRole,
+            cleanEmail,
+            phone || "",
+            company || "Enser / MEP Delivery",
+            trade || "Multi-Discipline MEP",
+            resolvedStakeholder,
+            req.user?.name || "Main Admin",
+            nowIso
+          );
+        }
+
+        // If Subcontractor or Client/Employer, also register in companies directory if not present
+        if (company && (resolvedRole === "Subcontractor" || resolvedRole === "Client" || resolvedRole === "Consultant")) {
+          try {
+            const compId = `comp-${crypto.randomUUID().slice(0, 8)}`;
+            db.prepare(`
+              INSERT OR IGNORE INTO companies (id, name, type, trade, contact_person, email, phone, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', ?)
+            `).run(
+              compId,
+              company,
+              resolvedRole === "Client" ? "Client / Employer" : resolvedRole,
+              trade || "MEP",
+              name,
+              cleanEmail,
+              phone || "",
+              nowIso
+            );
+          } catch {}
+        }
+
+        if (project_id && project_id !== "ALL") {
           db.prepare("INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active) VALUES (?, ?, ?, 1)").run(
             newUserId,
             project_id,
-            role || "ProjectManager"
+            resolvedRole
           );
-          if (role === "ProjectManager") {
+          if (resolvedRole === "ProjectManager" && action === "create_staff") {
             db.prepare("UPDATE projects SET project_manager_id = ?, project_manager_name = ? WHERE id = ?").run(newUserId, name, project_id);
-          } else {
+          } else if (resolvedRole === "SiteEngineer" && action === "create_staff") {
             db.prepare("UPDATE projects SET site_supervisor_id = ?, site_supervisor_name = ? WHERE id = ?").run(newUserId, name, project_id);
           }
+        } else {
+          // Grant membership across active projects when 'ALL' is chosen
+          const allProjs = db.prepare("SELECT id FROM projects").all() as any[];
+          for (const p of allProjs) {
+            db.prepare("INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active) VALUES (?, ?, ?, 1)").run(
+              newUserId,
+              p.id,
+              resolvedRole
+            );
+          }
         }
-        res.status(201).json({ success: true, id: newUserId });
+        res.status(201).json({ success: true, id: newUserId, username: cleanUsername, email: cleanEmail, role: resolvedRole, stakeholder_type: resolvedStakeholder });
+        return;
+      }
+
+      if (action === "authorize_main_admin") {
+        const { email, admin_name, company_name, plan, username, password, notes, provision_now } = req.body;
+        const cleanEmail = String(email || "").trim().toLowerCase();
+        if (!cleanEmail || !admin_name || !company_name) {
+          res.status(400).json({ error: "Main Admin Email ID, Full Name, and Company Name are required." });
+          return;
+        }
+        const cleanUsername = String(username || cleanEmail.split("@")[0] || "main_admin").trim().toLowerCase();
+        const shouldActivate = provision_now !== false && Boolean(password || true);
+        const pwHash = hashPassword(password || "admin123");
+        let userId: string | null = null;
+
+        if (shouldActivate) {
+          const existing = db.prepare("SELECT id FROM users WHERE LOWER(email)=? OR LOWER(username)=?").get(cleanEmail, cleanUsername) as any;
+          userId = existing?.id || `usr-admin-${crypto.randomUUID().slice(0, 6)}`;
+          if (existing) {
+            db.prepare(`
+              UPDATE users SET name=?, email=?, company=?, role='Admin', status='Active', stakeholder_type='Main Admin' WHERE id=?
+            `).run(admin_name, cleanEmail, company_name, userId);
+          } else {
+            db.prepare(`
+              INSERT INTO users (id, username, name, password_hash, role, email, company, trade, status, stakeholder_type, created_by_admin, created_at, must_change_password)
+              VALUES (?, ?, ?, ?, 'Admin', ?, ?, 'All MEP Disciplines', 'Active', 'Main Admin', 'Our Company (Platform Owner)', ?, 0)
+            `).run(userId, cleanUsername, admin_name, pwHash, cleanEmail, company_name, nowIso);
+          }
+        }
+
+        const authId = `auth-adm-${crypto.randomUUID().slice(0, 6)}`;
+        db.prepare(`
+          INSERT INTO authorized_main_admins (
+            id, email, admin_name, company_name, plan, status, username, user_id, authorized_by, notes, created_at, activated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Our Company (Platform Owner)', ?, ?, ?)
+          ON CONFLICT(email) DO UPDATE SET
+            admin_name=excluded.admin_name,
+            company_name=excluded.company_name,
+            plan=excluded.plan,
+            status=excluded.status,
+            username=excluded.username,
+            user_id=COALESCE(excluded.user_id, authorized_main_admins.user_id),
+            notes=excluded.notes,
+            activated_at=COALESCE(excluded.activated_at, authorized_main_admins.activated_at)
+        `).run(
+          authId,
+          cleanEmail,
+          admin_name,
+          company_name,
+          plan || "Enterprise",
+          shouldActivate ? "Activated" : "Authorized",
+          cleanUsername,
+          userId,
+          notes || "Authorized by Our Company via Email ID — permitted to create Employee, Client/Employer & Subcontractor accounts.",
+          nowIso,
+          shouldActivate ? nowIso : null
+        );
+
+        res.status(201).json({
+          success: true,
+          email: cleanEmail,
+          username: cleanUsername,
+          status: shouldActivate ? "Activated" : "Authorized",
+          user_id: userId,
+        });
         return;
       }
 
       res.status(400).json({ error: "Unknown hierarchy action" });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Failed to update command hierarchy" });
+    }
+  });
+
+  app.get("/api/admin/authorized-main-admins", authRequired, (_req: Request, res: Response) => {
+    try {
+      const rows = db.prepare("SELECT * FROM authorized_main_admins ORDER BY created_at DESC").all().map(rowToDict);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to load authorized main admins" });
     }
   });
 

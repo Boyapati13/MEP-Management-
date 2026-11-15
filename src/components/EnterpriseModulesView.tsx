@@ -6088,11 +6088,24 @@ const CompaniesDirectoryWorkspace: React.FC = () => {
  * ========================================================================== */
 const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
   const [users, setUsers] = useState<any[]>([]);
+  const [authorizedAdmins, setAuthorizedAdmins] = useState<any[]>([]);
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [showAdd, setShowAdd] = useState(false);
+  const [showAuthorizeMainAdmin, setShowAuthorizeMainAdmin] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [mainAdminForm, setMainAdminForm] = useState({
+    email: '',
+    admin_name: '',
+    company_name: '',
+    username: '',
+    password: '',
+    plan: 'Enterprise',
+    provision_now: true,
+  });
   const [form, setForm] = useState({
+    stakeholder_type: 'Employee (Internal)',
     name: '',
     username: '',
     password: '',
@@ -6105,23 +6118,54 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
 
   const loadUsers = useCallback(() => {
     api.get<any[]>('/api/users').then(r => setUsers(Array.isArray(r) ? r : [])).catch(() => {});
+    api.get<any[]>('/api/admin/authorized-main-admins').then(r => setAuthorizedAdmins(Array.isArray(r) ? r : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
 
+  const handleAuthorizeMainAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res: any = await api.post('/api/admin/assign-hierarchy', {
+        action: 'authorize_main_admin',
+        ...mainAdminForm,
+      });
+      setShowAuthorizeMainAdmin(false);
+      setNotice(`Our Company granted Main Admin permission to Email ID "${res.email || mainAdminForm.email}" (${mainAdminForm.admin_name})!`);
+      setMainAdminForm({
+        email: '',
+        admin_name: '',
+        company_name: '',
+        username: '',
+        password: '',
+        plan: 'Enterprise',
+        provision_now: true,
+      });
+      loadUsers();
+    } catch (err: any) {
+      setError(err.message || 'Unable to authorize Main Admin Email ID');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
     try {
-      await api.post('/api/users', {
+      await api.post('/api/admin/assign-hierarchy', {
+        action: 'provision_stakeholder',
         ...form,
-        project_ids: form.project_id ? [form.project_id] : ['ALL'],
       });
       setShowAdd(false);
+      setNotice(`Created ${form.stakeholder_type} account for "${form.name}" (${form.email})!`);
       setForm({
+        stakeholder_type: 'Employee (Internal)',
         name: '',
         username: '',
         password: '',
@@ -6153,23 +6197,73 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
       <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-            Identity &amp; Tenant Access Control
+            Identity &amp; 2-Tier Tenant Access Control
           </span>
-          <h1 className="text-lg font-bold text-slate-900 mt-1">Users &amp; 8-Role RBAC Matrix</h1>
+          <h1 className="text-lg font-bold text-slate-900 mt-1">Users, Authorized Main Admins &amp; 8-Role RBAC Matrix</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Role-based access control across Admin, ProjectManager, SiteEngineer, CommercialManager, QAQC, SafetyOfficer, Subcontractor, and Client portals.
+            Step 1: Our Company grants Main Admin permission by Email ID → Step 2: Main Admin creates accounts for Employees, Clients/Employers &amp; Subcontractors.
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-3.5 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Plus size={14} /> Provision User Account
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => { setError(''); setShowAuthorizeMainAdmin(true); }}
+            className="px-3.5 py-2 rounded-md bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+          >
+            <ShieldCheck size={14} /> + Step 1: Authorize Main Admin (Email ID)
+          </button>
+          <button
+            onClick={() => { setError(''); setShowAdd(true); }}
+            className="px-3.5 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus size={14} /> + Step 2: Create Employee / Client / Subcontractor
+          </button>
+        </div>
+      </div>
+
+      {notice && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-between">
+          <span>{notice}</span>
+          <button onClick={() => setNotice('')} className="underline text-[11px]">Dismiss</button>
+        </div>
+      )}
+
+      {/* Authorized Main Admin Email IDs Strip */}
+      <div className="bg-indigo-950 text-white rounded-lg border border-indigo-800 p-4 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+              Tier 1 · Authorized by Our Company (Platform Owner)
+            </span>
+            <h3 className="text-sm font-bold">Main Admin Accounts Permitted by Email ID ({authorizedAdmins.length})</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAuthorizeMainAdmin(true)}
+            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold cursor-pointer"
+          >
+            + Grant Main Admin Email ID
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          {authorizedAdmins.map((adm: any) => (
+            <div key={adm.id || adm.email} className="bg-slate-900/90 border border-indigo-800/80 rounded-lg p-3 text-xs flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-bold text-white truncate">{adm.admin_name}</div>
+                <div className="font-mono text-[11px] text-indigo-300 truncate">{adm.email}</div>
+                <div className="text-[11px] text-slate-400 truncate">{adm.company_name}</div>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                adm.status === 'Activated' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }`}>
+                {adm.status || 'Authorized'}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="flex items-center gap-1.5 overflow-x-auto bg-white border border-slate-200 rounded-lg p-2">
-        {['ALL', 'Admin', 'ProjectManager', 'SiteEngineer', 'CommercialManager', 'QAQC', 'SafetyOfficer', 'Subcontractor', 'Client'].map(r => (
+        {['ALL', 'Admin', 'ProjectManager', 'SiteEngineer', 'CommercialManager', 'QAQC', 'SafetyOfficer', 'Subcontractor', 'Client', 'Consultant'].map(r => (
           <button
             key={r}
             onClick={() => setRoleFilter(r)}
@@ -6187,8 +6281,8 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <th className="py-3 px-4">Full Name</th>
-              <th className="py-3 px-4">Username</th>
-              <th className="py-3 px-4">Security Role</th>
+              <th className="py-3 px-4">Login Email ID &amp; Username</th>
+              <th className="py-3 px-4">Account Type &amp; Role</th>
               <th className="py-3 px-4">Company &amp; Trade</th>
               <th className="py-3 px-4">Project Scope</th>
               <th className="py-3 px-4">Status</th>
@@ -6199,10 +6293,13 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
             {filteredUsers.map((u: any) => (
               <tr key={u.id} className="hover:bg-slate-50">
                 <td className="py-3 px-4 font-bold text-slate-900">{u.name || u.username}</td>
-                <td className="py-3 px-4 font-mono text-slate-600">{u.username}</td>
+                <td className="py-3 px-4 font-mono text-slate-600">
+                  <div className="text-blue-700 font-semibold">{u.email || `${u.username}@mepfieldhub.com`}</div>
+                  <div className="text-[11px] text-slate-400">@{u.username}</div>
+                </td>
                 <td className="py-3 px-4">
                   <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
-                    {u.role}
+                    {u.role === 'Client' ? 'Client / Employer' : u.role}
                   </span>
                 </td>
                 <td className="py-3 px-4 text-slate-600">
@@ -6234,41 +6331,115 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
         </table>
       </div>
 
+      {showAuthorizeMainAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <form onSubmit={handleAuthorizeMainAdmin} className="bg-white rounded-lg border border-slate-200 shadow-xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 text-indigo-800 border border-indigo-200">
+                  Step 1 · Our Company (Platform Owner)
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">Grant Main Admin Permission by Email ID</h3>
+              </div>
+              <button type="button" onClick={() => setShowAuthorizeMainAdmin(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            {error && <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-2.5 rounded">{error}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Main Admin Email ID *</label>
+                <input required type="email" value={mainAdminForm.email} onChange={e => setMainAdminForm(s => ({ ...s, email: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md font-mono" placeholder="e.g. admin@company.com" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Main Admin Full Name *</label>
+                <input required value={mainAdminForm.admin_name} onChange={e => setMainAdminForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. Ing. Christian Borg" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Company / Organization *</label>
+                <input required value={mainAdminForm.company_name} onChange={e => setMainAdminForm(s => ({ ...s, company_name: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. Enser Ltd" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Username (Optional)</label>
+                <input value={mainAdminForm.username} onChange={e => setMainAdminForm(s => ({ ...s, username: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md font-mono" placeholder="Auto-derived from Email ID" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password</label>
+                <input type="password" value={mainAdminForm.password} onChange={e => setMainAdminForm(s => ({ ...s, password: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="Default: admin123" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <button type="button" onClick={() => setShowAuthorizeMainAdmin(false)} className="px-3.5 py-2 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md">Cancel</button>
+              <button type="submit" disabled={saving} className="px-4 py-2 rounded-md bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold disabled:opacity-50">
+                {saving ? 'Authorizing...' : 'Grant Main Admin Permission'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <form onSubmit={handleProvision} className="bg-white rounded-lg border border-slate-200 shadow-xl w-full max-w-lg p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Provision Enterprise User Account</h3>
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800 border border-blue-200">
+                  Step 2 · Main Admin Account Creation
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">Create Employee, Client/Employer or Subcontractor Account</h3>
+              </div>
               <button type="button" onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
             </div>
             {error && <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-2.5 rounded">{error}</p>}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
-                <input required value={form.name} onChange={e => setForm(s => ({ ...s, name: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. Marcus Vance" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Username *</label>
-                <input required value={form.username} onChange={e => setForm(s => ({ ...s, username: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. mvance" />
-              </div>
+            <div className="grid grid-cols-4 gap-1.5 bg-slate-100 p-1.5 rounded-lg">
+              {(
+                [
+                  ['Employee (Internal)', 'ProjectManager', 'Employee'],
+                  ['Client / Employer', 'Client', 'Client / Employer'],
+                  ['Subcontractor', 'Subcontractor', 'Subcontractor'],
+                  ['Consultant', 'Consultant', 'Consultant'],
+                ] as const
+              ).map(([cat, defRole, label]) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setForm(s => ({ ...s, stakeholder_type: cat, role: defRole }))}
+                  className={`py-1.5 px-2 rounded text-[11px] font-bold ${
+                    form.stakeholder_type === cat ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+                <input required value={form.name} onChange={e => setForm(s => ({ ...s, name: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="e.g. Mr. Sandro Mallia" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Email ID (Login) *</label>
+                <input required type="email" value={form.email} onChange={e => setForm(s => ({ ...s, email: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md font-mono" placeholder="user@company.com" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Username</label>
+                <input value={form.username} onChange={e => setForm(s => ({ ...s, username: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md font-mono" placeholder="Auto from email" />
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password *</label>
-                <input required type="password" value={form.password} onChange={e => setForm(s => ({ ...s, password: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="Minimum 6 characters" />
+                <input required type="password" value={form.password} onChange={e => setForm(s => ({ ...s, password: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md" placeholder="Min 6 chars" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">RBAC Security Role *</label>
                 <select value={form.role} onChange={e => setForm(s => ({ ...s, role: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md">
-                  <option value="ProjectManager">Project Manager</option>
-                  <option value="SiteEngineer">Site Engineer</option>
-                  <option value="CommercialManager">Commercial Manager / QS</option>
-                  <option value="QAQC">QA/QC &amp; Commissioning Lead</option>
-                  <option value="SafetyOfficer">HSE Safety Officer</option>
-                  <option value="Subcontractor">Trade Subcontractor</option>
+                  <option value="ProjectManager">Project Manager (Employee)</option>
+                  <option value="SiteEngineer">Site Supervisor / Engineer (Employee)</option>
+                  <option value="CommercialManager">Commercial Manager / QS (Employee)</option>
+                  <option value="QAQC">QA/QC Lead (Employee)</option>
+                  <option value="SafetyOfficer">HSE Safety Officer (Employee)</option>
+                  <option value="Client">Client / Employer (Client Portal)</option>
+                  <option value="Subcontractor">Subcontractor (Subcontractor Portal)</option>
                   <option value="Consultant">Supervising Consultant</option>
-                  <option value="Client">Client Representative</option>
-                  <option value="Admin">System Administrator</option>
                 </select>
               </div>
             </div>
@@ -6301,7 +6472,7 @@ const UsersAndRbacWorkspace: React.FC<{ projects: any[] }> = ({ projects }) => {
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
               <button type="button" onClick={() => setShowAdd(false)} className="px-3.5 py-2 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md">Cancel</button>
               <button type="submit" disabled={saving} className="px-4 py-2 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold disabled:opacity-50">
-                {saving ? 'Provisioning...' : 'Provision Account'}
+                {saving ? 'Provisioning...' : `Create ${form.stakeholder_type} Account`}
               </button>
             </div>
           </form>

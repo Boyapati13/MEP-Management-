@@ -1420,20 +1420,104 @@ export function seedData() {
     try { db.exec("ALTER TABLE workers ADD COLUMN role_on_site TEXT;"); } catch {}
     try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_id TEXT;"); } catch {}
     try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_name TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE users ADD COLUMN created_by_admin TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE users ADD COLUMN stakeholder_type TEXT;"); } catch {}
+
+    // Table for Our Company (Platform Owner) granting permission to Main Admins by Email ID
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS authorized_main_admins (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        admin_name TEXT NOT NULL,
+        company_name TEXT NOT NULL,
+        plan TEXT DEFAULT 'Enterprise',
+        status TEXT DEFAULT 'Authorized',
+        username TEXT,
+        user_id TEXT,
+        authorized_by TEXT DEFAULT 'Our Company (Platform Owner)',
+        notes TEXT,
+        created_at TEXT,
+        activated_at TEXT
+      );
+    `);
 
     // Seed Project Managers, Site Supervisors, Sites, and Workers for BOV St. Venera (bov-st-venera-2618) & enterprise hierarchy
     const nowIso = new Date().toISOString();
     const defaultPw = hashPassword("admin123");
 
-    const upsertUser = db.prepare(`
-      INSERT OR IGNORE INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, created_at, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, 0)
+    // Ensure default users have email addresses and stakeholder categories populated
+    db.exec(`
+      UPDATE users SET email = 'admin@mepfieldhub.com', company = COALESCE(company, 'MEP FieldHub Enterprise'), stakeholder_type = 'Main Admin' WHERE username = 'admin' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'pm@mepfieldhub.com', company = COALESCE(company, 'MEP FieldHub Operations'), stakeholder_type = 'Employee (Internal)' WHERE username = 'pm' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'elec@electrodata.com.mt', company = COALESCE(company, 'ElectroData Installations Ltd'), stakeholder_type = 'Employee (Internal)' WHERE username = 'elec' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'hvac@climatecontrol.com.mt', company = COALESCE(company, 'ClimateControl Malta Ltd'), stakeholder_type = 'Employee (Internal)' WHERE username = 'hvac' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'plumb@aquamep.com.mt', company = COALESCE(company, 'AquaMEP Services Ltd'), stakeholder_type = 'Employee (Internal)' WHERE username = 'plumb' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'qs@mepfieldhub.com', company = COALESCE(company, 'MEP FieldHub Commercial'), stakeholder_type = 'Employee (Internal)' WHERE username = 'qs' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'qaqc@enser.com.mt', company = COALESCE(company, 'Enser Ltd QA/QC'), stakeholder_type = 'Employee (Internal)' WHERE username = 'qaqc' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'safety@mepfieldhub.com', company = COALESCE(company, 'MEP FieldHub HSE'), stakeholder_type = 'Employee (Internal)' WHERE username = 'safety' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'client@bov.com', company = COALESCE(company, 'Bank of Valletta (BOV plc)'), stakeholder_type = 'Client / Employer' WHERE username = 'client' AND (email IS NULL OR email = '');
+      UPDATE users SET email = 'sub@electrodata.com.mt', company = COALESCE(company, 'ElectroData Subcontracting Ltd'), stakeholder_type = 'Subcontractor' WHERE username = 'sub' AND (email IS NULL OR email = '');
     `);
-    upsertUser.run("usr-pm-2618", "mcamilleri", "Ing. Mark Camilleri", defaultPw, "ProjectManager", "m.camilleri@enser.com.mt", "+356 7942 2618", "Enser / BOV MEP Delivery", "Multi-Discipline MEP", nowIso);
-    upsertUser.run("usr-pm-mriehel", "rborg", "Eng. Roderick Borg", defaultPw, "ProjectManager", "r.borg@mepfieldhub.com", "+356 7988 4410", "MEP FieldHub Operations", "HVAC & Electrical", nowIso);
-    upsertUser.run("usr-sup-elec", "cvella", "Carmelo Vella", defaultPw, "SiteEngineer", "c.vella@electrodata.com.mt", "+356 9921 3301", "ElectroData Installations Ltd", "Electrical & ELV", nowIso);
-    upsertUser.run("usr-sup-hvac", "jfarrugia", "Joseph Farrugia", defaultPw, "SiteEngineer", "j.farrugia@climatecontrol.com.mt", "+356 9944 5502", "ClimateControl Malta Ltd", "HVAC & Mechanical", nowIso);
-    upsertUser.run("usr-sup-fire", "dmicallef", "David Micallef", defaultPw, "SiteEngineer", "d.micallef@enser.com.mt", "+356 9967 8803", "FireSafe Systems Ltd", "Fire Alarm & Life Safety", nowIso);
+
+    const upsertAuthAdmin = db.prepare(`
+      INSERT OR IGNORE INTO authorized_main_admins (
+        id, email, admin_name, company_name, plan, status, username, user_id, authorized_by, notes, created_at, activated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Our Company (Platform Owner)', ?, ?, ?)
+    `);
+    upsertAuthAdmin.run(
+      "auth-adm-01",
+      "admin@mepfieldhub.com",
+      "Executive Main Admin",
+      "MEP FieldHub Enterprise",
+      "Enterprise",
+      "Activated",
+      "admin",
+      "1",
+      "Primary Main Admin account authorized by Our Company — can create Employee, Client/Employer, and Subcontractor accounts.",
+      nowIso,
+      nowIso
+    );
+    upsertAuthAdmin.run(
+      "auth-adm-02",
+      "admin.bov@enser.com.mt",
+      "Ing. Christian Borg (Main Admin)",
+      "Enser Ltd / BOV Refurbishment Delivery",
+      "Enterprise",
+      "Activated",
+      "cborg_admin",
+      "usr-main-admin-enser",
+      "Authorized by Our Company for BOV St. Venera Level 1 & 2 Refurbishment (Job 2618).",
+      nowIso,
+      nowIso
+    );
+    upsertAuthAdmin.run(
+      "auth-adm-03",
+      "director@apexmep.com",
+      "Ing. David Vella (Main Admin)",
+      "Apex MEP Contracting Ltd",
+      "Professional",
+      "Authorized",
+      "dvella_admin",
+      null,
+      "Pre-authorized by Our Company via Email ID — ready for Main Admin self-activation on Login page.",
+      nowIso,
+      null
+    );
+
+    const upsertUser = db.prepare(`
+      INSERT OR IGNORE INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, stakeholder_type, created_by_admin, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, 'admin@mepfieldhub.com', ?, 0)
+    `);
+    upsertUser.run("usr-main-admin-enser", "cborg_admin", "Ing. Christian Borg (Main Admin)", defaultPw, "Admin", "admin.bov@enser.com.mt", "+356 2133 2618", "Enser Ltd / BOV Refurbishment Delivery", "All MEP Disciplines", "Main Admin", nowIso);
+    upsertUser.run("usr-pm-2618", "mcamilleri", "Ing. Mark Camilleri", defaultPw, "ProjectManager", "m.camilleri@enser.com.mt", "+356 7942 2618", "Enser / BOV MEP Delivery", "Multi-Discipline MEP", "Employee (Internal)", nowIso);
+    upsertUser.run("usr-pm-mriehel", "rborg", "Eng. Roderick Borg", defaultPw, "ProjectManager", "r.borg@mepfieldhub.com", "+356 7988 4410", "MEP FieldHub Operations", "HVAC & Electrical", "Employee (Internal)", nowIso);
+    upsertUser.run("usr-sup-elec", "cvella", "Carmelo Vella", defaultPw, "SiteEngineer", "c.vella@electrodata.com.mt", "+356 9921 3301", "ElectroData Installations Ltd", "Electrical & ELV", "Employee (Internal)", nowIso);
+    upsertUser.run("usr-sup-hvac", "jfarrugia", "Joseph Farrugia", defaultPw, "SiteEngineer", "j.farrugia@climatecontrol.com.mt", "+356 9944 5502", "ClimateControl Malta Ltd", "HVAC & Mechanical", "Employee (Internal)", nowIso);
+    upsertUser.run("usr-sup-fire", "dmicallef", "David Micallef", defaultPw, "SiteEngineer", "d.micallef@enser.com.mt", "+356 9967 8803", "FireSafe Systems Ltd", "Fire Alarm & Life Safety", "Employee (Internal)", nowIso);
+    upsertUser.run("usr-client-bov", "bov_employer", "Mr. Sandro Mallia (BOV Employer Rep)", defaultPw, "Client", "s.mallia@bov.com", "+356 2131 2020", "Bank of Valletta (BOV plc)", "Client / Employer Representative", "Client / Employer", nowIso);
+    upsertUser.run("usr-sub-elec2618", "electrodata_sub", "Ing. Simon Pace (ElectroData Subcontractor)", defaultPw, "Subcontractor", "s.pace@electrodata.com.mt", "+356 7900 1122", "ElectroData Installations Ltd", "Electrical & ELV Subcontractor", "Subcontractor", nowIso);
+    upsertUser.run("usr-sub-hvac2618", "climate_sub", "Ing. Mario Cutajar (ClimateControl Subcontractor)", defaultPw, "Subcontractor", "m.cutajar@climatecontrol.com.mt", "+356 7900 3344", "ClimateControl Malta Ltd", "HVAC & VRF Subcontractor", "Subcontractor", nowIso);
+    upsertUser.run("usr-cons-enser", "enser_consultant", "Ing. Robert Farrugia (Enser Consultant)", defaultPw, "Consultant", "r.farrugia@enser.com.mt", "+356 2144 2618", "Enser Ltd Consulting Engineers", "Lead MEP Consultant", "Consultant", nowIso);
 
     // Ensure project_memberships for PMs & Supervisors
     const upsertMembership = db.prepare(`
@@ -1444,6 +1528,10 @@ export function seedData() {
     upsertMembership.run("usr-sup-elec", "bov-st-venera-2618", "SiteSupervisor");
     upsertMembership.run("usr-sup-hvac", "bov-st-venera-2618", "SiteSupervisor");
     upsertMembership.run("usr-sup-fire", "bov-st-venera-2618", "SiteSupervisor");
+    upsertMembership.run("usr-client-bov", "bov-st-venera-2618", "Client");
+    upsertMembership.run("usr-sub-elec2618", "bov-st-venera-2618", "Subcontractor");
+    upsertMembership.run("usr-sub-hvac2618", "bov-st-venera-2618", "Subcontractor");
+    upsertMembership.run("usr-cons-enser", "bov-st-venera-2618", "Consultant");
 
     // Assign Project Manager & Lead Site Supervisor on bov-st-venera-2618
     db.prepare(`

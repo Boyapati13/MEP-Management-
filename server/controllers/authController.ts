@@ -127,10 +127,11 @@ export function registerAuthController(app: Express): void {
       res.status(429).json({ error: `Too many failed attempts. Try again in ${rateLimit.retryAfterSeconds}s.`, retry_after_seconds: rateLimit.retryAfterSeconds });
       return;
     }
-    const user = db.prepare("SELECT * FROM users WHERE username=?").get(username) as any;
+    const cleanIdent = String(username).trim();
+    const user = db.prepare("SELECT * FROM users WHERE LOWER(username)=LOWER(?) OR LOWER(email)=LOWER(?)").get(cleanIdent, cleanIdent) as any;
     if (!user || !verifyPassword(password, user.password_hash)) {
       recordLoginFailure(username);
-      res.status(401).json({ error: "Invalid username or password" });
+      res.status(401).json({ error: "Invalid email ID / username or password" });
       return;
     }
     if (user.status === "Inactive") {
@@ -405,60 +406,99 @@ export function registerAuthController(app: Express): void {
     res.json({ ok: true });
   });
 
-  // Self-service SaaS Organization Signup
+  // Self-service SaaS Organization Signup & Authorized Main Admin Email ID Activation
   app.post("/api/auth/register-organization", (req, res) => {
     const { organization_name, country, currency, plan, admin_name, username, email, password } = req.body || {};
-    if (!organization_name || !admin_name || !username || !password) {
-      res.status(400).json({ error: "organization_name, admin_name, username, and password are required" });
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    const preAuth = cleanEmail
+      ? (db.prepare("SELECT * FROM authorized_main_admins WHERE LOWER(email)=?").get(cleanEmail) as any)
+      : null;
+
+    const finalOrgName = String(organization_name || preAuth?.company_name || "MEP Enterprise Workspace").trim();
+    const finalAdminName = String(admin_name || preAuth?.admin_name || "Main Administrator").trim();
+    const finalUsername = String(username || preAuth?.username || cleanEmail.split("@")[0] || "main_admin").trim().toLowerCase();
+
+    if (!finalOrgName || !finalAdminName || !finalUsername || !password) {
+      res.status(400).json({ error: "Email ID, admin_name, organization_name, and password are required" });
       return;
     }
-    if (String(password).length < 8) {
-      res.status(400).json({ error: "Password must be at least 8 characters." });
+    if (String(password).length < 6) {
+      res.status(400).json({ error: "Password must be at least 6 characters." });
       return;
     }
-    const cleanUser = String(username).trim().toLowerCase();
-    const existing = db.prepare("SELECT id FROM users WHERE LOWER(username)=?").get(cleanUser);
-    if (existing) {
-      res.status(409).json({ error: "Username already exists" });
-      return;
-    }
+    const existingByEmailOrUser = db.prepare("SELECT * FROM users WHERE LOWER(username)=? OR ( ? != '' AND LOWER(email)=? )").get(finalUsername, cleanEmail, cleanEmail) as any;
+
     const orgId = `org-${crypto.randomUUID().slice(0, 8)}`;
-    const userId = crypto.randomUUID();
+    const userId = existingByEmailOrUser?.id || preAuth?.user_id || crypto.randomUUID();
     const now = new Date().toISOString();
-    const chosenPlan = ["Starter", "Professional", "Enterprise"].includes(plan) ? plan : "Professional";
+    const chosenPlan = ["Starter", "Professional", "Enterprise"].includes(plan || preAuth?.plan) ? (plan || preAuth?.plan) : "Enterprise";
     const maxUsers = chosenPlan === "Starter" ? 15 : chosenPlan === "Professional" ? 75 : 500;
     const maxProjects = chosenPlan === "Starter" ? 5 : chosenPlan === "Professional" ? 25 : 100;
 
-    db.prepare(
-      `INSERT INTO organizations (id, name, slug, plan, subscription_status, max_users, max_projects, country, default_currency, tax_label, default_tax_rate, created_at)
-       VALUES (?, ?, ?, ?, 'Trial', ?, ?, ?, ?, 'VAT', 0, ?)`
-    ).run(
-      orgId,
-      String(organization_name).trim(),
-      String(organization_name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      chosenPlan,
-      maxUsers,
-      maxProjects,
-      country || "Global",
-      currency || "USD",
-      now
-    );
+    try {
+      db.prepare(
+        `INSERT OR IGNORE INTO organizations (id, name, slug, plan, subscription_status, max_users, max_projects, country, default_currency, tax_label, default_tax_rate, created_at)
+         VALUES (?, ?, ?, ?, 'Active', ?, ?, ?, ?, 'VAT', 0, ?)`
+      ).run(
+        orgId,
+        finalOrgName,
+        finalOrgName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        chosenPlan,
+        maxUsers,
+        maxProjects,
+        country || "Global",
+        currency || "EUR",
+        now
+      );
+    } catch {}
 
-    db.prepare(
-      `INSERT INTO users (id, username, password_hash, name, role, email, company, status, organization_id, created_at)
-       VALUES (?, ?, ?, ?, 'Admin', ?, ?, 'Active', ?, ?)`
-    ).run(userId, cleanUser, hashPassword(password), String(admin_name).trim(), email || "", String(organization_name).trim(), orgId, now);
+    if (existingByEmailOrUser) {
+      db.prepare(
+        `UPDATE users SET password_hash=?, name=?, role='Admin', email=COALESCE(NULLIF(?,''), email), company=?, status='Active', stakeholder_type='Main Admin', must_change_password=0 WHERE id=?`
+      ).run(hashPassword(password), finalAdminName, cleanEmail, finalOrgName, existingByEmailOrUser.id);
+    } else {
+      db.prepare(
+        `INSERT INTO users (id, username, password_hash, name, role, email, company, status, stakeholder_type, organization_id, created_at)
+         VALUES (?, ?, ?, ?, 'Admin', ?, ?, 'Active', 'Main Admin', ?, ?)`
+      ).run(userId, finalUsername, hashPassword(password), finalAdminName, cleanEmail, finalOrgName, orgId, now);
+    }
+
+    if (cleanEmail) {
+      try {
+        db.prepare(`
+          INSERT INTO authorized_main_admins (id, email, admin_name, company_name, plan, status, username, user_id, authorized_by, notes, created_at, activated_at)
+          VALUES (?, ?, ?, ?, ?, 'Activated', ?, ?, 'Our Company (Platform Owner)', 'Activated via Main Admin Email ID', ?, ?)
+          ON CONFLICT(email) DO UPDATE SET
+            status='Activated',
+            admin_name=excluded.admin_name,
+            company_name=excluded.company_name,
+            username=excluded.username,
+            user_id=excluded.user_id,
+            activated_at=excluded.activated_at
+        `).run(`auth-adm-${crypto.randomUUID().slice(0, 6)}`, cleanEmail, finalAdminName, finalOrgName, chosenPlan, finalUsername, userId, now, now);
+      } catch {}
+    }
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + SESSION_LIFETIME_MS).toISOString();
-    db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)").run(token, userId, expiresAt);
+    db.prepare("INSERT INTO sessions (token, user_id, name, role, created_at, expires_at) VALUES (?, ?, ?, 'Admin', ?, ?)").run(token, userId, finalAdminName, now, expiresAt);
     res.cookie("mep_session", token, { httpOnly: true, sameSite: "lax", maxAge: SESSION_LIFETIME_MS, path: "/" });
-    writeAudit(userId, "organizations", orgId, "SYSTEM", "REGISTER_ORG", null, { organization_name, plan: chosenPlan });
+    writeAudit(userId, "organizations", orgId, "SYSTEM", "ACTIVATE_MAIN_ADMIN", null, { organization_name: finalOrgName, email: cleanEmail, plan: chosenPlan });
 
     res.status(201).json({
       ok: true,
       token,
-      user: { user_id: userId, name: String(admin_name).trim(), role: "Admin", organization_id: orgId },
+      user: {
+        id: userId,
+        user_id: userId,
+        username: finalUsername,
+        email: cleanEmail,
+        name: finalAdminName,
+        company: finalOrgName,
+        role: "Admin",
+        organization_id: orgId,
+        permissions: ROLE_PERMS.Admin,
+      },
       organization: db.prepare("SELECT * FROM organizations WHERE id=?").get(orgId),
     });
   });

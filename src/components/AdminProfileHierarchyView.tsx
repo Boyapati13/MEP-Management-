@@ -27,6 +27,33 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
   const [showAddSite, setShowAddSite] = useState(false);
   const [showAddWorker, setShowAddWorker] = useState(false);
   const [assignProjModal, setAssignProjModal] = useState<any | null>(null);
+  const [showAuthorizeMainAdmin, setShowAuthorizeMainAdmin] = useState(false);
+  const [showProvisionStakeholder, setShowProvisionStakeholder] = useState(false);
+  const [stakeholderFilter, setStakeholderFilter] = useState<string>('ALL');
+
+  const [mainAdminForm, setMainAdminForm] = useState({
+    email: '',
+    admin_name: '',
+    company_name: '',
+    username: '',
+    password: '',
+    plan: 'Enterprise',
+    provision_now: true,
+    notes: 'Granted Main Admin permission by Our Company via Email ID — authorized to create Employee, Client/Employer & Subcontractor accounts.',
+  });
+
+  const [stakeholderForm, setStakeholderForm] = useState({
+    stakeholder_type: 'Employee (Internal)',
+    role: 'ProjectManager',
+    name: '',
+    email: '',
+    username: '',
+    password: '',
+    phone: '',
+    company: 'Enser / BOV MEP Delivery',
+    trade: 'Electrical & ELV',
+    project_id: selectedProject || 'bov-st-venera-2618',
+  });
 
   const [staffForm, setStaffForm] = useState({
     name: '',
@@ -166,6 +193,96 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
     }
   };
 
+  const handleAuthorizeMainAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res: any = await api.post('/api/admin/assign-hierarchy', {
+        action: 'authorize_main_admin',
+        ...mainAdminForm,
+      });
+      setShowAuthorizeMainAdmin(false);
+      setNotice({
+        type: 'success',
+        text: `Our Company granted Main Admin permission to Email ID "${res.email || mainAdminForm.email}" (${mainAdminForm.admin_name} · ${mainAdminForm.company_name})! They can now sign in with their Email ID and create Employee, Client/Employer & Subcontractor accounts.`,
+      });
+      setMainAdminForm({
+        email: '',
+        admin_name: '',
+        company_name: '',
+        username: '',
+        password: '',
+        plan: 'Enterprise',
+        provision_now: true,
+        notes: 'Granted Main Admin permission by Our Company via Email ID — authorized to create Employee, Client/Employer & Subcontractor accounts.',
+      });
+      loadHierarchy();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: err?.message || 'Failed to authorize Main Admin Email ID' });
+    }
+  };
+
+  const handleProvisionStakeholder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res: any = await api.post('/api/admin/assign-hierarchy', {
+        action: 'provision_stakeholder',
+        ...stakeholderForm,
+      });
+      setShowProvisionStakeholder(false);
+      setNotice({
+        type: 'success',
+        text: `Created ${stakeholderForm.stakeholder_type} account for "${stakeholderForm.name}" (Login Email ID: ${res.email || stakeholderForm.email} / Username: ${res.username || stakeholderForm.username})!`,
+      });
+      setStakeholderForm({
+        stakeholder_type: 'Employee (Internal)',
+        role: 'ProjectManager',
+        name: '',
+        email: '',
+        username: '',
+        password: '',
+        phone: '',
+        company: 'Enser / BOV MEP Delivery',
+        trade: 'Electrical & ELV',
+        project_id: selectedProject || 'bov-st-venera-2618',
+      });
+      loadHierarchy();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: err?.message || 'Failed to create user account' });
+    }
+  };
+
+  const openStakeholderModal = (category: 'Employee (Internal)' | 'Client / Employer' | 'Subcontractor' | 'Consultant') => {
+    const defaultRole =
+      category === 'Client / Employer'
+        ? 'Client'
+        : category === 'Subcontractor'
+        ? 'Subcontractor'
+        : category === 'Consultant'
+        ? 'Consultant'
+        : 'ProjectManager';
+    const defaultCompany =
+      category === 'Client / Employer'
+        ? 'Bank of Valletta (BOV plc)'
+        : category === 'Subcontractor'
+        ? 'ElectroData Installations Ltd'
+        : category === 'Consultant'
+        ? 'Enser Ltd Consulting Engineers'
+        : 'Enser / BOV MEP Delivery';
+    setStakeholderForm({
+      stakeholder_type: category,
+      role: defaultRole,
+      name: '',
+      email: '',
+      username: '',
+      password: '',
+      phone: '',
+      company: defaultCompany,
+      trade: category === 'Client / Employer' ? 'Client / Employer Representative' : 'Electrical & ELV',
+      project_id: selectedProject || allProjects[0]?.id || 'bov-st-venera-2618',
+    });
+    setShowProvisionStakeholder(true);
+  };
+
   const adminProfile = data?.adminProfile || {
     name: user?.name || 'Executive Administrator',
     username: user?.username || 'admin',
@@ -183,6 +300,24 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
   const allSupervisors: any[] = data?.supervisors || [];
   const allProjects: any[] = data?.projects || [];
   const allSites: any[] = data?.sites || [];
+  const authorizedMainAdmins: any[] = data?.authorizedMainAdmins || [];
+  const allUsers: any[] = data?.users || [];
+
+  const filteredStakeholders = allUsers.filter((u: any) => {
+    if (stakeholderFilter === 'ALL') return true;
+    const cat =
+      u.stakeholder_type ||
+      (u.role === 'Admin'
+        ? 'Main Admin'
+        : u.role === 'Client'
+        ? 'Client / Employer'
+        : u.role === 'Subcontractor'
+        ? 'Subcontractor'
+        : u.role === 'Consultant'
+        ? 'Consultant'
+        : 'Employee (Internal)');
+    return cat === stakeholderFilter;
+  });
 
   return (
     <div className="space-y-6">
@@ -317,6 +452,250 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
           </button>
         </div>
       )}
+
+      {/* ======================================================================
+          2-TIER ENTERPRISE ONBOARDING & ACCOUNT PROVISIONING HUB
+          Tier 1: Our Company -> Grant Permission to Main Admin (by Email ID)
+          Tier 2: Main Admin -> Create Accounts for Employees, Clients/Employers & Subcontractors
+          ====================================================================== */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-blue-950 px-6 py-4 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
+                2-Tier Enterprise Permission &amp; Account Provisioning
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Email ID Based Authorization
+              </span>
+            </div>
+            <h2 className="text-base sm:text-lg font-bold text-white mt-1">
+              Step 1: Our Company Authorizes Main Admin (Email ID) → Step 2: Main Admin Creates Employee, Client &amp; Subcontractor Accounts
+            </h2>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Our Company grants Main Admin permission to an Email ID. Once authorized, that Main Admin signs in with their Email ID and creates accounts for their <strong>Employees / Staff</strong>, <strong>Employers / Clients</strong>, and <strong>Subcontractors</strong>.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAuthorizeMainAdmin(true)}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <ShieldCheck size={14} /> + Step 1: Authorize Main Admin (Email ID)
+            </button>
+            <button
+              type="button"
+              onClick={() => openStakeholderModal('Employee (Internal)')}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Plus size={14} /> + Step 2: Create Employee / Client / Subcontractor
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 bg-slate-50/50">
+          {/* Tier 1 Card: Our Company -> Main Admin Email ID Permissions */}
+          <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-4 flex flex-col justify-between space-y-3 shadow-2xs">
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                <div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 text-indigo-800 border border-indigo-200">
+                    Tier 1 · Platform Owner (Our Company)
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-900 mt-1">
+                    Authorized Main Admin Accounts (by Email ID)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Main Admin Email IDs granted permission by Our Company to manage their organization and provision accounts.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAuthorizeMainAdmin(true)}
+                  className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                >
+                  <Plus size={12} /> Grant Email ID
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[270px] overflow-y-auto pr-1">
+                {authorizedMainAdmins.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-4 text-center">No Main Admin Email IDs authorized yet.</p>
+                ) : (
+                  authorizedMainAdmins.map((adm: any) => (
+                    <div
+                      key={adm.id || adm.email}
+                      className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-start justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900">{adm.admin_name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            {adm.plan || 'Enterprise'}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[11px] text-indigo-700 font-semibold mt-0.5 flex items-center gap-1">
+                          <Mail size={11} /> {adm.email}
+                          {adm.username ? <span className="text-slate-400">(@{adm.username})</span> : null}
+                        </div>
+                        <div className="text-[11px] text-slate-600 mt-0.5">
+                          Company: <strong>{adm.company_name}</strong> · By: {adm.authorized_by || 'Our Company'}
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 border ${
+                          adm.status === 'Activated'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {adm.status || 'Authorized'}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-indigo-50/70 border border-indigo-200/80 p-2.5 text-[11px] text-indigo-950">
+              <strong>How Main Admin Signs In:</strong> The Main Admin can sign in on the Login screen using their <strong>Email ID</strong> (e.g. <code className="font-mono bg-white px-1 py-0.5 rounded border border-indigo-200">admin.bov@enser.com.mt</code>) or click <em>"Activate Main Admin (Email ID)"</em> on the Login page.
+            </div>
+          </div>
+
+          {/* Tier 2 Card: Main Admin -> Provision Employees, Clients/Employers & Subcontractors */}
+          <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800 border border-blue-200">
+                  Tier 2 · Main Admin Account Provisioning
+                </span>
+                <h3 className="text-sm font-bold text-slate-900 mt-1">
+                  Create User Accounts for Employees, Clients/Employers &amp; Subcontractors
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Once logged in, the Main Admin creates role-scoped accounts with Email ID &amp; Password for internal staff and external partners.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => openStakeholderModal('Employee (Internal)')}
+                  className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer"
+                >
+                  + Employee
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openStakeholderModal('Client / Employer')}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold cursor-pointer"
+                >
+                  + Client / Employer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openStakeholderModal('Subcontractor')}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold cursor-pointer"
+                >
+                  + Subcontractor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openStakeholderModal('Consultant')}
+                  className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold cursor-pointer"
+                >
+                  + Consultant
+                </button>
+              </div>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {['ALL', 'Main Admin', 'Employee (Internal)', 'Client / Employer', 'Subcontractor', 'Consultant'].map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setStakeholderFilter(cat)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    stakeholderFilter === cat
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat === 'ALL' ? `All Accounts (${allUsers.length})` : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Provisioned Accounts Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[250px] overflow-y-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase text-slate-500">
+                    <th className="py-2 px-3">Name &amp; Company</th>
+                    <th className="py-2 px-3">Login Email ID / Username</th>
+                    <th className="py-2 px-3">Account Category &amp; Role</th>
+                    <th className="py-2 px-3">Portal Access</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredStakeholders.map((u: any) => {
+                    const cat =
+                      u.stakeholder_type ||
+                      (u.role === 'Admin'
+                        ? 'Main Admin'
+                        : u.role === 'Client'
+                        ? 'Client / Employer'
+                        : u.role === 'Subcontractor'
+                        ? 'Subcontractor'
+                        : u.role === 'Consultant'
+                        ? 'Consultant'
+                        : 'Employee (Internal)');
+                    const badgeCls =
+                      cat === 'Main Admin'
+                        ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                        : cat === 'Client / Employer'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : cat === 'Subcontractor'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : cat === 'Consultant'
+                        ? 'bg-purple-50 text-purple-800 border-purple-200'
+                        : 'bg-blue-50 text-blue-800 border-blue-200';
+                    const portalName =
+                      u.role === 'Client'
+                        ? 'Client / Employer Portal'
+                        : u.role === 'Subcontractor'
+                        ? 'Subcontractor Portal'
+                        : u.role === 'Admin'
+                        ? 'Full Main Admin Console'
+                        : 'Internal Engineering ERP';
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50">
+                        <td className="py-2 px-3">
+                          <div className="font-bold text-slate-900">{u.name}</div>
+                          <div className="text-[11px] text-slate-500">{u.company || 'MEP Delivery'} · {u.trade || 'All Trades'}</div>
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[11px]">
+                          <div className="text-blue-700 font-semibold">{u.email || `${u.username}@mepfieldhub.com`}</div>
+                          <div className="text-slate-400">@{u.username}</div>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${badgeCls}`}>
+                            {cat} ({u.role})
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-[11px] font-semibold text-slate-700">
+                          {portalName}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Command Tree: Project Managers -> Projects -> Sites & Site Supervisors -> Workers */}
       <div className="space-y-6">
@@ -866,6 +1245,275 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
               </button>
               <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
                 Save Leadership
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modal: Step 1 — Our Company Grants Permission to Main Admin by Email ID */}
+      {showAuthorizeMainAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleAuthorizeMainAdmin} className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 text-indigo-800 border border-indigo-200">
+                  Step 1 · Our Company (Platform Owner)
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">
+                  Grant Main Admin Permission by Email ID
+                </h3>
+              </div>
+              <button type="button" onClick={() => setShowAuthorizeMainAdmin(false)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
+              Enter the <strong>Main Admin&apos;s Email ID</strong> below to grant them Main Admin authority. Once authorized, they can sign in with their Email ID and create user accounts for their <strong>Employees</strong>, <strong>Employers / Clients</strong>, and <strong>Subcontractors</strong>.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                  Main Admin Email ID (Login Identifier) *
+                </label>
+                <input
+                  required
+                  type="email"
+                  value={mainAdminForm.email}
+                  onChange={e => setMainAdminForm(s => ({ ...s, email: e.target.value }))}
+                  placeholder="e.g. admin@company.com or director@bov.com"
+                  className="w-full px-3 py-2.5 text-xs border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Main Admin Full Name *</label>
+                <input
+                  required
+                  value={mainAdminForm.admin_name}
+                  onChange={e => setMainAdminForm(s => ({ ...s, admin_name: e.target.value }))}
+                  placeholder="e.g. Ing. Christian Borg"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Organization / Company *</label>
+                <input
+                  required
+                  value={mainAdminForm.company_name}
+                  onChange={e => setMainAdminForm(s => ({ ...s, company_name: e.target.value }))}
+                  placeholder="e.g. Enser / BOV MEP Delivery"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Optional Username</label>
+                <input
+                  value={mainAdminForm.username}
+                  onChange={e => setMainAdminForm(s => ({ ...s, username: e.target.value }))}
+                  placeholder="Auto-derived from Email ID if blank"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Initial Password</label>
+                <input
+                  type="password"
+                  value={mainAdminForm.password}
+                  onChange={e => setMainAdminForm(s => ({ ...s, password: e.target.value }))}
+                  placeholder="Default: admin123 (or set custom)"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <label className="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={mainAdminForm.provision_now}
+                  onChange={e => setMainAdminForm(s => ({ ...s, provision_now: e.target.checked }))}
+                  className="rounded border-slate-300 text-indigo-600"
+                />
+                Activate Main Admin login immediately (or let them self-activate on Login page)
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowAuthorizeMainAdmin(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">
+                Grant Main Admin Permission
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modal: Step 2 — Main Admin Creates Account for Employee, Client/Employer, or Subcontractor */}
+      {showProvisionStakeholder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleProvisionStakeholder} className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800 border border-blue-200">
+                  Step 2 · Main Admin Account Provisioning
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">
+                  Create Account for Employee, Client/Employer or Subcontractor
+                </h3>
+              </div>
+              <button type="button" onClick={() => setShowProvisionStakeholder(false)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Category Selector Tabs */}
+            <div className="grid grid-cols-4 gap-1.5 bg-slate-100 p-1.5 rounded-xl">
+              {(
+                [
+                  ['Employee (Internal)', 'ProjectManager', 'Employee / Staff'],
+                  ['Client / Employer', 'Client', 'Client / Employer'],
+                  ['Subcontractor', 'Subcontractor', 'Subcontractor'],
+                  ['Consultant', 'Consultant', 'Consultant'],
+                ] as const
+              ).map(([cat, defRole, label]) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() =>
+                    setStakeholderForm(s => ({
+                      ...s,
+                      stakeholder_type: cat,
+                      role: defRole,
+                      company:
+                        cat === 'Client / Employer'
+                          ? 'Bank of Valletta (BOV plc)'
+                          : cat === 'Subcontractor'
+                          ? 'ElectroData Installations Ltd'
+                          : cat === 'Consultant'
+                          ? 'Enser Ltd Consulting Engineers'
+                          : 'Enser / BOV MEP Delivery',
+                    }))
+                  }
+                  className={`py-2 px-2 rounded-lg text-[11px] font-bold text-center transition-colors cursor-pointer ${
+                    stakeholderForm.stakeholder_type === cat
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:bg-white/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Full Name *</label>
+                <input
+                  required
+                  value={stakeholderForm.name}
+                  onChange={e => setStakeholderForm(s => ({ ...s, name: e.target.value }))}
+                  placeholder="e.g. Mr. Sandro Mallia / Ing. Simon Pace"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Email ID (Login) *</label>
+                <input
+                  required
+                  type="email"
+                  value={stakeholderForm.email}
+                  onChange={e => setStakeholderForm(s => ({ ...s, email: e.target.value }))}
+                  placeholder="user@company.com"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Username</label>
+                <input
+                  value={stakeholderForm.username}
+                  onChange={e => setStakeholderForm(s => ({ ...s, username: e.target.value }))}
+                  placeholder="Auto-filled from Email if blank"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Password *</label>
+                <input
+                  type="password"
+                  value={stakeholderForm.password}
+                  onChange={e => setStakeholderForm(s => ({ ...s, password: e.target.value }))}
+                  placeholder="Default: admin123"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Security Role / Portal *</label>
+                <select
+                  value={stakeholderForm.role}
+                  onChange={e => setStakeholderForm(s => ({ ...s, role: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white"
+                >
+                  {stakeholderForm.stakeholder_type === 'Employee (Internal)' ? (
+                    <>
+                      <option value="ProjectManager">Project Manager</option>
+                      <option value="SiteEngineer">Site Supervisor / Site Engineer</option>
+                      <option value="CommercialManager">Commercial Manager / QS</option>
+                      <option value="QAQC">QA/QC &amp; Commissioning Engineer</option>
+                      <option value="SafetyOfficer">HSE Safety Officer</option>
+                      <option value="Worker">Field Worker (Mobile App)</option>
+                    </>
+                  ) : stakeholderForm.stakeholder_type === 'Client / Employer' ? (
+                    <option value="Client">Client / Employer Representative (Client Portal)</option>
+                  ) : stakeholderForm.stakeholder_type === 'Subcontractor' ? (
+                    <option value="Subcontractor">Subcontractor (Subcontractor Portal)</option>
+                  ) : (
+                    <option value="Consultant">Supervising Consultant (Approval Authority)</option>
+                  )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Company / Organization *</label>
+                <input
+                  required
+                  value={stakeholderForm.company}
+                  onChange={e => setStakeholderForm(s => ({ ...s, company: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Trade / Department</label>
+                <input
+                  value={stakeholderForm.trade}
+                  onChange={e => setStakeholderForm(s => ({ ...s, trade: e.target.value }))}
+                  placeholder="Electrical / HVAC / Client Rep"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Assigned Project Scope *</label>
+                <select
+                  value={stakeholderForm.project_id}
+                  onChange={e => setStakeholderForm(s => ({ ...s, project_id: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white"
+                >
+                  <option value="ALL">All Enterprise Projects</option>
+                  {allProjects.map((p: any) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowProvisionStakeholder(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
+                Create {stakeholderForm.stakeholder_type} Account
               </button>
             </div>
           </form>
