@@ -23,56 +23,18 @@ export function cleanDatabase(dbPath: string = DB_PATH) {
 
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA busy_timeout = 10000;');
+  db.exec('PRAGMA foreign_keys = OFF;');
 
-  // Tables to completely truncate (wipe all test/demo records)
-  const tablesToTruncate = [
-    'attendance',
-    'audit_logs',
-    'boq_items',
-    'change_orders',
-    'clarifications',
-    'clarification_comments',
-    'commissioning_tests',
-    'dailylogs',
-    'document_revisions',
-    'documents',
-    'handover_items',
-    'ncrs',
-    'notifications',
-    'plan_buckets',
-    'plan_tasks',
-    'progress_reports',
-    'progress_report_photos',
-    'progress_submissions',
-    'project_actions',
-    'project_decisions',
-    'project_memberships',
-    'projects',
-    'punchlist',
-    'purchase_orders',
-    'material_requests',
-    'record_owners',
-    'reference_sequences',
-    'rfis',
-    'safety_incidents',
-    'sessions',
-    'sites',
-    'site_instructions',
-    'submittals',
-    'task_blockers',
-    'task_status_history',
-    'tasks',
-    'transmittal_items',
-    'transmittals',
-    'variations',
-    'wbs_items',
-    'work_packages',
-    'workers'
-  ];
+  const allTables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    .all() as { name: string }[];
 
   db.exec('BEGIN IMMEDIATE;');
   try {
-    for (const table of tablesToTruncate) {
+    for (const { name: table } of allTables) {
+      if (table === 'users' || table === 'leave_types' || table === 'schema_migrations') {
+        continue;
+      }
       try {
         db.exec(`DELETE FROM "${table}";`);
       } catch (err: any) {
@@ -83,13 +45,25 @@ export function cleanDatabase(dbPath: string = DB_PATH) {
     // Keep ONLY the bootstrap 'admin' user; remove all test/seed users
     try {
       db.exec(`DELETE FROM users WHERE username != 'admin';`);
+      db.exec(`
+        UPDATE users
+        SET email = 'admin@mepfieldhub.com',
+            name = 'Administrator',
+            company = 'MEP FieldHub Enterprise',
+            stakeholder_type = 'Main Admin',
+            status = 'Active',
+            must_change_password = 0
+        WHERE username = 'admin';
+      `);
     } catch {}
 
     db.exec('COMMIT;');
-    console.log('[CLEAN-DB] Successfully purged all test and demo records from tables.');
+    console.log('[CLEAN-DB] Successfully purged all test and demo records from all tables.');
   } catch (err) {
     try { db.exec('ROLLBACK;'); } catch {}
     throw err;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;');
   }
 
   // Reclaim disk space and defragment SQLite database file

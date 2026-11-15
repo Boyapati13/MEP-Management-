@@ -647,24 +647,8 @@ function LoginPage() {
               </div>
               <div className="text-[11px] text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-2.5 space-y-1.5">
                 <p>
-                  Enter the <strong>Main Admin Email ID</strong> granted permission by <strong>Our Company</strong>. Click <strong>Verify Email ID</strong> to load your authorized profile:
+                  Enter the <strong>Main Admin Email ID</strong> granted permission by <strong>Our Company</strong>. Click <strong>Verify Email ID</strong> to load your authorized profile.
                 </p>
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="text-[10px] font-bold uppercase text-indigo-800">Authorized Demo Emails:</span>
-                  {['director@apexmep.com', 'admin.bov@enser.com.mt', 'admin@mepfieldhub.com'].map(em => (
-                    <button
-                      key={em}
-                      type="button"
-                      onClick={() => {
-                        setOrgForm(s => ({ ...s, email: em }));
-                        verifyMainAdminEmail(em);
-                      }}
-                      className="px-2 py-0.5 rounded bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-300 font-mono text-[10px] font-semibold cursor-pointer"
-                    >
-                      {em}
-                    </button>
-                  ))}
-                </div>
               </div>
               {verifiedEmailInfo && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">

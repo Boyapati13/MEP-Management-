@@ -50,9 +50,9 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
     username: '',
     password: '',
     phone: '',
-    company: 'Enser / BOV MEP Delivery',
+    company: user?.company || '',
     trade: 'Electrical & ELV',
-    project_id: selectedProject || 'bov-st-venera-2618',
+    project_id: selectedProject || '',
     work_package_id: '',
   });
 
@@ -62,18 +62,18 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
     role: 'ProjectManager',
     email: '',
     phone: '',
-    company: 'Enser / BOV MEP Delivery',
+    company: user?.company || '',
     trade: 'Multi-Discipline MEP',
-    project_id: selectedProject || 'bov-st-venera-2618',
+    project_id: selectedProject || '',
   });
 
   const [siteForm, setSiteForm] = useState({
-    project_id: selectedProject || 'bov-st-venera-2618',
+    project_id: selectedProject || '',
     name: '',
-    address: 'Triq il-Kanun, Santa Venera',
-    city: 'Santa Venera',
-    supervisor_id: 'usr-sup-elec',
-    supervisor_name: 'Carmelo Vella (Electrical & ELV Supervisor)',
+    address: '',
+    city: '',
+    supervisor_id: '',
+    supervisor_name: '',
   });
 
   const [workerForm, setWorkerForm] = useState({
@@ -83,10 +83,10 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
     trade: 'Electrical',
     phone: '',
     email: '',
-    project_id: selectedProject || 'bov-st-venera-2618',
-    site_id: 'site-2618-l1',
-    supervisor_id: 'usr-sup-elec',
-    supervisor_name: 'Carmelo Vella',
+    project_id: selectedProject || '',
+    site_id: '',
+    supervisor_id: '',
+    supervisor_name: '',
     role_on_site: 'MEP Site Technician & Installer',
   });
 
@@ -133,9 +133,9 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
         role: 'ProjectManager',
         email: '',
         phone: '',
-        company: 'Enser / BOV MEP Delivery',
+        company: user?.company || '',
         trade: 'Multi-Discipline MEP',
-        project_id: selectedProject || 'bov-st-venera-2618',
+        project_id: selectedProject || '',
       });
       loadHierarchy();
     } catch (err: any) {
@@ -242,9 +242,9 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
         username: '',
         password: '',
         phone: '',
-        company: 'Enser / BOV MEP Delivery',
+        company: user?.company || '',
         trade: 'Electrical & ELV',
-        project_id: selectedProject || 'bov-st-venera-2618',
+        project_id: selectedProject || '',
         work_package_id: '',
       });
       loadHierarchy();
