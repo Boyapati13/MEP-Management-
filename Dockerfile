@@ -27,6 +27,4 @@ COPY --from=builder /app/dist ./dist
 USER node
 EXPOSE 3000
 
-VOLUME ["/data"]
-
 CMD ["node", "dist/server.cjs"]
