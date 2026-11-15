@@ -36,7 +36,10 @@ import {
   ZoomOut,
   RotateCcw,
   CalendarCheck,
-  Printer
+  Printer,
+  MapPin,
+  GitBranch,
+  Trash2
 } from 'lucide-react';
 import { api, projectsApi, procurementApi, risksApi } from '../api';
 import { ProcurementProgrammeRiskView } from './ProcurementProgrammeRiskView';
@@ -2236,7 +2239,43 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   }>>([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
 
+  // Drawing Version & Site Markings State
+  const [drawingRevisions, setDrawingRevisions] = useState<any[]>([]);
+  const [drawingMarkings, setDrawingMarkings] = useState<any[]>([]);
+  const [placingMarkingMode, setPlacingMarkingMode] = useState(false);
+  const [activePinId, setActivePinId] = useState<string | null>(null);
+  const [pendingPinCoords, setPendingPinCoords] = useState<{ x: number; y: number } | null>(null);
+  const [markingForm, setMarkingForm] = useState({
+    marking_type: 'Site Progress / Installed',
+    title: '',
+    description: '',
+    trade: 'Electrical',
+    status: 'Installed / Verified',
+    progress_percent: 100,
+  });
+  const [savingMarking, setSavingMarking] = useState(false);
+
+  const [versionTargetDoc, setVersionTargetDoc] = useState<any | null>(null);
+  const [versionForm, setVersionForm] = useState({
+    new_revision: 'Rev 1',
+    change_summary: '',
+    status: 'Approved',
+    carry_over_markings: true,
+    attachment_name: '',
+    attachment_data: '',
+  });
+  const [uploadingVersion, setUploadingVersion] = useState(false);
+
   const canManage = user?.role === 'Admin' || user?.role === 'ProjectManager';
+
+  useEffect(() => {
+    const onOpenUpload = () => {
+      setBatchFiles([]);
+      setShowUploadDoc(true);
+    };
+    window.addEventListener('open-upload-document', onOpenUpload);
+    return () => window.removeEventListener('open-upload-document', onOpenUpload);
+  }, []);
 
   const loadDocs = useCallback(async () => {
     setLoading(true);
@@ -2432,13 +2471,39 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     }
   };
 
+  const computeNextRevision = (currentRev?: string) => {
+    const rev = (currentRev || 'Rev 0').trim();
+    const numMatch = rev.match(/(\d+)$/);
+    if (numMatch) {
+      const nextNum = parseInt(numMatch[1], 10) + 1;
+      return rev.replace(/(\d+)$/, String(nextNum));
+    }
+    if (/^Rev\s*([A-Y])$/i.test(rev)) {
+      const letter = rev.slice(-1).toUpperCase();
+      return `Rev ${String.fromCharCode(letter.charCodeAt(0) + 1)}`;
+    }
+    return 'Rev 1';
+  };
+
   const openDrawingViewer = async (doc: any) => {
     setSelectedDrawing(doc);
     setDrawingZoom(1);
+    setPlacingMarkingMode(false);
+    setPendingPinCoords(null);
+    setActivePinId(null);
     setLoadingTasks(true);
     try {
       const q = selectedProject ? `?project_id=${selectedProject}` : '';
-      const allTasks = await api.get<any[]>(`/api/tasks${q}`).catch(() => []);
+      const [allTasks, revData] = await Promise.all([
+        api.get<any[]>(`/api/tasks${q}`).catch(() => []),
+        api.get<any>(`/api/documents/${doc.id}/revisions`).catch(() => ({ revisions: [], markings: [] })),
+      ]);
+      if (revData?.document) {
+        setSelectedDrawing(revData.document);
+      }
+      setDrawingRevisions(Array.isArray(revData?.revisions) ? revData.revisions : []);
+      setDrawingMarkings(Array.isArray(revData?.markings) ? revData.markings : []);
+
       const docNum = doc.document_number || (doc.name ? (doc.name.match(/2618-[A-Z]-[A-Z]{3}-\d{2}/) || [])[0] : '');
       const matched = Array.isArray(allTasks)
         ? allTasks.filter((t: any) => t.drawing_ref === docNum || (docNum && (t.title?.includes(docNum) || t.description?.includes(docNum))))
@@ -2449,6 +2514,116 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     } finally {
       setLoadingTasks(false);
     }
+  };
+
+  const openNewVersionModal = (doc: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setVersionTargetDoc(doc);
+    setVersionForm({
+      new_revision: computeNextRevision(doc.revision || doc.version || 'Rev 0'),
+      change_summary: '',
+      status: doc.status || 'Approved',
+      carry_over_markings: true,
+      attachment_name: '',
+      attachment_data: '',
+    });
+  };
+
+  const handleVersionFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setVersionForm(prev => ({
+        ...prev,
+        attachment_name: file.name,
+        attachment_data: String(reader.result || ''),
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadNewVersion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!versionTargetDoc) return;
+    setUploadingVersion(true);
+    try {
+      const res = await api.post<any>(`/api/documents/${versionTargetDoc.id}/new-version`, {
+        new_revision: versionForm.new_revision,
+        change_summary: versionForm.change_summary,
+        status: versionForm.status,
+        carry_over_markings: versionForm.carry_over_markings,
+        attachment_name: versionForm.attachment_name || undefined,
+        attachment_data: versionForm.attachment_data || undefined,
+      });
+      await loadDocs();
+      if (selectedDrawing && selectedDrawing.id === versionTargetDoc.id) {
+        if (res?.document) setSelectedDrawing(res.document);
+        if (Array.isArray(res?.revisions)) setDrawingRevisions(res.revisions);
+        if (Array.isArray(res?.markings)) setDrawingMarkings(res.markings);
+      }
+      setVersionTargetDoc(null);
+      onProjectUpdated?.();
+    } finally {
+      setUploadingVersion(false);
+    }
+  };
+
+  const handleDrawingCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!placingMarkingMode || !selectedDrawing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(4, Math.min(96, Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(1))));
+    const y = Math.max(4, Math.min(96, Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(1))));
+    setPendingPinCoords({ x, y });
+    setMarkingForm({
+      marking_type: 'Site Progress / Installed',
+      title: '',
+      description: '',
+      trade: selectedDrawing.discipline || 'Electrical',
+      status: 'Installed / Verified',
+      progress_percent: 100,
+    });
+  };
+
+  const handleSaveSiteMarking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDrawing || !pendingPinCoords) return;
+    setSavingMarking(true);
+    try {
+      const res = await api.post<any>(`/api/documents/${selectedDrawing.id}/markings`, {
+        x_percent: pendingPinCoords.x,
+        y_percent: pendingPinCoords.y,
+        ...markingForm,
+      });
+      if (Array.isArray(res?.markings)) {
+        setDrawingMarkings(res.markings);
+      } else if (res?.marking) {
+        setDrawingMarkings(prev => [...prev, res.marking]);
+      }
+      setPendingPinCoords(null);
+      setPlacingMarkingMode(false);
+    } finally {
+      setSavingMarking(false);
+    }
+  };
+
+  const handleUpdateMarkingStatus = async (marking: any, nextStatus: string) => {
+    const nextProg =
+      nextStatus === 'Installed / Verified' || nextStatus === 'Closed'
+        ? 100
+        : nextStatus === 'In Progress'
+        ? Math.max(50, Number(marking.progress_percent || 50))
+        : Number(marking.progress_percent || 0);
+    const updated = await api.put<any>(`/api/drawing-markings/${marking.id}`, {
+      status: nextStatus,
+      progress_percent: nextProg,
+    });
+    setDrawingMarkings(prev => prev.map(m => (m.id === marking.id ? updated : m)));
+  };
+
+  const handleDeleteMarking = async (markingId: string) => {
+    await api.delete(`/api/drawing-markings/${markingId}`);
+    setDrawingMarkings(prev => prev.filter(m => m.id !== markingId));
   };
 
   const drawingDocs = docs.filter(
@@ -2709,11 +2884,16 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-900/90 text-white shadow-xs">
                     {sheet.document_number}
                   </span>
-                  {meta?.pdfPage && (
-                    <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-blue-600/90 text-white">
-                      PDF p.{meta.pdfPage}
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-600/95 text-white">
+                      {sheet.revision || 'Rev 0'}
                     </span>
-                  )}
+                    {meta?.pdfPage && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-blue-600/90 text-white">
+                        PDF p.{meta.pdfPage}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="p-3 flex-1 flex flex-col justify-between gap-2">
                   <div>
@@ -2726,19 +2906,16 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   </div>
                   <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/70">
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 group-hover:text-blue-700">
-                      <Eye size={12} /> Inspect CAD Sheet
+                      <Eye size={12} /> Inspect &amp; Mark Sheet
                     </span>
-                    {meta?.originalPdfUrl && (
-                      <a
-                        href={meta.originalPdfUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="text-[10px] font-semibold text-slate-500 hover:text-blue-700 underline"
-                      >
-                        Open PDF
-                      </a>
-                    )}
+                    <button
+                      type="button"
+                      onClick={e => openNewVersionModal(sheet, e)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold cursor-pointer"
+                      title="Upload New Revision / Version"
+                    >
+                      <GitBranch size={10} /> + New Version
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2821,25 +2998,33 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
-                      {isDrawing ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isDrawing ? (
+                          <button
+                            type="button"
+                            onClick={() => openDrawingViewer(doc)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
+                          >
+                            <Eye size={13} /> View &amp; Mark Sheet
+                          </button>
+                        ) : doc.attachment_data ? (
+                          <a
+                            href={doc.attachment_data}
+                            download={doc.attachment_name || `${doc.name}.pdf`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold transition-colors"
+                          >
+                            <Download size={12} /> Download
+                          </a>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => openDrawingViewer(doc)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
+                          onClick={e => openNewVersionModal(doc, e)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[11px] transition-colors cursor-pointer"
+                          title="Upload New Version / Revision"
                         >
-                          <Eye size={13} /> View Sheet
+                          <GitBranch size={12} /> + New Version
                         </button>
-                      ) : doc.attachment_data ? (
-                        <a
-                          href={doc.attachment_data}
-                          download={doc.attachment_name || `${doc.name}.pdf`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold transition-colors"
-                        >
-                          <Download size={12} /> Download
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 text-[11px]">—</span>
-                      )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       {canManage ? (
@@ -2873,7 +3058,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl shadow-2xl w-full max-w-7xl h-[94vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 flex-shrink-0">
+            <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-blue-600/30 text-blue-400 border border-blue-500/30 flex-shrink-0">
                   {selectedDrawing.document_number || '2618 SHEET'}
@@ -2889,13 +3074,39 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     <span>•</span>
                     <span className="text-amber-400">{selectedDrawing.discipline || 'Engineering'}</span>
                     <span>•</span>
-                    <span className="text-emerald-400">Rev A (Approved for Construction)</span>
+                    <span className="text-emerald-400 font-mono font-bold">
+                      {selectedDrawing.revision || 'Rev 0'} ({selectedDrawing.status || 'Approved for Construction'})
+                    </span>
                   </p>
                 </div>
               </div>
 
               {/* Viewer Controls */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlacingMarkingMode(m => !m);
+                    setPendingPinCoords(null);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                    placingMarkingMode
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/20'
+                      : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40'
+                  }`}
+                >
+                  <MapPin size={14} />
+                  {placingMarkingMode ? 'Click Anywhere on Drawing to Place Pin...' : '+ Place Site Marking on Drawing'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openNewVersionModal(selectedDrawing)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                >
+                  <GitBranch size={14} /> + Upload New Version (Rev)
+                </button>
+
                 <div className="flex items-center bg-slate-800/80 rounded-xl border border-slate-700 p-1">
                   <button
                     type="button"
@@ -2933,17 +3144,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
                   >
-                    <FileText size={14} /> Open Original PDF (Page {getDrawingMeta(selectedDrawing).pdfPage})
-                  </a>
-                )}
-
-                {selectedDrawing.attachment_data && (
-                  <a
-                    href={selectedDrawing.attachment_data}
-                    download={selectedDrawing.attachment_name || `${selectedDrawing.document_number || 'drawing'}.png`}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
-                  >
-                    <Download size={14} /> Download Original CAD Sheet
+                    <FileText size={14} /> Original PDF (p.{getDrawingMeta(selectedDrawing).pdfPage})
                   </a>
                 )}
 
@@ -2959,8 +3160,25 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
 
             {/* Modal Body: Left Canvas + Right WBS Sidebar */}
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-              {/* Drawing Sheet Canvas (Left 72%) */}
+              {/* Drawing Sheet Canvas (Left 70%) */}
               <div className="flex-1 bg-[#090d16] overflow-auto relative p-4 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800">
+                {placingMarkingMode && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-amber-500 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-2">
+                    <MapPin size={14} />
+                    Click anywhere on the CAD drawing below to drop a Site Marking Pin (or click Cancel)
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPlacingMarkingMode(false);
+                        setPendingPinCoords(null);
+                      }}
+                      className="ml-2 px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
                 {selectedDrawing.attachment_data ? (
                   selectedDrawing.attachment_data.startsWith('data:application/pdf') ||
                   selectedDrawing.attachment_data.toLowerCase().endsWith('.pdf') ||
@@ -2972,14 +3190,88 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     />
                   ) : (
                     <div
-                      className="transition-transform duration-150 ease-out origin-center"
+                      onClick={handleDrawingCanvasClick}
+                      className={`relative inline-block transition-transform duration-150 ease-out origin-center ${
+                        placingMarkingMode ? 'cursor-crosshair ring-2 ring-amber-400 rounded' : ''
+                      }`}
                       style={{ transform: `scale(${drawingZoom})`, transformOrigin: 'center center' }}
                     >
                       <img
                         src={selectedDrawing.attachment_data}
                         alt={selectedDrawing.name}
-                        className="max-w-[1300px] w-full shadow-2xl rounded border border-slate-800 pointer-events-auto"
+                        className="max-w-[1250px] w-full shadow-2xl rounded border border-slate-800 pointer-events-auto select-none"
                       />
+
+                      {/* Interactive Site Marking Pins Overlaid on Drawing */}
+                      {drawingMarkings.map((m: any) => {
+                        const isInstalled = m.status === 'Installed / Verified' || m.status === 'Closed';
+                        const isInProgress = m.status === 'In Progress';
+                        const isSelected = activePinId === m.id;
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={ev => {
+                              ev.stopPropagation();
+                              setActivePinId(isSelected ? null : m.id);
+                            }}
+                            style={{
+                              left: `${m.x_percent ?? 50}%`,
+                              top: `${m.y_percent ?? 50}%`,
+                            }}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 z-20 group/pin cursor-pointer"
+                          >
+                            <div
+                              className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-mono font-bold shadow-lg border-2 transition-transform ${
+                                isSelected ? 'scale-125 ring-4 ring-white/40' : 'hover:scale-110'
+                              } ${
+                                isInstalled
+                                  ? 'bg-emerald-600 text-white border-white'
+                                  : isInProgress
+                                  ? 'bg-blue-600 text-white border-white'
+                                  : 'bg-amber-500 text-slate-950 border-white'
+                              }`}
+                            >
+                              <MapPin size={11} />
+                              <span>{m.pin_number || 'MK'}</span>
+                            </div>
+
+                            {/* Pin Callout Popover */}
+                            <div
+                              className={`absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-slate-900/95 text-white border border-slate-700 rounded-xl p-2.5 shadow-2xl text-left z-30 ${
+                                isSelected ? 'block' : 'hidden group-hover/pin:block'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className="text-[10px] font-mono font-bold text-amber-400">
+                                  {m.pin_number} • {m.revision || selectedDrawing.revision || 'Rev 0'}
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 font-bold">
+                                  {m.status} ({m.progress_percent ?? 100}%)
+                                </span>
+                              </div>
+                              <p className="text-xs font-bold text-white leading-snug">{m.title}</p>
+                              {m.description && (
+                                <p className="text-[10px] text-slate-300 mt-1 leading-relaxed">{m.description}</p>
+                              )}
+                              <p className="text-[9px] text-slate-400 mt-1.5 border-t border-slate-800 pt-1">
+                                Marked by {m.created_by_name || 'Site Supervisor'} • {m.trade || 'MEP'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Pending Pin Marker */}
+                      {pendingPinCoords && (
+                        <div
+                          style={{ left: `${pendingPinCoords.x}%`, top: `${pendingPinCoords.y}%` }}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 z-30"
+                        >
+                          <div className="px-2.5 py-1 rounded-full bg-red-600 text-white border-2 border-white text-[10px] font-mono font-bold shadow-xl animate-bounce">
+                            NEW PIN ({pendingPinCoords.x}%, {pendingPinCoords.y}%)
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 ) : (
@@ -2991,16 +3283,132 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     </p>
                   </div>
                 )}
+
+                {/* Modal Form when a New Site Marking Pin is Dropped on the Drawing */}
+                {pendingPinCoords && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-xs z-40 flex items-center justify-center p-4">
+                    <form
+                      onSubmit={handleSaveSiteMarking}
+                      className="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md shadow-2xl space-y-3 text-white"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                        <div>
+                          <span className="text-[10px] font-mono font-bold uppercase text-amber-400">
+                            Pin Coordinates: X={pendingPinCoords.x}%, Y={pendingPinCoords.y}% • {selectedDrawing.document_number} ({selectedDrawing.revision || 'Rev 0'})
+                          </span>
+                          <h4 className="text-sm font-bold text-white">Add Site Marking / Redline Update on Drawing</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPendingPinCoords(null)}
+                          className="text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Marking Type</label>
+                          <select
+                            value={markingForm.marking_type}
+                            onChange={e => setMarkingForm(s => ({ ...s, marking_type: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white"
+                          >
+                            <option value="Site Progress / Installed">Site Progress / Installed</option>
+                            <option value="As-Built Redline Change">As-Built Redline Change</option>
+                            <option value="Snag / Defect">Snag / Defect</option>
+                            <option value="RFI / Clarification">RFI / Clarification</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Status on Site</label>
+                          <select
+                            value={markingForm.status}
+                            onChange={e => setMarkingForm(s => ({ ...s, status: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white"
+                          >
+                            <option value="Installed / Verified">Installed / Verified</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Open">Open / Action Required</option>
+                            <option value="Closed">Closed</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Site Marking Title *</label>
+                        <input
+                          required
+                          value={markingForm.title}
+                          onChange={e => setMarkingForm(s => ({ ...s, title: e.target.value }))}
+                          placeholder="e.g. Area K Corridor 600x600 LED Panels Installed & Tested"
+                          className="w-full px-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Field Notes / Redline Details</label>
+                        <textarea
+                          rows={2}
+                          value={markingForm.description}
+                          onChange={e => setMarkingForm(s => ({ ...s, description: e.target.value }))}
+                          placeholder="Describe installed circuit numbers, redline routing change, or site supervisor verification..."
+                          className="w-full px-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Trade</label>
+                          <input
+                            value={markingForm.trade}
+                            onChange={e => setMarkingForm(s => ({ ...s, trade: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Completion %</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={markingForm.progress_percent}
+                            onChange={e => setMarkingForm(s => ({ ...s, progress_percent: Number(e.target.value) }))}
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPendingPinCoords(null)}
+                          className="px-3 py-1.5 text-xs text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={savingMarking}
+                          className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
+                        >
+                          {savingMarking ? 'Saving Pin...' : 'Save Site Marking Pin'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </div>
 
-              {/* Right Sidebar: Linked WBS Tasks & Engineering Specs (Right 28%) */}
-              <div className="w-full lg:w-96 bg-slate-950 flex flex-col overflow-y-auto divide-y divide-slate-800 flex-shrink-0">
+              {/* Right Sidebar: Site Markings, Version History & Linked WBS Tasks (Right 30%) */}
+              <div className="w-full lg:w-[420px] bg-slate-950 flex flex-col overflow-y-auto divide-y divide-slate-800 flex-shrink-0">
                 {/* Engineering Sheet Metadata */}
-                <div className="p-5 space-y-3">
+                <div className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Drawing Metadata</span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      Approved
+                      {selectedDrawing.status || 'Approved'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -3008,23 +3416,155 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                       <span className="text-[10px] text-slate-500 uppercase font-semibold">Sheet Number</span>
                       <p className="font-mono font-bold text-blue-400 mt-0.5">{selectedDrawing.document_number || '2618-S-ELE-01'}</p>
                     </div>
-                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Revision</span>
-                      <p className="font-mono font-bold text-slate-200 mt-0.5">{selectedDrawing.revision || 'Rev A'}</p>
-                    </div>
-                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Scale</span>
-                      <p className="font-bold text-slate-200 mt-0.5">1:100 @ A1</p>
-                    </div>
-                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Discipline</span>
-                      <p className="font-bold text-amber-400 mt-0.5">{selectedDrawing.discipline || 'Electrical'}</p>
+                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase font-semibold">Active Revision</span>
+                        <p className="font-mono font-bold text-emerald-400 mt-0.5">{selectedDrawing.revision || 'Rev 0'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openNewVersionModal(selectedDrawing)}
+                        className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold cursor-pointer"
+                      >
+                        + Update Rev
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Linked WBS Tasks Section */}
-                <div className="p-5 flex-1 flex flex-col min-h-0">
+                {/* 1. Interactive Site Markings on Drawing Section */}
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin size={14} className="text-amber-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Site Markings on Drawing ({drawingMarkings.length})
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPlacingMarkingMode(true);
+                        setPendingPinCoords({ x: 50, y: 50 });
+                        setMarkingForm({
+                          marking_type: 'Site Progress / Installed',
+                          title: '',
+                          description: '',
+                          trade: selectedDrawing.discipline || 'Electrical',
+                          status: 'Installed / Verified',
+                          progress_percent: 100,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] cursor-pointer"
+                    >
+                      <Plus size={11} /> Add Site Marking
+                    </button>
+                  </div>
+
+                  {drawingMarkings.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800/80 p-3">
+                      No site markings placed on this drawing yet. Click <strong>+ Place Site Marking on Drawing</strong> above and click any point on the sheet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {drawingMarkings.map((m: any) => (
+                        <div
+                          key={m.id}
+                          onClick={() => setActivePinId(activePinId === m.id ? null : m.id)}
+                          className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
+                            activePinId === m.id
+                              ? 'bg-slate-800 border-amber-400'
+                              : 'bg-slate-900/80 hover:bg-slate-900 border-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              <MapPin size={10} /> {m.pin_number} ({m.x_percent}%, {m.y_percent}%)
+                            </span>
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <select
+                                value={m.status || 'Installed / Verified'}
+                                onChange={e => handleUpdateMarkingStatus(m, e.target.value)}
+                                className="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] font-bold text-emerald-400"
+                              >
+                                <option value="Installed / Verified">Installed / Verified</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Open">Open</option>
+                                <option value="Closed">Closed</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMarking(m.id)}
+                                className="p-1 text-slate-500 hover:text-red-400 cursor-pointer"
+                                title="Delete Site Marking"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-xs font-bold text-white mt-1.5">{m.title}</p>
+                          {m.description && (
+                            <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">{m.description}</p>
+                          )}
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
+                            <span>{m.marking_type} • {m.created_by_name || 'Supervisor'}</span>
+                            <span className="font-mono text-slate-400">{m.revision || selectedDrawing.revision || 'Rev 0'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Drawing Version & Revision History Section */}
+                <div className="p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <History size={14} className="text-emerald-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Version &amp; Revision History ({drawingRevisions.length + 1})
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openNewVersionModal(selectedDrawing)}
+                      className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                    >
+                      + Upload New Version
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 text-xs">
+                    {/* Active Version */}
+                    <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-emerald-400">
+                          {selectedDrawing.revision || 'Rev 0'} (CURRENT ACTIVE)
+                        </span>
+                        <span className="text-[10px] text-emerald-300 font-semibold">{selectedDrawing.status || 'Approved'}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Active construction drawing sheet synced with AI Copilot &amp; Site Markings.
+                      </p>
+                    </div>
+
+                    {/* Superseded / Historical Versions */}
+                    {drawingRevisions.map((rev: any) => (
+                      <div key={rev.id} className="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-slate-300">{rev.version}</span>
+                          <span className="text-[10px] text-slate-500">
+                            {rev.uploaded_at ? new Date(rev.uploaded_at).toLocaleDateString() : 'Archived'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{rev.notes || 'Previous drawing issue'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Linked WBS Tasks Section */}
+                <div className="p-4 flex-1 flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Layers size={14} className="text-blue-400" />
@@ -3047,15 +3587,15 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   </div>
 
                   {loadingTasks ? (
-                    <div className="py-8 text-center text-xs text-slate-500">Loading linked schedule tasks...</div>
+                    <div className="py-6 text-center text-xs text-slate-500">Loading linked schedule tasks...</div>
                   ) : linkedTasks.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-500">
+                    <div className="py-6 text-center text-xs text-slate-500">
                       No schedule tasks directly linked to drawing {selectedDrawing.document_number}.
                     </div>
                   ) : (
-                    <div className="space-y-2 overflow-y-auto max-h-[360px] pr-1">
+                    <div className="space-y-2 overflow-y-auto max-h-[240px] pr-1">
                       {linkedTasks.map((t: any) => (
-                        <div key={t.id} className="bg-slate-900/80 hover:bg-slate-900 p-3 rounded-xl border border-slate-800 transition-colors">
+                        <div key={t.id} className="bg-slate-900/80 hover:bg-slate-900 p-2.5 rounded-xl border border-slate-800 transition-colors">
                           <div className="flex items-start justify-between gap-2">
                             <span className="text-xs font-bold text-slate-200 leading-snug line-clamp-2">
                               {t.title}
@@ -3064,18 +3604,11 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                               {t.progress}%
                             </span>
                           </div>
-                          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
                             <span>{t.trade || 'MEP'} • {t.assignee || 'Assigned'}</span>
                             <span className={t.status === 'Completed' ? 'text-emerald-400' : 'text-amber-400'}>
                               {t.status}
                             </span>
-                          </div>
-                          {/* Mini Progress Bar */}
-                          <div className="w-full bg-slate-800 rounded-full h-1 mt-2 overflow-hidden">
-                            <div
-                              className="bg-blue-500 h-full rounded-full transition-all"
-                              style={{ width: `${t.progress || 0}%` }}
-                            />
                           </div>
                         </div>
                       ))}
@@ -3097,6 +3630,119 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Upload New Drawing Version / Revision Modal */}
+      {versionTargetDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <form
+            onSubmit={handleUploadNewVersion}
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800">
+                  DRAWING VERSION CONTROL • {versionTargetDoc.document_number || 'DOC'}
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">
+                  Upload New Version / Revision ({versionTargetDoc.revision || 'Rev 0'} → {versionForm.new_revision})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Archives {versionTargetDoc.revision || 'current version'} in Revision History, updates AI Copilot, and carries forward active Site Markings.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVersionTargetDoc(null)}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">New Revision Code *</label>
+                <input
+                  required
+                  value={versionForm.new_revision}
+                  onChange={e => setVersionForm(s => ({ ...s, new_revision: e.target.value }))}
+                  placeholder="e.g. Rev 1, Rev 2, Rev B, As-Built"
+                  className="w-full px-3 py-2 text-xs font-mono font-bold border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Workflow Status</label>
+                <select
+                  value={versionForm.status}
+                  onChange={e => setVersionForm(s => ({ ...s, status: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                >
+                  <option value="Approved">Approved for Construction (AFC)</option>
+                  <option value="As-Built">As-Built Verified</option>
+                  <option value="Submitted">Submitted for Approval</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">
+                Replacement Drawing / Document File (Optional — PNG, JPG, PDF, SVG)
+              </label>
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf,.svg,.webp,.docx,.xlsx"
+                onChange={handleVersionFileChange}
+                className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+              />
+              {versionForm.attachment_name && (
+                <p className="text-[11px] text-emerald-700 font-mono mt-1">
+                  Selected new sheet file: {versionForm.attachment_name}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">
+                Revision Change Summary / Site Update Notes *
+              </label>
+              <textarea
+                required
+                rows={3}
+                value={versionForm.change_summary}
+                onChange={e => setVersionForm(s => ({ ...s, change_summary: e.target.value }))}
+                placeholder="e.g. Updated Level 2 Area K lighting circuit L2/C4 routing & incorporated site supervisor redline markings..."
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={versionForm.carry_over_markings}
+                onChange={e => setVersionForm(s => ({ ...s, carry_over_markings: e.target.checked }))}
+              />
+              Carry forward existing Site Markings (MK pins) onto {versionForm.new_revision}
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setVersionTargetDoc(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={uploadingVersion}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold cursor-pointer"
+              >
+                {uploadingVersion ? 'Publishing Revision...' : `Publish ${versionForm.new_revision}`}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -3165,13 +3811,13 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-2.5">
               <div>
                 <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Category</label>
                 <select
                   value={docForm.category}
                   onChange={e => setDocForm(s => ({ ...s, category: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                  className="w-full px-2.5 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option value="Drawing">Drawing / Layout</option>
                   <option value="Schematic">Schematic</option>
@@ -3187,7 +3833,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                 <select
                   value={docForm.discipline}
                   onChange={e => setDocForm(s => ({ ...s, discipline: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                  className="w-full px-2.5 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option value="Electrical">Electrical</option>
                   <option value="HVAC">HVAC</option>
@@ -3198,11 +3844,20 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Revision / Status</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Revision</label>
+                <input
+                  value={docForm.version}
+                  onChange={e => setDocForm(s => ({ ...s, version: e.target.value }))}
+                  placeholder="Rev A / Rev 1"
+                  className="w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Status</label>
                 <select
                   value={docForm.status}
                   onChange={e => setDocForm(s => ({ ...s, status: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                  className="w-full px-2.5 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option value="Approved">Approved (AFC)</option>
                   <option value="Submitted">Submitted</option>

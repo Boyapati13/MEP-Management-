@@ -343,15 +343,25 @@ export function InternalLayout({
           </button>
         </div>
 
-        {/* Active Project Selector */}
-        <div className="p-3 border-b border-slate-800/80 bg-slate-900/40">
-          <div className="flex items-center justify-between mb-1">
+        {/* Active Project Selector + Quick Create Project / Upload Doc */}
+        <div className="p-3 border-b border-slate-800/80 bg-slate-900/40 space-y-2">
+          <div className="flex items-center justify-between">
             <label htmlFor="sidebar-project-select" className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Project Context
             </label>
-            {activeProject?.code && (
-              <span className="text-[10px] font-mono text-blue-400">{activeProject.code}</span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {activeProject?.code && (
+                <span className="text-[10px] font-mono text-blue-400">{activeProject.code}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('open-create-project'))}
+                className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                title="Create New Project"
+              >
+                + New Project
+              </button>
+            </div>
           </div>
           <select
             id="sidebar-project-select"
@@ -366,6 +376,28 @@ export function InternalLayout({
               </option>
             ))}
           </select>
+          <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate('technical', 'documents');
+                setMobileMenuOpen(false);
+              }}
+              className="px-2 py-1.5 rounded bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[10px] font-semibold text-center transition-colors cursor-pointer truncate"
+            >
+              Drawings &amp; Docs
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate('dashboard', 'admin-hierarchy');
+                setMobileMenuOpen(false);
+              }}
+              className="px-2 py-1.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-semibold text-center transition-colors cursor-pointer truncate"
+            >
+              Admin &amp; Hierarchy
+            </button>
+          </div>
         </div>
 
         {/* Hierarchical Module Tree Navigation */}
@@ -560,15 +592,23 @@ export function InternalLayout({
 
         {/* User Identity & Session Footer */}
         <div className="p-3 border-t border-slate-800/90 bg-[#090d16] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center text-xs font-semibold flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate('dashboard', 'admin-hierarchy');
+              setMobileMenuOpen(false);
+            }}
+            className="flex items-center gap-2.5 min-w-0 text-left hover:bg-slate-800/70 p-1 rounded-lg transition-colors flex-1 cursor-pointer"
+            title="Open Admin Profile & Command Hierarchy"
+          >
+            <div className="w-7 h-7 rounded bg-blue-600/20 border border-blue-500/40 text-blue-300 flex items-center justify-center text-xs font-bold flex-shrink-0">
               {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
               <div className="text-xs font-semibold text-slate-100 truncate">{user?.name || user?.username}</div>
-              <div className="text-[10px] text-slate-400 truncate">{role}</div>
+              <div className="text-[10px] text-amber-400 font-medium truncate">{role} • View Hierarchy</div>
             </div>
-          </div>
+          </button>
           <button
             onClick={logout}
             className="p-1.5 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"

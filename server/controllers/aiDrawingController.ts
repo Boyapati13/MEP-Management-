@@ -1618,6 +1618,584 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   app.post("/api/projects/upload-contractor-doc", authRequired, upload.single("file"), handleContractorDocUpload);
   app.post("/api/projects/:id/upload-contractor-doc", authRequired, upload.single("file"), handleContractorDocUpload);
 
+  // =========================================================================
+  // DRAWING REVISION CONTROL (NEW VERSION UPLOAD) & SITE MARKINGS ON DRAWINGS
+  // =========================================================================
+
+  // Get revision history + site markings for a specific drawing/document
+  app.get("/api/documents/:id/revisions", authRequired, (req: Request, res: Response) => {
+    try {
+      const docId = String(req.params.id);
+      const doc = rowToDict(db.prepare("SELECT * FROM documents WHERE id = ?").get(docId));
+      if (!doc) {
+        res.status(404).json({ error: "Document or drawing not found" });
+        return;
+      }
+      const revisions = db
+        .prepare("SELECT * FROM document_revisions WHERE document_id = ? ORDER BY created_at DESC")
+        .all(docId)
+        .map(rowToDict);
+      const markings = db
+        .prepare("SELECT * FROM drawing_markings WHERE document_id = ? ORDER BY created_at ASC")
+        .all(docId)
+        .map(rowToDict);
+      res.json({
+        document: doc,
+        current_revision: doc.revision || "Rev A",
+        revisions,
+        markings,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to load drawing revisions" });
+    }
+  });
+
+  // Upload a new version/revision of an existing drawing or document
+  app.post("/api/documents/:id/new-version", authRequired, async (req: Request, res: Response) => {
+    try {
+      const docId = String(req.params.id);
+      const existing = rowToDict(db.prepare("SELECT * FROM documents WHERE id = ?").get(docId));
+      if (!existing) {
+        res.status(404).json({ error: "Drawing or document not found" });
+        return;
+      }
+
+      const newRevision = String(req.body?.revision || req.body?.revision_code || "Rev B").trim();
+      const changeSummary = String(req.body?.change_summary || req.body?.notes || `Updated to ${newRevision}`).trim();
+      const newAttachmentData = req.body?.attachment_data || existing.attachment_data;
+      const newAttachmentName = req.body?.attachment_name || existing.attachment_name;
+      const newStatus = req.body?.status || existing.status || "Approved";
+      const carryOverMarkings = req.body?.carry_over_markings !== false;
+      const nowIso = new Date().toISOString();
+      const actorName = req.user?.name || req.user?.user_id || "Project Engineer";
+
+      // 1. Archive the previous revision into document_revisions
+      const revId = `rev-${crypto.randomUUID().slice(0, 8)}`;
+      db.prepare(`
+        INSERT INTO document_revisions (
+          id, document_id, project_id, revision_code, superseded_date,
+          changed_by, change_summary, attachment_name, attachment_data, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        revId,
+        docId,
+        existing.project_id,
+        existing.revision || "Rev 0",
+        nowIso.slice(0, 10),
+        actorName,
+        changeSummary,
+        existing.attachment_name || null,
+        existing.attachment_data || null,
+        nowIso
+      );
+
+      // 2. Extract text if a new file was uploaded, and append revision note to extracted_text for AI Copilot
+      let updatedExtractedText = existing.extracted_text || "";
+      if (req.body?.attachment_data && req.body.attachment_data !== existing.attachment_data) {
+        try {
+          const parsed = await extractDocumentText(req.body.attachment_data, newAttachmentName || existing.name || "drawing");
+          if (parsed.kind === "text" && parsed.text.trim().length > 20) {
+            updatedExtractedText = parsed.text.slice(0, 50000);
+          }
+        } catch {}
+      }
+      const revNote = `\n[Revision Update ${newRevision} on ${nowIso.slice(0, 10)} by ${actorName}]: ${changeSummary}`;
+      updatedExtractedText = `${updatedExtractedText}${revNote}`.trim();
+
+      // 3. Update the main document record to the new version
+      db.prepare(`
+        UPDATE documents
+        SET revision = ?,
+            status = ?,
+            date_added = ?,
+            attachment_name = ?,
+            attachment_data = ?,
+            extracted_text = ?
+        WHERE id = ?
+      `).run(
+        newRevision,
+        newStatus,
+        nowIso.slice(0, 10),
+        newAttachmentName,
+        newAttachmentData,
+        updatedExtractedText,
+        docId
+      );
+
+      // 4. Carry over existing site markings to the new revision if requested
+      if (carryOverMarkings) {
+        db.prepare("UPDATE drawing_markings SET revision = ?, updated_at = ? WHERE document_id = ?").run(
+          newRevision,
+          nowIso,
+          docId
+        );
+      }
+
+      // 5. Log a project update so the site timeline shows the new drawing version
+      try {
+        db.prepare(`
+          INSERT INTO project_updates (
+            id, project_id, title, category, content, trade, location, pinned, created_by, created_by_name, created_at
+          ) VALUES (?, ?, ?, 'Drawing Revision', ?, ?, ?, 0, ?, ?, ?)
+        `).run(
+          `upd-${crypto.randomUUID().slice(0, 8)}`,
+          existing.project_id,
+          `Drawing ${existing.document_number || existing.name} Updated to ${newRevision}`,
+          `New version ${newRevision} issued (superseding ${existing.revision || "Rev 0"}): ${changeSummary}`,
+          existing.discipline || "Electrical",
+          existing.document_number || "Site",
+          req.user?.user_id || "admin",
+          actorName,
+          nowIso
+        );
+      } catch {}
+
+      const updatedDoc = rowToDict(db.prepare("SELECT * FROM documents WHERE id = ?").get(docId));
+      const revisions = db
+        .prepare("SELECT * FROM document_revisions WHERE document_id = ? ORDER BY created_at DESC")
+        .all(docId)
+        .map(rowToDict);
+
+      res.status(201).json({
+        success: true,
+        document: updatedDoc,
+        revisions,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to upload new drawing version" });
+    }
+  });
+
+  // Get site markings for a drawing or project
+  app.get("/api/documents/:id/markings", authRequired, (req: Request, res: Response) => {
+    try {
+      const docId = String(req.params.id);
+      const rows = db
+        .prepare("SELECT * FROM drawing_markings WHERE document_id = ? ORDER BY created_at ASC")
+        .all(docId)
+        .map(rowToDict);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch drawing site markings" });
+    }
+  });
+
+  app.get("/api/drawing-markings", authRequired, (req: Request, res: Response) => {
+    try {
+      const projectId = req.query.project_id ? String(req.query.project_id) : "";
+      const docId = req.query.document_id ? String(req.query.document_id) : "";
+      let rows: any[] = [];
+      if (docId) {
+        rows = db.prepare("SELECT * FROM drawing_markings WHERE document_id = ? ORDER BY created_at ASC").all(docId).map(rowToDict);
+      } else if (projectId) {
+        rows = db.prepare("SELECT * FROM drawing_markings WHERE project_id = ? ORDER BY created_at DESC").all(projectId).map(rowToDict);
+      } else {
+        rows = db.prepare("SELECT * FROM drawing_markings ORDER BY created_at DESC LIMIT 200").all().map(rowToDict);
+      }
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch drawing markings" });
+    }
+  });
+
+  // Create a new Site Marking / Redline Pin on a drawing
+  app.post("/api/documents/:id/markings", authRequired, (req: Request, res: Response) => {
+    try {
+      const docId = String(req.params.id);
+      const doc = rowToDict(db.prepare("SELECT * FROM documents WHERE id = ?").get(docId));
+      if (!doc) {
+        res.status(404).json({ error: "Drawing not found" });
+        return;
+      }
+
+      const existingCount = (db.prepare("SELECT COUNT(*) as c FROM drawing_markings WHERE document_id = ?").get(docId) as any)?.c || 0;
+      const pinNumber = req.body?.pin_number || `MK-${String(existingCount + 1).padStart(2, "0")}`;
+      const xPercent = Math.max(2, Math.min(98, Number(req.body?.x_percent ?? 50)));
+      const yPercent = Math.max(2, Math.min(98, Number(req.body?.y_percent ?? 50)));
+      const markingType = String(req.body?.marking_type || "Site Progress / Installed");
+      const title = String(req.body?.title || "Site Marking Update").trim();
+      const description = String(req.body?.description || "").trim();
+      const trade = String(req.body?.trade || doc.discipline || "Electrical");
+      const status = String(req.body?.status || "Installed / Verified");
+      const progressPercent = Number(req.body?.progress_percent ?? (status === "Installed / Verified" ? 100 : 50));
+      const linkedTaskId = req.body?.linked_task_id || null;
+      const nowIso = new Date().toISOString();
+      const actorName = req.user?.name || req.user?.user_id || "Site Supervisor";
+      const markingId = `mk-${crypto.randomUUID().slice(0, 8)}`;
+
+      db.prepare(`
+        INSERT INTO drawing_markings (
+          id, document_id, project_id, drawing_number, revision, pin_number,
+          x_percent, y_percent, marking_type, title, description, trade,
+          status, progress_percent, linked_task_id, created_by, created_by_name, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        markingId,
+        docId,
+        doc.project_id,
+        doc.document_number || doc.name,
+        doc.revision || "Rev A",
+        pinNumber,
+        xPercent,
+        yPercent,
+        markingType,
+        title,
+        description,
+        trade,
+        status,
+        progressPercent,
+        linkedTaskId,
+        req.user?.user_id || "admin",
+        actorName,
+        nowIso,
+        nowIso
+      );
+
+      // Append site marking note to drawing extracted_text so AI Copilot can answer questions about site markings on the drawing
+      const markingText = `\n[Site Marking ${pinNumber} (${markingType} - ${status}, ${progressPercent}%) on ${doc.document_number || doc.name} at (${Math.round(xPercent)}%, ${Math.round(yPercent)}%) by ${actorName}]: ${title}. ${description}`;
+      db.prepare("UPDATE documents SET extracted_text = COALESCE(extracted_text, '') || ? WHERE id = ?").run(markingText, docId);
+
+      // Optionally update linked WBS task progress
+      if (linkedTaskId && progressPercent >= 0) {
+        try {
+          db.prepare("UPDATE tasks SET progress = ?, status = ? WHERE id = ?").run(
+            progressPercent,
+            progressPercent >= 100 ? "Completed" : progressPercent > 0 ? "In Progress" : "Not Started",
+            linkedTaskId
+          );
+        } catch {}
+      }
+
+      // Also post a site update entry so the project timeline reflects the drawing site marking
+      try {
+        db.prepare(`
+          INSERT INTO project_updates (
+            id, project_id, title, category, content, progress_percent, trade, location, pinned, created_by, created_by_name, created_at
+          ) VALUES (?, ?, ?, 'Drawing Site Marking', ?, ?, ?, ?, 0, ?, ?, ?)
+        `).run(
+          `upd-${crypto.randomUUID().slice(0, 8)}`,
+          doc.project_id,
+          `[${doc.document_number || "DWG"} ${pinNumber}] ${title}`,
+          `${markingType} marked on Drawing ${doc.document_number || doc.name} (${doc.revision || "Rev A"}): ${description || title}`,
+          progressPercent,
+          trade,
+          `${doc.document_number || "Drawing"} (${Math.round(xPercent)}%, ${Math.round(yPercent)}%)`,
+          req.user?.user_id || "admin",
+          actorName,
+          nowIso
+        );
+      } catch {}
+
+      const created = rowToDict(db.prepare("SELECT * FROM drawing_markings WHERE id = ?").get(markingId));
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to save drawing site marking" });
+    }
+  });
+
+  // Update a site marking status/progress/notes
+  app.put("/api/drawing-markings/:markingId", authRequired, (req: Request, res: Response) => {
+    try {
+      const markingId = String(req.params.markingId);
+      const existing = rowToDict(db.prepare("SELECT * FROM drawing_markings WHERE id = ?").get(markingId));
+      if (!existing) {
+        res.status(404).json({ error: "Site marking not found" });
+        return;
+      }
+      const title = req.body?.title ?? existing.title;
+      const description = req.body?.description ?? existing.description;
+      const markingType = req.body?.marking_type ?? existing.marking_type;
+      const status = req.body?.status ?? existing.status;
+      const progressPercent = req.body?.progress_percent !== undefined ? Number(req.body.progress_percent) : existing.progress_percent;
+      const nowIso = new Date().toISOString();
+
+      db.prepare(`
+        UPDATE drawing_markings
+        SET title = ?, description = ?, marking_type = ?, status = ?, progress_percent = ?, updated_at = ?
+        WHERE id = ?
+      `).run(title, description, markingType, status, progressPercent, nowIso, markingId);
+
+      const updated = rowToDict(db.prepare("SELECT * FROM drawing_markings WHERE id = ?").get(markingId));
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to update site marking" });
+    }
+  });
+
+  app.delete("/api/drawing-markings/:markingId", authRequired, (req: Request, res: Response) => {
+    try {
+      const markingId = String(req.params.markingId);
+      db.prepare("DELETE FROM drawing_markings WHERE id = ?").run(markingId);
+      res.json({ deleted: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to delete site marking" });
+    }
+  });
+
+  // =========================================================================
+  // ADMIN PROFILE & COMMAND HIERARCHY (ADMIN -> PM -> SITES -> SUPERVISORS -> WORKERS)
+  // =========================================================================
+  app.get("/api/admin/command-hierarchy", authRequired, (req: Request, res: Response) => {
+    try {
+      const users = db.prepare("SELECT id, username, name, role, email, phone, company, trade, status, created_at FROM users ORDER BY name ASC").all().map(rowToDict);
+      const projects = db.prepare("SELECT * FROM projects ORDER BY name ASC").all().map(rowToDict);
+      const sites = db.prepare("SELECT * FROM sites ORDER BY name ASC").all().map(rowToDict);
+      const workers = db.prepare("SELECT * FROM workers ORDER BY name ASC").all().map(rowToDict);
+
+      const adminUsers = users.filter((u: any) => u.role === "Admin");
+      const pmUsers = users.filter((u: any) => u.role === "ProjectManager");
+      const supervisorUsers = users.filter((u: any) => u.role === "SiteEngineer" || u.role === "QAQC" || u.role === "SafetyOfficer");
+
+      // Build structured Project Manager -> Projects -> Sites -> Site Supervisors -> Workers tree
+      const projectManagers = pmUsers.map((pm: any) => {
+        const pmProjects = projects.filter(
+          (p: any) =>
+            p.project_manager_id === pm.id ||
+            (p.project_manager_name && p.project_manager_name.toLowerCase().includes((pm.name || "").toLowerCase()))
+        );
+
+        const enrichedProjects = pmProjects.map((proj: any) => {
+          const projSites = sites.filter((s: any) => s.project_id === proj.id);
+          const projWorkers = workers.filter((w: any) => w.project_id === proj.id);
+
+          const enrichedSites = projSites.map((site: any) => {
+            const siteWorkers = projWorkers.filter((w: any) => w.site_id === site.id);
+            const supUser = users.find((u: any) => u.id === site.supervisor_id) || null;
+            return {
+              ...site,
+              supervisor: supUser || {
+                id: site.supervisor_id || "sup-default",
+                name: site.supervisor_name || proj.site_supervisor_name || "Assigned Site Supervisor",
+                role: "Site Supervisor",
+              },
+              workers: siteWorkers,
+            };
+          });
+
+          // Group workers by supervisor on this project as well
+          const supervisorMap = new Map<string, { supervisor: any; sites: string[]; workers: any[] }>();
+          for (const site of enrichedSites) {
+            const supKey = site.supervisor?.id || site.supervisor_name || "default";
+            if (!supervisorMap.has(supKey)) {
+              supervisorMap.set(supKey, {
+                supervisor: site.supervisor,
+                sites: [site.name],
+                workers: [],
+              });
+            } else {
+              const entry = supervisorMap.get(supKey)!;
+              if (!entry.sites.includes(site.name)) entry.sites.push(site.name);
+            }
+          }
+          for (const w of projWorkers) {
+            const supKey = w.supervisor_id || w.supervisor_name || "default";
+            const supUser = users.find((u: any) => u.id === w.supervisor_id);
+            if (!supervisorMap.has(supKey)) {
+              supervisorMap.set(supKey, {
+                supervisor: supUser || { id: supKey, name: w.supervisor_name || "Site Supervisor", role: "SiteEngineer", trade: w.trade },
+                sites: [],
+                workers: [w],
+              });
+            } else {
+              supervisorMap.get(supKey)!.workers.push(w);
+            }
+          }
+
+          return {
+            ...proj,
+            sites: enrichedSites,
+            supervisors: Array.from(supervisorMap.values()),
+            workers: projWorkers,
+          };
+        });
+
+        const totalSitesUnderPm = enrichedProjects.reduce((acc: number, p: any) => acc + p.sites.length, 0);
+        const totalWorkersUnderPm = enrichedProjects.reduce((acc: number, p: any) => acc + p.workers.length, 0);
+
+        return {
+          ...pm,
+          projects: enrichedProjects,
+          total_projects: enrichedProjects.length,
+          total_sites: totalSitesUnderPm,
+          total_workers: totalWorkersUnderPm,
+        };
+      }).sort((a: any, b: any) => (b.total_workers - a.total_workers) || (b.total_projects - a.total_projects));
+
+      const currentAdmin = adminUsers[0] || {
+        id: req.user?.user_id || "admin",
+        name: req.user?.name || "Executive Administrator",
+        username: "admin",
+        role: "Admin",
+        email: "admin@mep.com",
+        company: "MEP FieldHub Enterprise",
+      };
+
+      res.json({
+        adminProfile: {
+          ...currentAdmin,
+          total_project_managers: pmUsers.length,
+          total_projects: projects.length,
+          total_sites: sites.length,
+          total_supervisors: supervisorUsers.length,
+          total_workers: workers.length,
+        },
+        projectManagers,
+        supervisors: supervisorUsers,
+        projects,
+        sites,
+        workers,
+        users,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to load command hierarchy" });
+    }
+  });
+
+  app.post("/api/admin/assign-hierarchy", authRequired, (req: Request, res: Response) => {
+    try {
+      const action = String(req.body?.action || "");
+      const nowIso = new Date().toISOString();
+
+      if (action === "assign_project_leadership") {
+        const { project_id, project_manager_id, project_manager_name, site_supervisor_id, site_supervisor_name } = req.body;
+        db.prepare(`
+          UPDATE projects
+          SET project_manager_id = COALESCE(?, project_manager_id),
+              project_manager_name = COALESCE(?, project_manager_name),
+              site_supervisor_id = COALESCE(?, site_supervisor_id),
+              site_supervisor_name = COALESCE(?, site_supervisor_name)
+          WHERE id = ?
+        `).run(project_manager_id || null, project_manager_name || null, site_supervisor_id || null, site_supervisor_name || null, project_id);
+        res.json({ success: true });
+        return;
+      }
+
+      if (action === "assign_site_supervisor") {
+        const { site_id, supervisor_id, supervisor_name } = req.body;
+        db.prepare("UPDATE sites SET supervisor_id = ?, supervisor_name = ? WHERE id = ?").run(
+          supervisor_id || null,
+          supervisor_name || null,
+          site_id
+        );
+        // Also update workers on that site if requested
+        if (req.body?.update_site_workers) {
+          db.prepare("UPDATE workers SET supervisor_id = ?, supervisor_name = ? WHERE site_id = ?").run(
+            supervisor_id || null,
+            supervisor_name || null,
+            site_id
+          );
+        }
+        res.json({ success: true });
+        return;
+      }
+
+      if (action === "create_or_assign_worker") {
+        const { id, name, employee_id, trade, phone, email, project_id, site_id, supervisor_id, supervisor_name, role_on_site } = req.body;
+        if (id) {
+          db.prepare(`
+            UPDATE workers
+            SET name = COALESCE(?, name),
+                trade = COALESCE(?, trade),
+                project_id = COALESCE(?, project_id),
+                site_id = COALESCE(?, site_id),
+                supervisor_id = COALESCE(?, supervisor_id),
+                supervisor_name = COALESCE(?, supervisor_name),
+                role_on_site = COALESCE(?, role_on_site)
+            WHERE id = ?
+          `).run(name || null, trade || null, project_id || null, site_id || null, supervisor_id || null, supervisor_name || null, role_on_site || null, id);
+          res.json({ success: true, id });
+          return;
+        } else {
+          const newId = `wrk-${crypto.randomUUID().slice(0, 8)}`;
+          db.prepare(`
+            INSERT INTO workers (
+              id, project_id, site_id, name, employee_id, trade, employment_type,
+              nationality, phone, email, supervisor_id, supervisor_name, role_on_site, status, hired_date, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'Permanent', 'Malta / EU', ?, ?, ?, ?, ?, 'Active', ?, ?)
+          `).run(
+            newId,
+            project_id || "bov-st-venera-2618",
+            site_id || "site-2618-l1",
+            name,
+            employee_id || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+            trade || "Electrical",
+            phone || "",
+            email || "",
+            supervisor_id || "usr-sup-elec",
+            supervisor_name || "Carmelo Vella",
+            role_on_site || "MEP Site Technician",
+            nowIso.slice(0, 10),
+            nowIso
+          );
+          res.status(201).json({ success: true, id: newId });
+          return;
+        }
+      }
+
+      if (action === "create_site") {
+        const { project_id, name, address, city, supervisor_id, supervisor_name } = req.body;
+        const newSiteId = `site-${crypto.randomUUID().slice(0, 8)}`;
+        db.prepare(`
+          INSERT INTO sites (
+            id, project_id, name, address, city, country, latitude, longitude,
+            geofence_radius_m, geofence_warning_radius_m, timezone, status, supervisor_id, supervisor_name, created_by, created_at
+          ) VALUES (?, ?, ?, ?, ?, 'Malta', 35.8902, 14.4775, 120, 180, 'Europe/Malta', 'Active', ?, ?, ?, ?)
+        `).run(
+          newSiteId,
+          project_id || "bov-st-venera-2618",
+          name,
+          address || "Triq il-Kanun, Santa Venera",
+          city || "Santa Venera",
+          supervisor_id || "usr-sup-elec",
+          supervisor_name || "Carmelo Vella",
+          req.user?.user_id || "admin",
+          nowIso
+        );
+        res.status(201).json({ success: true, id: newSiteId });
+        return;
+      }
+
+      if (action === "create_staff") {
+        const { name, username, role, email, phone, company, trade, project_id } = req.body;
+        const newUserId = `usr-${crypto.randomUUID().slice(0, 8)}`;
+        const pwHash = hashPassword(req.body?.password || "admin123");
+        db.prepare(`
+          INSERT INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, created_at, must_change_password)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, 0)
+        `).run(
+          newUserId,
+          username || name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14),
+          name,
+          pwHash,
+          role || "ProjectManager",
+          email || "",
+          phone || "",
+          company || "Enser / MEP Delivery",
+          trade || "Multi-Discipline MEP",
+          nowIso
+        );
+        if (project_id) {
+          db.prepare("INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active) VALUES (?, ?, ?, 1)").run(
+            newUserId,
+            project_id,
+            role || "ProjectManager"
+          );
+          if (role === "ProjectManager") {
+            db.prepare("UPDATE projects SET project_manager_id = ?, project_manager_name = ? WHERE id = ?").run(newUserId, name, project_id);
+          } else {
+            db.prepare("UPDATE projects SET site_supervisor_id = ?, site_supervisor_name = ? WHERE id = ?").run(newUserId, name, project_id);
+          }
+        }
+        res.status(201).json({ success: true, id: newUserId });
+        return;
+      }
+
+      res.status(400).json({ error: "Unknown hierarchy action" });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to update command hierarchy" });
+    }
+  });
+
   // ==========================================
   // V1.1 - V1.2 CONSTRUCTION-GRADE MODULE APIS
   // ==========================================

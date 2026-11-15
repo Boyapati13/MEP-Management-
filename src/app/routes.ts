@@ -129,7 +129,9 @@ export const ROUTE_ITEMS: RouteItem[] = [
   { id: 'dashboard', label: 'Executive Control Tower', icon: LayoutDashboard, domain: 'dashboard' },
   { id: 'projects', label: 'Projects Portfolio', icon: Briefcase, domain: 'dashboard' },
   { id: 'project-detail', label: 'Work Packages & WBS', icon: Layers, domain: 'dashboard' },
+  { id: 'documents-hub', label: 'Documents & Drawings (CDE)', icon: FolderKanban, domain: 'dashboard' },
   { id: 'material-submittals', label: 'Material Submittals', icon: FileCheck2, domain: 'dashboard' },
+  { id: 'admin-hierarchy', label: 'Admin & Team Hierarchy', icon: UserCog, domain: 'dashboard' },
 
   // Pillar 1: Commercial & Financial Control
   { id: 'boq', label: 'BOQ & Job Costing', icon: FileSpreadsheet, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },
@@ -175,6 +177,7 @@ export const ROUTE_ITEMS: RouteItem[] = [
   { id: 'decisions', label: 'Decisions Log', icon: CheckSquare, domain: 'controls' },
 
   // System Administration
+  { id: 'admin-profile', label: 'Admin Profile & Hierarchy', icon: UserCog, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
   { id: 'setup-checklist', label: 'Readiness Checklist', icon: CheckSquare, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
   { id: 'companies', label: 'Company Hierarchy', icon: Building, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },
   { id: 'users', label: 'Users & 8-Role RBAC', icon: UserCog, domain: 'settings', allowedRoles: ['Admin', 'ProjectManager'] },

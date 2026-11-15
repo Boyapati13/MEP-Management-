@@ -51,6 +51,7 @@ import { ProjectDocumentsSection } from './components/ProjectDocumentsSection';
 import { SelectionsManagerView } from './components/SelectionsManagerView';
 import { ProjectMessagesPage } from './components/ProjectMessagesPage';
 import { MaterialSubmittalsView } from './components/MaterialSubmittalsView';
+import { AdminProfileHierarchyView } from './components/AdminProfileHierarchyView';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -716,7 +717,8 @@ type Page =
   | 'payroll' | 'payroll-detail'
   | 'punch-clock'
   // V1.4.1 Domains & Consolidations
-  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist' | 'field-notes' | 'submittals' | 'material-submittals';
+  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist' | 'field-notes' | 'submittals' | 'material-submittals'
+  | 'documents-hub' | 'admin-hierarchy' | 'admin-profile';
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -726,6 +728,7 @@ function AppShell() {
   const [activeDomain, setActiveDomain] = useState<NavigationDomain>('dashboard');
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [initialCopilotPrompt, setInitialCopilotPrompt] = useState<string | undefined>(undefined);
+  const [globalCreateProjectOpen, setGlobalCreateProjectOpen] = useState(false);
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -734,8 +737,13 @@ function AppShell() {
       if (e.detail?.prompt) setInitialCopilotPrompt(e.detail.prompt);
       setAssistantOpen(true);
     };
+    const onOpenCreateProject = () => setGlobalCreateProjectOpen(true);
     window.addEventListener('open-copilot', handler);
-    return () => window.removeEventListener('open-copilot', handler);
+    window.addEventListener('open-create-project', onOpenCreateProject);
+    return () => {
+      window.removeEventListener('open-copilot', handler);
+      window.removeEventListener('open-create-project', onOpenCreateProject);
+    };
   }, [setSelectedProject]);
 
   const navigate = useCallback((p: Page, param?: string) => {
@@ -797,6 +805,10 @@ function AppShell() {
       case 'field-notes': return <FieldNotesAndSnagCreatorView projectId={selectedProject} projects={projects} user={user} addToast={addToast} onNavigate={(r) => navigate(r as Page)} />;
       case 'submittals':
       case 'material-submittals': return <MaterialSubmittalsView projectId={selectedProject} projects={projects} user={user} onSubmittalsChanged={reload} />;
+      case 'documents-hub':
+      case 'documents': return <EnterpriseModulesView page="documents" selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
+      case 'admin-hierarchy':
+      case 'admin-profile': return <AdminProfileHierarchyView selectedProject={selectedProject} user={user} onNavigate={(r, param) => navigate(r as Page, param)} onOpenCreateProject={() => setGlobalCreateProjectOpen(true)} />;
       case 'site-quality': return <EnterpriseModulesView page="inspections" selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
       default: return <EnterpriseModulesView page={page} selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
     }
@@ -904,6 +916,20 @@ function AppShell() {
         onSelectProject={setSelectedProject}
         initialPrompt={initialCopilotPrompt}
         onPromptConsumed={() => setInitialCopilotPrompt(undefined)}
+      />
+
+      <CreateProjectModal
+        open={globalCreateProjectOpen}
+        onClose={() => setGlobalCreateProjectOpen(false)}
+        onSuccess={async (newProj) => {
+          setGlobalCreateProjectOpen(false);
+          await reload();
+          if (newProj?.id) {
+            setSelectedProject(newProj.id);
+            navigate('project-detail', newProj.id);
+          }
+          addToast('success', `Project "${newProj?.name || 'New Project'}" created!`);
+        }}
       />
     </>
   );
@@ -3594,15 +3620,34 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
 
   return (
     <div className="space-y-6">
-      {/* Top Navigation & Actions — 1 primary, 2 secondary, rest in "More" */}
+      {/* Top Navigation & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          onClick={() => navigate('projects')}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-        >
-          <ArrowLeft size={15} /> Projects
-        </button>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('projects')}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+          >
+            <ArrowLeft size={15} /> Projects
+          </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-create-project'))}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+          >
+            <Plus size={13} /> New Project
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('documents');
+              setTimeout(() => window.dispatchEvent(new CustomEvent('open-upload-document')), 80);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+          >
+            <Upload size={14} /> + Upload Drawing / Doc
+          </button>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('open-copilot', { detail: { projectId: activeProjectId } }))}
             className={btnSecondary}
@@ -3713,7 +3758,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
           { id: 'feed', label: 'Live feed', count: feed.length, icon: TrendingUp },
           { id: 'actions', label: 'Actions', icon: AlertCircle },
           { id: 'decisions', label: 'Decisions', icon: Shield },
-          { id: 'team', label: 'Team', icon: Users },
+          { id: 'team', label: 'Admin & Team Hierarchy', icon: Users },
         ].map(tab => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -3797,13 +3842,14 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         />
       )}
 
-      {/* Tab: Documents & Contract */}
+      {/* Tab: Documents & Drawings (Full CDE, Drawing Version Control & Site Markings) */}
       {activeTab === 'documents' && (
-        <ProjectDocumentsSection
-          projectId={activeProjectId}
-          projectName={p?.name}
+        <EnterpriseModulesView
+          page="documents"
+          selectedProject={activeProjectId}
+          projects={projects}
+          user={user}
           onProjectUpdated={loadProjectDetails}
-          canManage={isManager}
         />
       )}
 
@@ -3924,25 +3970,14 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
         <ProjectDecisionsRegister projectId={activeProjectId} />
       )}
 
-      {/* Tab: Team */}
+      {/* Tab: Admin & Team Hierarchy */}
       {activeTab === 'team' && (
-        <Card className="p-6 border border-gray-100">
-          <h3 className="font-bold text-gray-900 text-base mb-4">Project Stakeholders & Key Directory</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50">
-              <p className="text-xs text-gray-400 uppercase font-semibold">Employer / Client</p>
-              <p className="text-base font-bold text-gray-900 mt-1">{p.client || '—'}</p>
-            </div>
-            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50">
-              <p className="text-xs text-gray-400 uppercase font-semibold">Lead MEP Contractor</p>
-              <p className="text-base font-bold text-gray-900 mt-1">Apex MEP Contracting LLC</p>
-            </div>
-            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50">
-              <p className="text-xs text-gray-400 uppercase font-semibold">Site Location</p>
-              <p className="text-base font-bold text-gray-900 mt-1">{p.location || 'Downtown Dubai'}</p>
-            </div>
-          </div>
-        </Card>
+        <AdminProfileHierarchyView
+          selectedProject={activeProjectId}
+          user={user}
+          onNavigate={(r, param) => navigate(r as Page, param)}
+          onOpenCreateProject={() => window.dispatchEvent(new CustomEvent('open-create-project'))}
+        />
       )}
 
       {/* Modal: Post Site Update */}

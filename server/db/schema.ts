@@ -314,6 +314,29 @@ export function initDb() {
       attachment_data TEXT,
       created_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS drawing_markings (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      drawing_number TEXT,
+      revision TEXT DEFAULT 'Rev A',
+      pin_number TEXT NOT NULL,
+      x_percent REAL NOT NULL DEFAULT 50,
+      y_percent REAL NOT NULL DEFAULT 50,
+      marking_type TEXT NOT NULL DEFAULT 'Site Progress / Installed',
+      title TEXT NOT NULL,
+      description TEXT,
+      trade TEXT DEFAULT 'Electrical',
+      status TEXT NOT NULL DEFAULT 'Open',
+      progress_percent INTEGER DEFAULT 0,
+      linked_task_id TEXT,
+      created_by TEXT,
+      created_by_name TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_drawing_markings_doc ON drawing_markings(document_id);
+    CREATE INDEX IF NOT EXISTS idx_drawing_markings_proj ON drawing_markings(project_id);
     CREATE TABLE IF NOT EXISTS document_transmittals (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -1389,6 +1412,183 @@ export function seedData() {
           extracted_text = COALESCE(extracted_text, 'Material Submittal ' || COALESCE(number, 'SUB') || ': ' || COALESCE(title, item, 'AHU Technical Submittal') || ' — Manufacturer: Daikin / Systemair, Model: Geniox 14 Eurovent Certified AHU, Drawing Ref: M-HVAC-L2-001, Spec: Sec 23 73 13, Status: ' || COALESCE(status, 'Approved'))
       WHERE manufacturer IS NULL;
     `);
+
+    // Add supervisor columns to sites & workers for Admin -> Project Manager -> Site -> Site Supervisor -> Workers hierarchy
+    try { db.exec("ALTER TABLE sites ADD COLUMN supervisor_id TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE sites ADD COLUMN supervisor_name TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE workers ADD COLUMN supervisor_name TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE workers ADD COLUMN role_on_site TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_id TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_name TEXT;"); } catch {}
+
+    // Seed Project Managers, Site Supervisors, Sites, and Workers for BOV St. Venera (bov-st-venera-2618) & enterprise hierarchy
+    const nowIso = new Date().toISOString();
+    const defaultPw = hashPassword("admin123");
+
+    const upsertUser = db.prepare(`
+      INSERT OR IGNORE INTO users (id, username, name, password_hash, role, email, phone, company, trade, status, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, 0)
+    `);
+    upsertUser.run("usr-pm-2618", "mcamilleri", "Ing. Mark Camilleri", defaultPw, "ProjectManager", "m.camilleri@enser.com.mt", "+356 7942 2618", "Enser / BOV MEP Delivery", "Multi-Discipline MEP", nowIso);
+    upsertUser.run("usr-pm-mriehel", "rborg", "Eng. Roderick Borg", defaultPw, "ProjectManager", "r.borg@mepfieldhub.com", "+356 7988 4410", "MEP FieldHub Operations", "HVAC & Electrical", nowIso);
+    upsertUser.run("usr-sup-elec", "cvella", "Carmelo Vella", defaultPw, "SiteEngineer", "c.vella@electrodata.com.mt", "+356 9921 3301", "ElectroData Installations Ltd", "Electrical & ELV", nowIso);
+    upsertUser.run("usr-sup-hvac", "jfarrugia", "Joseph Farrugia", defaultPw, "SiteEngineer", "j.farrugia@climatecontrol.com.mt", "+356 9944 5502", "ClimateControl Malta Ltd", "HVAC & Mechanical", nowIso);
+    upsertUser.run("usr-sup-fire", "dmicallef", "David Micallef", defaultPw, "SiteEngineer", "d.micallef@enser.com.mt", "+356 9967 8803", "FireSafe Systems Ltd", "Fire Alarm & Life Safety", nowIso);
+
+    // Ensure project_memberships for PMs & Supervisors
+    const upsertMembership = db.prepare(`
+      INSERT OR IGNORE INTO project_memberships (user_id, project_id, access_role, active)
+      VALUES (?, ?, ?, 1)
+    `);
+    upsertMembership.run("usr-pm-2618", "bov-st-venera-2618", "ProjectManager");
+    upsertMembership.run("usr-sup-elec", "bov-st-venera-2618", "SiteSupervisor");
+    upsertMembership.run("usr-sup-hvac", "bov-st-venera-2618", "SiteSupervisor");
+    upsertMembership.run("usr-sup-fire", "bov-st-venera-2618", "SiteSupervisor");
+
+    // Assign Project Manager & Lead Site Supervisor on bov-st-venera-2618
+    db.prepare(`
+      UPDATE projects
+      SET project_manager_id = COALESCE(project_manager_id, 'usr-pm-2618'),
+          project_manager_name = COALESCE(project_manager_name, 'Ing. Mark Camilleri'),
+          site_supervisor_id = COALESCE(site_supervisor_id, 'usr-sup-elec'),
+          site_supervisor_name = COALESCE(site_supervisor_name, 'Carmelo Vella (Electrical & ELV) / Joseph Farrugia (HVAC)')
+      WHERE id = 'bov-st-venera-2618'
+    `).run();
+
+    // Also ensure other projects have a Project Manager assigned if NULL
+    db.prepare(`
+      UPDATE projects
+      SET project_manager_id = COALESCE(project_manager_id, 'usr-pm-mriehel'),
+          project_manager_name = COALESCE(project_manager_name, 'Eng. Roderick Borg'),
+          site_supervisor_id = COALESCE(site_supervisor_id, 'usr-sup-hvac'),
+          site_supervisor_name = COALESCE(site_supervisor_name, 'Joseph Farrugia')
+      WHERE project_manager_name IS NULL OR project_manager_name = ''
+    `).run();
+
+    // Seed BOV St. Venera Sites if not present
+    const upsertSite = db.prepare(`
+      INSERT OR IGNORE INTO sites (
+        id, project_id, name, address, city, country, latitude, longitude,
+        geofence_radius_m, geofence_warning_radius_m, timezone, status, supervisor_id, supervisor_name, created_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 120, 180, 'Europe/Malta', 'Active', ?, ?, 'admin', ?)
+    `);
+    upsertSite.run(
+      "site-2618-l1",
+      "bov-st-venera-2618",
+      "BOV Operations Centre — Level 1 Refurbishment Zone",
+      "Triq il-Kanun, Santa Venera SVR 9030",
+      "Santa Venera",
+      "Malta",
+      35.8902,
+      14.4775,
+      "usr-sup-elec",
+      "Carmelo Vella (Electrical & ELV Supervisor)",
+      nowIso
+    );
+    upsertSite.run(
+      "site-2618-l2",
+      "bov-st-venera-2618",
+      "BOV Operations Centre — Level 2 Area K, Server Room & Plant",
+      "Triq il-Kanun, Santa Venera SVR 9030",
+      "Santa Venera",
+      "Malta",
+      35.8905,
+      14.4778,
+      "usr-sup-hvac",
+      "Joseph Farrugia (HVAC & Mechanical Supervisor)",
+      nowIso
+    );
+    // Ensure existing sites have supervisor_name populated
+    db.exec(`
+      UPDATE sites
+      SET supervisor_id = COALESCE(supervisor_id, 'usr-sup-elec'),
+          supervisor_name = COALESCE(supervisor_name, 'Carmelo Vella')
+      WHERE supervisor_name IS NULL OR supervisor_name = '';
+    `);
+
+    // Seed Workers under each Site & Site Supervisor for BOV St. Venera
+    const upsertWorker = db.prepare(`
+      INSERT OR IGNORE INTO workers (
+        id, project_id, site_id, name, employee_id, trade, employment_type,
+        nationality, phone, email, supervisor_id, supervisor_name, role_on_site, status, hired_date, created_at
+      ) VALUES (?, 'bov-st-venera-2618', ?, ?, ?, ?, 'Permanent', 'Malta / EU', ?, ?, ?, ?, ?, 'Active', '2026-04-15', ?)
+    `);
+    const bovWorkers = [
+      ["wrk-2618-01", "site-2618-l1", "Mario Spiteri", "EMP-2618-01", "Electrical", "+356 7911 2001", "m.spiteri@electrodata.com.mt", "usr-sup-elec", "Carmelo Vella", "Lead Licence A Electrician (DB1 / UP1 & Submains)"],
+      ["wrk-2618-02", "site-2618-l1", "Antoine Galea", "EMP-2618-02", "Electrical", "+356 7911 2002", "a.galea@electrodata.com.mt", "usr-sup-elec", "Carmelo Vella", "Lighting & DALI Installer (Drawing 2618-L-LTG-01)"],
+      ["wrk-2618-03", "site-2618-l1", "Kevin Zammit", "EMP-2618-03", "ELV / Data", "+356 7911 2003", "k.zammit@electrodata.com.mt", "usr-sup-elec", "Carmelo Vella", "Cat 6 Structured Cabling & Rack Technician (2618-L-DTA-01)"],
+      ["wrk-2618-04", "site-2618-l1", "Luke Azzopardi", "EMP-2618-04", "Electrical", "+356 7911 2004", "l.azzopardi@electrodata.com.mt", "usr-sup-elec", "Carmelo Vella", "Containment & 3-Compartment Dado Trunking Fitter (2618-L-CON-01)"],
+      ["wrk-2618-05", "site-2618-l2", "Stefan Mifsud", "EMP-2618-05", "HVAC", "+356 7911 2005", "s.mifsud@climatecontrol.com.mt", "usr-sup-hvac", "Joseph Farrugia", "Senior VRF Refrigerant Pipefitter (Drawing 2618-L-ACO-01)"],
+      ["wrk-2618-06", "site-2618-l2", "Noel Grech", "EMP-2618-06", "HVAC", "+356 7911 2006", "n.grech@climatecontrol.com.mt", "usr-sup-hvac", "Joseph Farrugia", "DW144 Ventilation Ductwork & Fire Damper Fitter (2618-L-VEN-01)"],
+      ["wrk-2618-07", "site-2618-l2", "Christian Cassar", "EMP-2618-07", "Fire", "+356 7911 2007", "c.cassar@firesafe.com.mt", "usr-sup-fire", "David Micallef", "Addressable Fire Alarm & FP200 Gold Technician (2618-L-FAS-01)"],
+      ["wrk-2618-08", "site-2618-l2", "Adrian Attard", "EMP-2618-08", "ELV / Security", "+356 7911 2008", "a.attard@electrodata.com.mt", "usr-sup-fire", "David Micallef", "IP CCTV & Mifare Door Access Control Installer (2618-L-SEC-01)"]
+    ];
+    for (const w of bovWorkers) {
+      upsertWorker.run(...w, nowIso);
+    }
+
+    // Seed initial Site Markings & Drawing Revisions on 2618 CAD sheets so the user immediately sees how version updates and site markings work
+    const mkCount = (db.prepare("SELECT COUNT(*) as c FROM drawing_markings WHERE project_id = 'bov-st-venera-2618'").get() as any)?.c || 0;
+    if (mkCount === 0) {
+      const findDoc = db.prepare("SELECT id, document_number, revision FROM documents WHERE project_id = 'bov-st-venera-2618' AND document_number = ? LIMIT 1");
+      const insMarking = db.prepare(`
+        INSERT INTO drawing_markings (
+          id, document_id, project_id, drawing_number, revision, pin_number,
+          x_percent, y_percent, marking_type, title, description, trade,
+          status, progress_percent, created_by, created_by_name, created_at, updated_at
+        ) VALUES (?, ?, 'bov-st-venera-2618', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'usr-sup-elec', ?, ?, ?)
+      `);
+
+      const ltgDoc = findDoc.get("2618-L-LTG-01") as any;
+      if (ltgDoc) {
+        insMarking.run(
+          "mk-2618-01", ltgDoc.id, "2618-L-LTG-01", ltgDoc.revision || "Rev A", "MK-01",
+          34, 42, "Site Progress / Installed",
+          "Level 1 Open Plan Zone K1 — 24x 600x600 LED Panels Installed (Circuit L01 & L02)",
+          "First-fix 3x1.5mm² H07Z-K LSOH wiring complete and 24x Thorn Omega Pro 2 LED panels installed into ceiling grid. Insulation resistance tested >200 MΩ.",
+          "Electrical", "Installed / Verified", 100, "Carmelo Vella (Site Supervisor)", nowIso, nowIso
+        );
+        insMarking.run(
+          "mk-2618-02", ltgDoc.id, "2618-L-LTG-01", ltgDoc.revision || "Rev A", "MK-02",
+          68, 56, "As-Built Redline Change",
+          "Executive Boardroom — Relocated 2x PIR Presence Sensors + 3000K DALI Driver Addressing",
+          "Relocated ceiling PIR sensors 600mm east to clear projector ceiling mount bracket per Consultant site instruction. Updated DALI group addressing.",
+          "Electrical", "In Progress", 75, "Carmelo Vella (Site Supervisor)", nowIso, nowIso
+        );
+      }
+
+      const eleDoc = findDoc.get("2618-S-ELE-01") as any;
+      if (eleDoc) {
+        insMarking.run(
+          "mk-2618-03", eleDoc.id, "2618-S-ELE-01", eleDoc.revision || "Rev A", "MK-01",
+          48, 38, "Site Progress / Installed",
+          "DB1 & UP1 Switchgear Terminated — Type A 30mA RCBOs Installed",
+          "Schneider Acti9 iC60H Type A 30mA RCBOs fitted and torque-checked in DB1 (16-way TPN) and UP1 (8-way TPN). Submain C08 5c/6mm² LSOH pulled and glanded.",
+          "Electrical", "Installed / Verified", 100, "Carmelo Vella (Site Supervisor)", nowIso, nowIso
+        );
+      }
+
+      const acoDoc = findDoc.get("2618-L-ACO-01") as any;
+      if (acoDoc) {
+        insMarking.run(
+          "mk-2618-04", acoDoc.id, "2618-L-ACO-01", acoDoc.revision || "Rev A", "MK-01",
+          52, 46, "Snag / Defect",
+          "Server Room Duty/Standby Split Unit — Condensate Drain Gradient Adjustment",
+          "Condensate uPVC drain pipe above Server Room door requires rerouting around Cat 6 containment basket to maintain 1:100 gravity fall.",
+          "HVAC", "Open", 40, "Joseph Farrugia (HVAC Supervisor)", nowIso, nowIso
+        );
+      }
+
+      // Seed an initial revision entry in document_revisions for 2618-L-LTG-01 so version history is immediately visible
+      if (ltgDoc) {
+        db.prepare(`
+          INSERT OR IGNORE INTO document_revisions (
+            id, document_id, project_id, revision_code, superseded_date,
+            changed_by, change_summary, attachment_name, attachment_data, created_at
+          ) VALUES (?, ?, 'bov-st-venera-2618', 'Rev 0 (Tender Issue)', '2026-05-05', 'Ing. Christian Borg (Enser Ltd)', 'Original Tender Issue (05.05.26) — First & Second Floor Lighting Layout prior to Boardroom 3000K DALI luminaire & PIR sensor site markup.', '2618-L-LTG-01.png', '/original_drawings/2618-L-LTG-01.png', ?)
+        `).run("rev-2618-ltg-00", ltgDoc.id, nowIso);
+      }
+    }
   } catch (e) {
     console.warn("seedData warning:", e);
   }
