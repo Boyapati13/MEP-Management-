@@ -3148,12 +3148,6 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
             >
               <Shield size={14} className="text-amber-300" /> Team &amp; Access
             </button>
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('open-copilot', { detail: { projectId: selectedProject } }))}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-500/30 hover:bg-indigo-500/45 border border-indigo-300/40 px-3.5 py-2.5 text-xs font-bold text-indigo-100 backdrop-blur-sm transition cursor-pointer"
-            >
-              <Sparkles size={14} className="text-amber-300" /> AI Copilot
-            </button>
           </div>
         </div>
 
