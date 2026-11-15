@@ -7,6 +7,7 @@
 import crypto from "crypto";
 import { DatabaseSync } from "node:sqlite";
 import { broadcastRealtimeEvent } from "./auditService";
+import { resequenceProjectSchedule } from "./scheduleService";
 
 export interface ExtractedBoqLine {
   item_number: string;
@@ -919,6 +920,17 @@ export function applyContractorIntelligenceAndVerify(
       createdTasks.push({ id: existingTask.id, title: m.title, trade, status: existingTask.status || "Not Started" });
     }
   }
+
+  // Sequence Master Schedule tasks across the project's contract timeline by MEP phase
+  try {
+    const seqResult = resequenceProjectSchedule(db, projectId);
+    if (seqResult.tasks.length > 0) {
+      createdTasks.length = 0;
+      for (const t of seqResult.tasks) {
+        createdTasks.push({ id: t.id, title: t.title, trade: t.trade, status: t.status || "Not Started" });
+      }
+    }
+  } catch {}
 
   // 5. ARCHIVE OR UPDATE DOCUMENT IN REPOSITORY
   const baseDocName = fileMeta.name.replace(/\.[^/.]+$/, "");

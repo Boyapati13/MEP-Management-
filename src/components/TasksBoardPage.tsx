@@ -9,16 +9,16 @@ import {
   CircleDot, Camera, Edit3, Trash2, X, Upload, Eye, ChevronDown, ChevronRight,
   LayoutGrid, List, ArrowRight, Check, Calendar, User, Building2,
   Hash, Shield, Image as ImageIcon, MoreHorizontal, Move, ZoomIn,
-  TrendingUp, Target, Activity, Layers, Download, FileText
+  TrendingUp, Target, Activity, Layers, Download, FileText, GanttChartSquare, Sparkles
 } from 'lucide-react';
-import { tasksApi, projectsApi } from '../api';
+import { api, tasksApi, projectsApi } from '../api';
 import { TaskDetailModal } from './TaskDetailModal';
 import { CompleteTaskModal } from './CompleteTaskModal';
 import { CalendarProgrammeView } from './CalendarProgrammeView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TaskStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Blocked';
-type ViewMode = 'kanban' | 'list' | 'calendar';
+type ViewMode = 'gantt' | 'kanban' | 'list' | 'calendar';
 
 interface Task {
   id: string;
@@ -40,6 +40,9 @@ interface Task {
   drawing_ref?: string;
   start?: string;
   end?: string;
+  baseline_start_date?: string;
+  baseline_end_date?: string;
+  duration?: number;
   actual_end_date?: string;
   site_id?: string;
   site_name?: string;
@@ -714,20 +717,41 @@ export function TasksBoardPage({
     setCollapsedPackages(prev => ({ ...prev, [code]: !prev[code] }));
   };
 
-  const filtered = tasks.filter(t => {
-    const matchTrade = tradeFilter === 'All' || t.trade === tradeFilter;
-    const q = search.toLowerCase();
-    const matchSearch = !q ||
-      (t.title || '').toLowerCase().includes(q) ||
-      (t.wbs_code || '').toLowerCase().includes(q) ||
-      (t.boq_ref || '').toLowerCase().includes(q) ||
-      (t.boq_item_number || '').toLowerCase().includes(q) ||
-      (t.drawing_ref || '').toLowerCase().includes(q) ||
-      (t.work_package_code || '').toLowerCase().includes(q) ||
-      (t.work_package_name || '').toLowerCase().includes(q) ||
-      (t.description || '').toLowerCase().includes(q);
-    return matchTrade && matchSearch;
-  });
+  const filtered = useMemo(() => {
+    const list = tasks.filter(t => {
+      const matchTrade = tradeFilter === 'All' || t.trade === tradeFilter;
+      const q = search.toLowerCase();
+      const matchSearch = !q ||
+        (t.title || '').toLowerCase().includes(q) ||
+        (t.wbs_code || '').toLowerCase().includes(q) ||
+        (t.boq_ref || '').toLowerCase().includes(q) ||
+        (t.boq_item_number || '').toLowerCase().includes(q) ||
+        (t.drawing_ref || '').toLowerCase().includes(q) ||
+        (t.work_package_code || '').toLowerCase().includes(q) ||
+        (t.work_package_name || '').toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q);
+      return matchTrade && matchSearch;
+    });
+    return [...list].sort((a, b) =>
+      String(a.wbs_code || '999').localeCompare(String(b.wbs_code || '999'), undefined, { numeric: true })
+    );
+  }, [tasks, tradeFilter, search]);
+
+  const [recalculating, setRecalculating] = useState(false);
+  const handleRecalculateSchedule = async () => {
+    const targetProj = selectedProject && selectedProject !== 'all' ? selectedProject : projects[0]?.id;
+    if (!targetProj) return;
+    setRecalculating(true);
+    try {
+      const res = await api.post<any>(`/api/projects/${targetProj}/recalculate-schedule`, {});
+      addToast('success', `Master Schedule sequenced accurately (${res.updated_count || 0} tasks updated)`);
+      await loadTasks();
+    } catch (err: any) {
+      addToast('error', err?.message || 'Failed to recalculate schedule');
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   const packageGroups = useMemo(() => {
     const map = new Map<string, { code: string; name: string; tasks: Task[] }>();
@@ -793,6 +817,14 @@ export function TasksBoardPage({
           {/* View Toggle */}
           <div className="flex items-center bg-gray-100 dark:bg-slate-800 rounded-xl p-0.5 border border-transparent dark:border-slate-700">
             <button
+              onClick={() => setViewMode('gantt')}
+              className={cn('px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all flex items-center gap-1.5',
+                viewMode === 'gantt' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
+              )}
+            >
+              <GanttChartSquare size={13} /> Gantt
+            </button>
+            <button
               onClick={() => setViewMode('kanban')}
               className={cn('px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all flex items-center gap-1.5',
                 viewMode === 'kanban' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
@@ -817,6 +849,14 @@ export function TasksBoardPage({
               <Calendar size={13} /> Calendar
             </button>
           </div>
+          <button
+            onClick={handleRecalculateSchedule}
+            disabled={recalculating}
+            className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors disabled:opacity-50"
+            title="Sequence tasks across project contract dates by MEP construction phase"
+          >
+            <Sparkles size={13} /> {recalculating ? 'Sequencing…' : 'Auto-Sequence'}
+          </button>
           <button
             onClick={loadTasks}
             className="p-2 text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
@@ -917,6 +957,102 @@ export function TasksBoardPage({
             <p className="text-xs text-gray-400">Loading tasks…</p>
           </div>
         </div>
+      ) : viewMode === 'gantt' ? (
+        /* ── Master Schedule Gantt Timeline ────────────────────────────────── */
+        (() => {
+          const validStarts = filtered.map(t => t.start || t.baseline_start_date).filter(Boolean).map(d => new Date(d!).getTime()).filter(n => !isNaN(n));
+          const validEnds = filtered.map(t => t.end || t.baseline_end_date).filter(Boolean).map(d => new Date(d!).getTime()).filter(n => !isNaN(n));
+          const minTs = validStarts.length ? Math.min(...validStarts) : Date.now();
+          const maxTs = validEnds.length ? Math.max(...validEnds, minTs + 14 * 86400000) : minTs + 90 * 86400000;
+          const totalSpan = Math.max(86400000, maxTs - minTs);
+          const todayTs = Date.now();
+          const todayPct = Math.min(100, Math.max(0, ((todayTs - minTs) / totalSpan) * 100));
+
+          return (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-xs overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-900">
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  Master Programme Timeline ({new Date(minTs).toISOString().slice(0, 10)} → {new Date(maxTs).toISOString().slice(0, 10)})
+                </span>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Completed</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" /> In Progress</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-slate-400 inline-block" /> Not Started</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Blocked</span>
+                </div>
+              </div>
+              {filtered.length === 0 ? (
+                <div className="p-12 text-center text-xs text-slate-400">No tasks match your filter.</div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-slate-800 overflow-x-auto">
+                  {filtered.map(t => {
+                    const sTs = t.start ? new Date(t.start).getTime() : minTs;
+                    const eTs = t.end ? new Date(t.end).getTime() : sTs + 14 * 86400000;
+                    const leftPct = Math.max(0, Math.min(96, ((sTs - minTs) / totalSpan) * 100));
+                    const widthPct = Math.max(3, Math.min(100 - leftPct, ((Math.max(eTs, sTs + 86400000) - sTs) / totalSpan) * 100));
+                    const durDays = t.duration || Math.max(1, Math.round((eTs - sTs) / 86400000) + 1);
+                    const barColor = t.status === 'Completed'
+                      ? 'bg-emerald-500/25 border-emerald-500'
+                      : t.status === 'Blocked'
+                        ? 'bg-rose-500/25 border-rose-500'
+                        : t.status === 'In Progress'
+                          ? 'bg-blue-500/25 border-blue-600'
+                          : 'bg-slate-200 dark:bg-slate-700 border-slate-400';
+                    const fillColor = t.status === 'Completed'
+                      ? 'bg-emerald-500'
+                      : t.status === 'Blocked'
+                        ? 'bg-rose-500'
+                        : t.status === 'In Progress'
+                          ? 'bg-blue-600'
+                          : 'bg-slate-500';
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => handleEdit(t)}
+                        className="grid grid-cols-12 items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors min-w-[760px]"
+                      >
+                        <div className="col-span-5 flex items-center gap-2 min-w-0">
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex-shrink-0">
+                            {t.wbs_code || '—'}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{t.title}</p>
+                            <p className="text-[10px] text-slate-400 truncate">
+                              {t.trade || 'MEP'} · {t.start || '—'} → {t.end || '—'} ({durDays}d)
+                            </p>
+                          </div>
+                        </div>
+                        <div className="col-span-6 relative h-7 bg-slate-100/70 dark:bg-slate-800/70 rounded-lg overflow-hidden">
+                          {todayPct > 0 && todayPct < 100 && (
+                            <div
+                              className="absolute top-0 bottom-0 w-px bg-rose-500/70 z-10"
+                              style={{ left: `${todayPct}%` }}
+                              title="Today"
+                            />
+                          )}
+                          <div
+                            className={`absolute top-1.5 bottom-1.5 rounded-md border ${barColor} overflow-hidden`}
+                            style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                            title={`${t.title}: ${t.start || ''} → ${t.end || ''} (${t.progress || 0}%)`}
+                          >
+                            <div
+                              className={`h-full ${fillColor} transition-all`}
+                              style={{ width: `${Math.min(100, Math.max(0, Number(t.progress || 0)))}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="col-span-1 text-right text-xs font-bold text-slate-700 dark:text-slate-200">
+                          {Number(t.progress || 0)}%
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()
       ) : viewMode === 'kanban' ? (
         /* ── Kanban Board (Horizontal scroll with touch snap) ──────────────── */
         <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 scroll-smooth snap-x">
@@ -937,7 +1073,7 @@ export function TasksBoardPage({
       ) : viewMode === 'calendar' ? (
         /* ── Interactive Calendar Programme View (Month / Week / Day) ───────── */
         <CalendarProgrammeView
-          tasks={tasks}
+          tasks={filtered}
           projectId={selectedProject || (projects[0]?.id ?? '')}
           onEditTask={handleEdit}
           onAddTaskDate={(dateStr) => {

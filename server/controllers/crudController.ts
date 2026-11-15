@@ -81,6 +81,7 @@ import {
   applyContractorIntelligenceAndVerify,
   normalizeDate,
 } from "../services/contractorDocIntelligence";
+import { computeTaskDurationDays, resequenceProjectSchedule } from "../services/scheduleService";
 
 function resolveActualTable(table: string): string {
   if (table === "drawings") return "documents";
@@ -854,6 +855,19 @@ export function registerCrudController(app: Express): void {
             data.actual_end_date = new Date().toISOString().slice(0, 10);
           }
         }
+        if (("start" in data || "end" in data) && data.duration === undefined) {
+          const effStart = data.start ?? existing.start;
+          const effEnd = data.end ?? existing.end;
+          if (effStart && effEnd) {
+            data.duration = computeTaskDurationDays(effStart, effEnd);
+          }
+        }
+        if ("start" in data && !existing.baseline_start_date && data.baseline_start_date === undefined) {
+          data.baseline_start_date = data.start;
+        }
+        if ("end" in data && !existing.baseline_end_date && data.baseline_end_date === undefined) {
+          data.baseline_end_date = data.end;
+        }
       }
       if (actualTable === "change_orders") {
         if (data.cost_impact === undefined && data.amount !== undefined) data.cost_impact = Number(data.amount);
@@ -1253,6 +1267,34 @@ export function registerCrudController(app: Express): void {
         message: `Successfully converted ${converted} BOQ items into individual WBS tasks!`,
         converted_count: converted,
         project_id: projectId
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- RECALCULATE & SEQUENCE MASTER SCHEDULE ---
+  app.post("/api/projects/:id/recalculate-schedule", authRequired, (req, res) => {
+    try {
+      const projectId = req.params.id;
+      if (!hasProjectAccess(req.user!, projectId)) {
+        res.status(403).json({ error: "Access denied to project" });
+        return;
+      }
+      if (!canEdit(req.user!, "tasks")) {
+        res.status(403).json({ error: "Edit permission required for schedule tasks" });
+        return;
+      }
+      const result = resequenceProjectSchedule(db, projectId);
+      recalculateProjectProgress(projectId);
+      writeAudit(req.user!.user_id, "tasks", projectId, projectId, "recalculate_schedule", null, {
+        updated_count: result.updatedCount,
+      });
+      res.json({
+        ok: true,
+        project_id: projectId,
+        updated_count: result.updatedCount,
+        tasks: result.tasks.map(rowToDict),
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
