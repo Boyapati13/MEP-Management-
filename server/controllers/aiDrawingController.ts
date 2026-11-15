@@ -1631,6 +1631,87 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         res.status(404).json({ error: "Document or drawing not found" });
         return;
       }
+      let parsedMarkup: any = {};
+      try {
+        parsedMarkup = doc.markup_data ? (typeof doc.markup_data === "string" ? JSON.parse(doc.markup_data) : doc.markup_data) : {};
+      } catch {
+        parsedMarkup = {};
+      }
+
+      // Seed default CAD redline pen & markup shapes on 2618 sheets if none exist yet
+      if (!Array.isArray(parsedMarkup.shapes)) {
+        if (doc.document_number === "2618-L-LTG-01" || String(doc.name || "").includes("2618-L-LTG-01")) {
+          parsedMarkup.shapes = [
+            {
+              id: "shp-seed-cloud-1",
+              type: "cloud",
+              color: "#ef4444",
+              strokeWidth: 3,
+              x1: 24,
+              y1: 31,
+              x2: 46,
+              y2: 52,
+              label: "REV CLOUD: Area K1 24x LED 600x600 Circuit L2/C1-C3 Verified",
+              author: "Carmelo Vella",
+            },
+            {
+              id: "shp-seed-arrow-1",
+              type: "arrow",
+              color: "#f59e0b",
+              strokeWidth: 3,
+              x1: 58,
+              y1: 46,
+              x2: 67,
+              y2: 55,
+              label: "Relocate PIR Sensor",
+              author: "Carmelo Vella",
+            },
+            {
+              id: "shp-seed-rect-1",
+              type: "rect",
+              color: "#10b981",
+              strokeWidth: 3,
+              x1: 62,
+              y1: 50,
+              x2: 76,
+              y2: 63,
+              label: "Boardroom DALI Zone",
+              author: "Ing. Mark Camilleri",
+            },
+            {
+              id: "shp-seed-text-1",
+              type: "text",
+              color: "#ef4444",
+              strokeWidth: 3,
+              x1: 25,
+              y1: 28,
+              x2: 45,
+              y2: 30,
+              text: "REDLINE CHANGE: Add 2x 3hr Maintained Emergency Pack (L2/EM-04)",
+              author: "Carmelo Vella",
+            },
+            {
+              id: "shp-seed-pen-1",
+              type: "pen",
+              color: "#3b82f6",
+              strokeWidth: 3,
+              points: [
+                { x: 46, y: 41 },
+                { x: 50, y: 41.5 },
+                { x: 54, y: 43 },
+                { x: 58, y: 45 },
+                { x: 62, y: 50 },
+              ],
+              author: "Carmelo Vella",
+            },
+          ];
+          db.prepare("UPDATE documents SET markup_data = ? WHERE id = ?").run(JSON.stringify(parsedMarkup), docId);
+          doc.markup_data = JSON.stringify(parsedMarkup);
+        } else {
+          parsedMarkup.shapes = [];
+        }
+      }
+
       const revisions = db
         .prepare("SELECT * FROM document_revisions WHERE document_id = ? ORDER BY created_at DESC")
         .all(docId)
@@ -1644,9 +1725,49 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         current_revision: doc.revision || "Rev A",
         revisions,
         markings,
+        shapes: parsedMarkup.shapes || [],
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Failed to load drawing revisions" });
+    }
+  });
+
+  // Save freehand pen strokes & vector markup shapes (cloud, rect, ellipse, arrow, line, highlighter, text) on a drawing
+  app.put("/api/documents/:id/markup-shapes", authRequired, (req: Request, res: Response) => {
+    try {
+      const docId = String(req.params.id);
+      const existing = rowToDict(db.prepare("SELECT * FROM documents WHERE id = ?").get(docId));
+      if (!existing) {
+        res.status(404).json({ error: "Drawing not found" });
+        return;
+      }
+      let parsedMarkup: any = {};
+      try {
+        parsedMarkup = existing.markup_data
+          ? typeof existing.markup_data === "string"
+            ? JSON.parse(existing.markup_data)
+            : existing.markup_data
+          : {};
+      } catch {
+        parsedMarkup = {};
+      }
+
+      const shapes = Array.isArray(req.body?.shapes) ? req.body.shapes : [];
+      parsedMarkup.shapes = shapes;
+      parsedMarkup.lastMarkupUpdatedBy = req.user?.name || req.user?.user_id || "Site Engineer";
+      parsedMarkup.lastMarkupUpdatedAt = new Date().toISOString();
+
+      const serialized = JSON.stringify(parsedMarkup);
+      db.prepare("UPDATE documents SET markup_data = ? WHERE id = ?").run(serialized, docId);
+
+      const updatedDoc = rowToDict(db.prepare("SELECT * FROM documents WHERE id = ?").get(docId));
+      res.json({
+        success: true,
+        document: updatedDoc,
+        shapes,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to save drawing markup shapes" });
     }
   });
 
@@ -1660,7 +1781,7 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
         return;
       }
 
-      const newRevision = String(req.body?.revision || req.body?.revision_code || "Rev B").trim();
+      const newRevision = String(req.body?.new_revision || req.body?.revision || req.body?.revision_code || "Rev B").trim();
       const changeSummary = String(req.body?.change_summary || req.body?.notes || `Updated to ${newRevision}`).trim();
       const newAttachmentData = req.body?.attachment_data || existing.attachment_data;
       const newAttachmentName = req.body?.attachment_name || existing.attachment_name;

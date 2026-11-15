@@ -39,7 +39,17 @@ import {
   Printer,
   MapPin,
   GitBranch,
-  Trash2
+  Trash2,
+  PenTool,
+  Highlighter,
+  Cloud,
+  Square,
+  Circle,
+  Minus,
+  Type,
+  MousePointer,
+  Undo2,
+  Save
 } from 'lucide-react';
 import { api, projectsApi, procurementApi, risksApi } from '../api';
 import { ProcurementProgrammeRiskView } from './ProcurementProgrammeRiskView';
@@ -2255,6 +2265,19 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
   });
   const [savingMarking, setSavingMarking] = useState(false);
 
+  // Freehand Pen & Vector Markup Shapes Studio State
+  const [markupTool, setMarkupTool] = useState<'select' | 'pen' | 'highlighter' | 'cloud' | 'rect' | 'ellipse' | 'arrow' | 'line' | 'text' | 'pin'>('select');
+  const [markupColor, setMarkupColor] = useState<string>('#ef4444');
+  const [markupStrokeWidth, setMarkupStrokeWidth] = useState<number>(3);
+  const [markupShapes, setMarkupShapes] = useState<any[]>([]);
+  const [draftShape, setDraftShape] = useState<any | null>(null);
+  const [isDrawingStroke, setIsDrawingStroke] = useState(false);
+  const [showMarkupLayer, setShowMarkupLayer] = useState(true);
+  const [savingShapes, setSavingShapes] = useState(false);
+  const [shapesSavedFeedback, setShapesSavedFeedback] = useState(false);
+  const [pendingTextCoords, setPendingTextCoords] = useState<{ x: number; y: number } | null>(null);
+  const [pendingTextValue, setPendingTextValue] = useState('');
+
   const [versionTargetDoc, setVersionTargetDoc] = useState<any | null>(null);
   const [versionForm, setVersionForm] = useState({
     new_revision: 'Rev 1',
@@ -2489,20 +2512,30 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     setSelectedDrawing(doc);
     setDrawingZoom(1);
     setPlacingMarkingMode(false);
+    setMarkupTool('select');
     setPendingPinCoords(null);
+    setPendingTextCoords(null);
     setActivePinId(null);
+    setDraftShape(null);
+    setIsDrawingStroke(false);
     setLoadingTasks(true);
     try {
       const q = selectedProject ? `?project_id=${selectedProject}` : '';
       const [allTasks, revData] = await Promise.all([
         api.get<any[]>(`/api/tasks${q}`).catch(() => []),
-        api.get<any>(`/api/documents/${doc.id}/revisions`).catch(() => ({ revisions: [], markings: [] })),
+        api.get<any>(`/api/documents/${doc.id}/revisions`).catch(() => ({ revisions: [], markings: [], shapes: [] })),
       ]);
       if (revData?.document) {
         setSelectedDrawing(revData.document);
       }
       setDrawingRevisions(Array.isArray(revData?.revisions) ? revData.revisions : []);
       setDrawingMarkings(Array.isArray(revData?.markings) ? revData.markings : []);
+      if (Array.isArray(revData?.shapes)) {
+        setMarkupShapes(revData.shapes);
+      } else {
+        const meta = getDrawingMeta(revData?.document || doc);
+        setMarkupShapes(Array.isArray(meta?.shapes) ? meta.shapes : []);
+      }
 
       const docNum = doc.document_number || (doc.name ? (doc.name.match(/2618-[A-Z]-[A-Z]{3}-\d{2}/) || [])[0] : '');
       const matched = Array.isArray(allTasks)
@@ -2514,6 +2547,188 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
     } finally {
       setLoadingTasks(false);
     }
+  };
+
+  const persistShapesToServer = async (nextShapes: any[], docId?: string) => {
+    const targetId = docId || selectedDrawing?.id;
+    if (!targetId) return;
+    setSavingShapes(true);
+    try {
+      const res = await api.put<any>(`/api/documents/${targetId}/markup-shapes`, { shapes: nextShapes });
+      if (res?.document && selectedDrawing?.id === targetId) {
+        setSelectedDrawing(res.document);
+      }
+      setShapesSavedFeedback(true);
+      setTimeout(() => setShapesSavedFeedback(false), 2200);
+    } catch {
+      // silent fallback
+    } finally {
+      setSavingShapes(false);
+    }
+  };
+
+  const getRelativePercentCoords = (e: React.MouseEvent<HTMLElement | SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(1, Math.min(99, Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2))));
+    const y = Math.max(1, Math.min(99, Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(2))));
+    return { x, y };
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!selectedDrawing) return;
+    if (placingMarkingMode || markupTool === 'pin') {
+      const { x, y } = getRelativePercentCoords(e);
+      setPendingPinCoords({ x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) });
+      setMarkingForm({
+        marking_type: 'Site Progress / Installed',
+        title: '',
+        description: '',
+        trade: selectedDrawing.discipline || 'Electrical',
+        status: 'Installed / Verified',
+        progress_percent: 100,
+      });
+      return;
+    }
+
+    if (markupTool === 'text') {
+      const { x, y } = getRelativePercentCoords(e);
+      setPendingTextCoords({ x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) });
+      setPendingTextValue('');
+      return;
+    }
+
+    if (markupTool === 'select') return;
+
+    e.preventDefault();
+    const { x, y } = getRelativePercentCoords(e);
+    setIsDrawingStroke(true);
+
+    if (markupTool === 'pen' || markupTool === 'highlighter') {
+      setDraftShape({
+        id: `shp-${Date.now()}`,
+        type: markupTool,
+        color: markupColor,
+        strokeWidth: markupTool === 'highlighter' ? Math.max(8, markupStrokeWidth * 3) : markupStrokeWidth,
+        points: [{ x, y }],
+        author: user?.name || user?.username || 'Engineer',
+      });
+    } else {
+      setDraftShape({
+        id: `shp-${Date.now()}`,
+        type: markupTool,
+        color: markupColor,
+        strokeWidth: markupStrokeWidth,
+        x1: x,
+        y1: y,
+        x2: x + 0.5,
+        y2: y + 0.5,
+        author: user?.name || user?.username || 'Engineer',
+      });
+    }
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingStroke || !draftShape) return;
+    const { x, y } = getRelativePercentCoords(e);
+    if (draftShape.type === 'pen' || draftShape.type === 'highlighter') {
+      setDraftShape((prev: any) => (prev ? { ...prev, points: [...(prev.points || []), { x, y }] } : null));
+    } else {
+      setDraftShape((prev: any) => (prev ? { ...prev, x2: x, y2: y } : null));
+    }
+  };
+
+  const handleCanvasMouseUp = () => {
+    if (!isDrawingStroke || !draftShape) return;
+    setIsDrawingStroke(false);
+
+    // Ensure minimal size so accidental 0-px clicks don't create invisible shapes
+    if (draftShape.type !== 'pen' && draftShape.type !== 'highlighter') {
+      const dx = Math.abs((draftShape.x2 ?? 0) - (draftShape.x1 ?? 0));
+      const dy = Math.abs((draftShape.y2 ?? 0) - (draftShape.y1 ?? 0));
+      if (dx < 1 && dy < 1) {
+        // Default a click with a shape tool into a clean visible stamp (8% x 6%) so single clicks also work!
+        draftShape.x2 = Math.min(96, (draftShape.x1 ?? 50) + 9);
+        draftShape.y2 = Math.min(96, (draftShape.y1 ?? 50) + 6);
+      }
+    }
+
+    const updated = [...markupShapes, draftShape];
+    setMarkupShapes(updated);
+    setDraftShape(null);
+    persistShapesToServer(updated);
+  };
+
+  const handleConfirmTextShape = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingTextCoords || !pendingTextValue.trim()) {
+      setPendingTextCoords(null);
+      return;
+    }
+    const newTextShape = {
+      id: `shp-txt-${Date.now()}`,
+      type: 'text',
+      color: markupColor,
+      strokeWidth: markupStrokeWidth,
+      x1: pendingTextCoords.x,
+      y1: pendingTextCoords.y,
+      text: pendingTextValue.trim(),
+      author: user?.name || user?.username || 'Engineer',
+    };
+    const updated = [...markupShapes, newTextShape];
+    setMarkupShapes(updated);
+    setPendingTextCoords(null);
+    setPendingTextValue('');
+    persistShapesToServer(updated);
+  };
+
+  const handleUndoShape = () => {
+    if (markupShapes.length === 0) return;
+    const updated = markupShapes.slice(0, -1);
+    setMarkupShapes(updated);
+    persistShapesToServer(updated);
+  };
+
+  const handleClearShapes = () => {
+    setMarkupShapes([]);
+    persistShapesToServer([]);
+  };
+
+  const handleDeleteSingleShape = (shapeId: string) => {
+    const updated = markupShapes.filter(s => s.id !== shapeId);
+    setMarkupShapes(updated);
+    persistShapesToServer(updated);
+  };
+
+  // Build scalloped SVG path for a Revision Cloud in 0..1000 SVG coordinate space
+  const buildRevisionCloudPath = (x1Pct: number, y1Pct: number, x2Pct: number, y2Pct: number) => {
+    const minX = Math.min(x1Pct, x2Pct) * 10;
+    const maxX = Math.max(x1Pct, x2Pct) * 10;
+    const minY = Math.min(y1Pct, y2Pct) * 10;
+    const maxY = Math.max(y1Pct, y2Pct) * 10;
+    const w = Math.max(20, maxX - minX);
+    const h = Math.max(20, maxY - minY);
+    const step = 22;
+    const nx = Math.max(2, Math.round(w / step));
+    const ny = Math.max(2, Math.round(h / step));
+    const dx = w / nx;
+    const dy = h / ny;
+    const rx = dx * 0.65;
+    const ry = dy * 0.65;
+
+    let d = `M ${minX.toFixed(1)} ${minY.toFixed(1)}`;
+    for (let i = 1; i <= nx; i++) {
+      d += ` A ${rx.toFixed(1)} ${rx.toFixed(1)} 0 0 1 ${(minX + i * dx).toFixed(1)} ${minY.toFixed(1)}`;
+    }
+    for (let i = 1; i <= ny; i++) {
+      d += ` A ${ry.toFixed(1)} ${ry.toFixed(1)} 0 0 1 ${maxX.toFixed(1)} ${(minY + i * dy).toFixed(1)}`;
+    }
+    for (let i = nx - 1; i >= 0; i--) {
+      d += ` A ${rx.toFixed(1)} ${rx.toFixed(1)} 0 0 1 ${(minX + i * dx).toFixed(1)} ${maxY.toFixed(1)}`;
+    }
+    for (let i = ny - 1; i >= 0; i--) {
+      d += ` A ${ry.toFixed(1)} ${ry.toFixed(1)} 0 0 1 ${minX.toFixed(1)} ${(minY + i * dy).toFixed(1)}`;
+    }
+    return d + ' Z';
   };
 
   const openNewVersionModal = (doc: any, e?: React.MouseEvent) => {
@@ -3158,23 +3373,167 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               </div>
             </div>
 
+            {/* CAD Redline Pen & Markup Shapes Studio Toolbar */}
+            <div className="bg-slate-900/95 px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2.5 flex-shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 mr-1 flex items-center gap-1">
+                  <PenTool size={12} /> Redline &amp; Markup Tools:
+                </span>
+                {[
+                  { id: 'select', label: 'Select / Pan', icon: MousePointer },
+                  { id: 'pen', label: 'Freehand Pen', icon: PenTool },
+                  { id: 'highlighter', label: 'Highlighter', icon: Highlighter },
+                  { id: 'cloud', label: 'Revision Cloud', icon: Cloud },
+                  { id: 'rect', label: 'Box / Rect', icon: Square },
+                  { id: 'ellipse', label: 'Circle / Zone', icon: Circle },
+                  { id: 'arrow', label: 'Arrow Leader', icon: ArrowUpRight },
+                  { id: 'line', label: 'Line', icon: Minus },
+                  { id: 'text', label: 'Text Callout', icon: Type },
+                  { id: 'pin', label: 'Site Pin (MK)', icon: MapPin },
+                ].map(t => {
+                  const Icon = t.icon;
+                  const active = (t.id === 'pin' && placingMarkingMode) || (!placingMarkingMode && markupTool === t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        if (t.id === 'pin') {
+                          setPlacingMarkingMode(true);
+                          setMarkupTool('pin');
+                        } else {
+                          setPlacingMarkingMode(false);
+                          setMarkupTool(t.id as any);
+                        }
+                        setPendingPinCoords(null);
+                        setPendingTextCoords(null);
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                        active
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                          : 'bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700'
+                      }`}
+                    >
+                      <Icon size={12} />
+                      <span>{t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Color Swatches, Stroke Width & Save/Undo Controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                  {[
+                    { hex: '#ef4444', name: 'Redline Red' },
+                    { hex: '#f59e0b', name: 'Safety Amber' },
+                    { hex: '#10b981', name: 'Verified Green' },
+                    { hex: '#3b82f6', name: 'Electrical Blue' },
+                    { hex: '#a855f7', name: 'ELV Violet' },
+                  ].map(c => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      onClick={() => setMarkupColor(c.hex)}
+                      title={c.name}
+                      style={{ backgroundColor: c.hex }}
+                      className={`w-4 h-4 rounded-full cursor-pointer transition-transform ${
+                        markupColor === c.hex ? 'scale-125 ring-2 ring-white' : 'opacity-75 hover:opacity-100'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[10px]">
+                  {[
+                    { w: 2, label: 'Thin' },
+                    { w: 4, label: 'Med' },
+                    { w: 7, label: 'Thick' },
+                  ].map(sw => (
+                    <button
+                      key={sw.w}
+                      type="button"
+                      onClick={() => setMarkupStrokeWidth(sw.w)}
+                      className={`px-1.5 py-0.5 rounded font-bold cursor-pointer ${
+                        markupStrokeWidth === sw.w ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {sw.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMarkupLayer(v => !v)}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                    showMarkupLayer
+                      ? 'bg-slate-800 text-emerald-400 border-emerald-500/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {showMarkupLayer ? `Markups Visible (${markupShapes.length})` : 'Markups Hidden'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleUndoShape}
+                  disabled={markupShapes.length === 0}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 border border-slate-700 text-[11px] font-bold cursor-pointer"
+                  title="Undo Last Shape / Stroke"
+                >
+                  <Undo2 size={12} /> Undo
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearShapes}
+                  disabled={markupShapes.length === 0}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-red-950/60 disabled:opacity-40 text-red-300 border border-slate-700 text-[11px] font-bold cursor-pointer"
+                  title="Clear All Drawn Shapes"
+                >
+                  <Trash2 size={12} /> Clear
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => persistShapesToServer(markupShapes)}
+                  disabled={savingShapes}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold shadow-xs cursor-pointer ${
+                    shapesSavedFeedback
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white'
+                  }`}
+                >
+                  <Save size={12} />
+                  {savingShapes ? 'Saving...' : shapesSavedFeedback ? 'Markups Saved ✓' : 'Save Markups'}
+                </button>
+              </div>
+            </div>
+
             {/* Modal Body: Left Canvas + Right WBS Sidebar */}
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
               {/* Drawing Sheet Canvas (Left 70%) */}
               <div className="flex-1 bg-[#090d16] overflow-auto relative p-4 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800">
-                {placingMarkingMode && (
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-amber-500 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-2">
-                    <MapPin size={14} />
-                    Click anywhere on the CAD drawing below to drop a Site Marking Pin (or click Cancel)
+                {(placingMarkingMode || markupTool !== 'select') && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-full bg-amber-500 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-2">
+                    <PenTool size={13} />
+                    {placingMarkingMode || markupTool === 'pin'
+                      ? 'Click anywhere on the CAD drawing below to drop a Site Marking Pin'
+                      : markupTool === 'text'
+                      ? 'Click anywhere on the CAD drawing below to place a Redline Text Callout'
+                      : `Active Tool: ${markupTool.toUpperCase()} — Click and drag (or click) on the drawing to mark changes`}
                     <button
                       type="button"
                       onClick={() => {
                         setPlacingMarkingMode(false);
+                        setMarkupTool('select');
                         setPendingPinCoords(null);
+                        setPendingTextCoords(null);
                       }}
                       className="ml-2 px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] cursor-pointer"
                     >
-                      Cancel
+                      Done / Select Mode
                     </button>
                   </div>
                 )}
@@ -3190,17 +3549,230 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     />
                   ) : (
                     <div
-                      onClick={handleDrawingCanvasClick}
-                      className={`relative inline-block transition-transform duration-150 ease-out origin-center ${
-                        placingMarkingMode ? 'cursor-crosshair ring-2 ring-amber-400 rounded' : ''
+                      onMouseDown={handleCanvasMouseDown}
+                      onMouseMove={handleCanvasMouseMove}
+                      onMouseUp={handleCanvasMouseUp}
+                      onMouseLeave={handleCanvasMouseUp}
+                      className={`relative inline-block transition-transform duration-150 ease-out origin-center select-none ${
+                        placingMarkingMode || markupTool !== 'select'
+                          ? 'cursor-crosshair ring-2 ring-amber-400 rounded'
+                          : ''
                       }`}
                       style={{ transform: `scale(${drawingZoom})`, transformOrigin: 'center center' }}
                     >
                       <img
                         src={selectedDrawing.attachment_data}
                         alt={selectedDrawing.name}
-                        className="max-w-[1250px] w-full shadow-2xl rounded border border-slate-800 pointer-events-auto select-none"
+                        draggable={false}
+                        className="max-w-[1250px] w-full shadow-2xl rounded border border-slate-800 pointer-events-none select-none"
                       />
+
+                      {/* Interactive SVG Redline Pen & Markup Shapes Overlay (0..1000 coordinate space) */}
+                      {showMarkupLayer && (
+                        <svg
+                          viewBox="0 0 1000 1000"
+                          preserveAspectRatio="none"
+                          className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                        >
+                          <defs>
+                            {['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#a855f7'].map(col => (
+                              <marker
+                                key={col}
+                                id={`arrow-${col.replace('#', '')}`}
+                                viewBox="0 0 10 10"
+                                refX="7"
+                                refY="5"
+                                markerWidth="6"
+                                markerHeight="6"
+                                orient="auto-start-reverse"
+                              >
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill={col} />
+                              </marker>
+                            ))}
+                          </defs>
+
+                          {[...markupShapes, ...(draftShape ? [draftShape] : [])].map((shp: any) => {
+                            const col = shp.color || '#ef4444';
+                            const sw = Number(shp.strokeWidth || 3) * 1.4;
+
+                            if (shp.type === 'pen' || shp.type === 'highlighter') {
+                              const pts = Array.isArray(shp.points)
+                                ? shp.points.map((p: any) => `${(p.x * 10).toFixed(1)},${(p.y * 10).toFixed(1)}`).join(' ')
+                                : '';
+                              if (!pts) return null;
+                              return (
+                                <polyline
+                                  key={shp.id}
+                                  points={pts}
+                                  fill="none"
+                                  stroke={col}
+                                  strokeWidth={shp.type === 'highlighter' ? sw * 2.8 : sw}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  opacity={shp.type === 'highlighter' ? 0.38 : 0.95}
+                                />
+                              );
+                            }
+
+                            const x1 = Number(shp.x1 ?? 20) * 10;
+                            const y1 = Number(shp.y1 ?? 20) * 10;
+                            const x2 = Number(shp.x2 ?? 35) * 10;
+                            const y2 = Number(shp.y2 ?? 30) * 10;
+                            const minX = Math.min(x1, x2);
+                            const minY = Math.min(y1, y2);
+                            const w = Math.max(8, Math.abs(x2 - x1));
+                            const h = Math.max(8, Math.abs(y2 - y1));
+
+                            if (shp.type === 'rect') {
+                              return (
+                                <g key={shp.id}>
+                                  <rect
+                                    x={minX}
+                                    y={minY}
+                                    width={w}
+                                    height={h}
+                                    fill={col}
+                                    fillOpacity={0.08}
+                                    stroke={col}
+                                    strokeWidth={sw}
+                                    rx={4}
+                                  />
+                                  {shp.label && (
+                                    <text
+                                      x={minX + 6}
+                                      y={Math.max(16, minY - 6)}
+                                      fill={col}
+                                      fontSize="13"
+                                      fontWeight="bold"
+                                      fontFamily="monospace"
+                                    >
+                                      {shp.label}
+                                    </text>
+                                  )}
+                                </g>
+                              );
+                            }
+
+                            if (shp.type === 'cloud') {
+                              return (
+                                <g key={shp.id}>
+                                  <path
+                                    d={buildRevisionCloudPath(shp.x1 ?? 20, shp.y1 ?? 20, shp.x2 ?? 35, shp.y2 ?? 30)}
+                                    fill={col}
+                                    fillOpacity={0.07}
+                                    stroke={col}
+                                    strokeWidth={sw}
+                                  />
+                                  {shp.label && (
+                                    <text
+                                      x={minX + 6}
+                                      y={Math.max(16, minY - 8)}
+                                      fill={col}
+                                      fontSize="13"
+                                      fontWeight="bold"
+                                      fontFamily="monospace"
+                                    >
+                                      {shp.label}
+                                    </text>
+                                  )}
+                                </g>
+                              );
+                            }
+
+                            if (shp.type === 'ellipse') {
+                              return (
+                                <ellipse
+                                  key={shp.id}
+                                  cx={minX + w / 2}
+                                  cy={minY + h / 2}
+                                  rx={w / 2}
+                                  ry={h / 2}
+                                  fill={col}
+                                  fillOpacity={0.08}
+                                  stroke={col}
+                                  strokeWidth={sw}
+                                />
+                              );
+                            }
+
+                            if (shp.type === 'arrow') {
+                              const markerId = `arrow-${col.replace('#', '')}`;
+                              return (
+                                <g key={shp.id}>
+                                  <line
+                                    x1={x1}
+                                    y1={y1}
+                                    x2={x2}
+                                    y2={y2}
+                                    stroke={col}
+                                    strokeWidth={sw}
+                                    markerEnd={`url(#${markerId})`}
+                                  />
+                                  {shp.label && (
+                                    <text
+                                      x={x1}
+                                      y={Math.max(15, y1 - 8)}
+                                      fill={col}
+                                      fontSize="13"
+                                      fontWeight="bold"
+                                      fontFamily="monospace"
+                                    >
+                                      {shp.label}
+                                    </text>
+                                  )}
+                                </g>
+                              );
+                            }
+
+                            if (shp.type === 'line') {
+                              return (
+                                <line
+                                  key={shp.id}
+                                  x1={x1}
+                                  y1={y1}
+                                  x2={x2}
+                                  y2={y2}
+                                  stroke={col}
+                                  strokeWidth={sw}
+                                  strokeLinecap="round"
+                                />
+                              );
+                            }
+
+                            if (shp.type === 'text') {
+                              const labelText = shp.text || shp.label || 'REDLINE NOTE';
+                              const boxWidth = Math.max(120, labelText.length * 7.8 + 18);
+                              return (
+                                <g key={shp.id}>
+                                  <rect
+                                    x={x1}
+                                    y={Math.max(4, y1 - 22)}
+                                    width={boxWidth}
+                                    height={28}
+                                    rx={5}
+                                    fill="#0f172a"
+                                    fillOpacity={0.92}
+                                    stroke={col}
+                                    strokeWidth={2.5}
+                                  />
+                                  <text
+                                    x={x1 + 8}
+                                    y={Math.max(22, y1 - 4)}
+                                    fill={col}
+                                    fontSize="13"
+                                    fontWeight="bold"
+                                    fontFamily="monospace"
+                                  >
+                                    {labelText}
+                                  </text>
+                                </g>
+                              );
+                            }
+
+                            return null;
+                          })}
+                        </svg>
+                      )}
 
                       {/* Interactive Site Marking Pins Overlaid on Drawing */}
                       {drawingMarkings.map((m: any) => {
@@ -3399,9 +3971,63 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     </form>
                   </div>
                 )}
+
+                {/* Modal Form when a Redline Text Callout is Placed on the Drawing */}
+                {pendingTextCoords && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-xs z-40 flex items-center justify-center p-4">
+                    <form
+                      onSubmit={handleConfirmTextShape}
+                      className="bg-slate-900 border border-slate-700 rounded-2xl p-5 w-full max-w-md shadow-2xl space-y-3 text-white"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <div>
+                          <span className="text-[10px] font-mono font-bold uppercase text-amber-400">
+                            Redline Text Callout • X={pendingTextCoords.x}%, Y={pendingTextCoords.y}%
+                          </span>
+                          <h4 className="text-sm font-bold text-white">Place Text Markup on Drawing</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPendingTextCoords(null)}
+                          className="text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                          Redline Change / Annotation Text *
+                        </label>
+                        <input
+                          required
+                          autoFocus
+                          value={pendingTextValue}
+                          onChange={e => setPendingTextValue(e.target.value)}
+                          placeholder="e.g. RELOCATE PIR SENSOR 1.5M EAST — CIRCUIT L2/C4"
+                          className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white font-mono"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setPendingTextCoords(null)}
+                          className="px-3 py-1.5 text-xs text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
+                        >
+                          Place Text on Drawing
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </div>
 
-              {/* Right Sidebar: Site Markings, Version History & Linked WBS Tasks (Right 30%) */}
+              {/* Right Sidebar: Redline Markups, Site Markings, Version History & Linked WBS Tasks (Right 30%) */}
               <div className="w-full lg:w-[420px] bg-slate-950 flex flex-col overflow-y-auto divide-y divide-slate-800 flex-shrink-0">
                 {/* Engineering Sheet Metadata */}
                 <div className="p-4 space-y-3">
@@ -3430,6 +4056,70 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                       </button>
                     </div>
                   </div>
+                </div>
+
+                {/* 0. Redline Pen & Markup Shapes Layer List */}
+                <div className="p-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <PenTool size={14} className="text-red-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Pen &amp; Markup Shapes ({markupShapes.length})
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMarkupTool(markupTool === 'pen' ? 'cloud' : 'pen')}
+                        className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-[10px] font-bold cursor-pointer"
+                      >
+                        + Draw Redline
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => persistShapesToServer(markupShapes)}
+                        className="px-2 py-0.5 rounded bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 text-[10px] font-bold cursor-pointer"
+                      >
+                        {shapesSavedFeedback ? 'Saved ✓' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {markupShapes.length === 0 ? (
+                    <div className="py-3 text-center text-[11px] text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800/80 p-2.5">
+                      Select <strong>Freehand Pen</strong>, <strong>Revision Cloud</strong>, <strong>Box</strong>, <strong>Circle</strong>, <strong>Arrow</strong>, or <strong>Text Callout</strong> in the toolbar above and draw directly on the sheet.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {markupShapes.map((shp: any, idx: number) => (
+                        <div
+                          key={shp.id || idx}
+                          className="flex items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px]"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              style={{ backgroundColor: shp.color || '#ef4444' }}
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            />
+                            <span className="font-mono font-bold uppercase text-slate-300 text-[10px]">
+                              {shp.type}
+                            </span>
+                            <span className="text-slate-400 truncate">
+                              {shp.text || shp.label || `Marked by ${shp.author || 'Engineer'}`}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSingleShape(shp.id)}
+                            className="text-slate-500 hover:text-red-400 p-0.5 cursor-pointer flex-shrink-0"
+                            title="Delete Shape"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* 1. Interactive Site Markings on Drawing Section */}
