@@ -6,6 +6,7 @@
  */
 import crypto from "crypto";
 import { DatabaseSync } from "node:sqlite";
+import { broadcastRealtimeEvent } from "./auditService";
 
 export interface ExtractedBoqLine {
   item_number: string;
@@ -855,9 +856,11 @@ export function applyContractorIntelligenceAndVerify(
 
   // 4. PROGRAMME SCHEDULE TASKS
   const createdTasks: any[] = [];
-  const existingTaskTitles = new Set(
-    (db.prepare("SELECT LOWER(title) as t FROM tasks WHERE project_id=?").all(projectId) as any[]).map(r => r.t)
-  );
+  const existingTaskRows = db.prepare("SELECT id, title, status, progress FROM tasks WHERE project_id=?").all(projectId) as any[];
+  const existingTasksByTitle = new Map<string, any>();
+  for (const r of existingTaskRows) {
+    if (r.title) existingTasksByTitle.set(String(r.title).toLowerCase(), r);
+  }
 
   const wpMap = new Map<string, string>();
   const allCurrentWps = db.prepare("SELECT id, discipline FROM work_packages WHERE project_id=?").all(projectId) as any[];
@@ -867,13 +870,14 @@ export function applyContractorIntelligenceAndVerify(
 
   for (let idx = 0; idx < extracted.milestones.length; idx++) {
     const m = extracted.milestones[idx];
-    if (!existingTaskTitles.has(m.title.toLowerCase())) {
-      const taskId = crypto.randomUUID();
-      const trade = m.trade || "General";
-      const wpId = wpMap.get(trade.toUpperCase()) || allCurrentWps[0]?.id || null;
-      const tStart = m.startDate || extracted.startDate || now.split("T")[0];
-      const tEnd = m.endDate || extracted.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const trade = m.trade || "General";
+    const wpId = wpMap.get(trade.toUpperCase()) || allCurrentWps[0]?.id || null;
+    const tStart = m.startDate || extracted.startDate || now.split("T")[0];
+    const tEnd = m.endDate || extracted.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const existingTask = existingTasksByTitle.get(m.title.toLowerCase());
 
+    if (!existingTask) {
+      const taskId = crypto.randomUUID();
       db.prepare(`
         INSERT INTO tasks (
           id, project_id, title, trade, assignee, start, end, progress, status,
@@ -896,41 +900,78 @@ export function applyContractorIntelligenceAndVerify(
         `Contractor scheduled milestone: ${m.title}`
       );
       createdTasks.push({ id: taskId, title: m.title, trade, status: "Not Started" });
+    } else {
+      db.prepare(`
+        UPDATE tasks
+        SET trade = ?, start = COALESCE(?, start), end = COALESCE(?, end),
+            priority = ?, work_package_id = COALESCE(?, work_package_id),
+            company_id = COALESCE(?, company_id)
+        WHERE id = ?
+      `).run(
+        trade,
+        m.startDate || extracted.startDate || null,
+        m.endDate || extracted.endDate || null,
+        m.priority || "Medium",
+        wpId,
+        companyId || null,
+        existingTask.id
+      );
+      createdTasks.push({ id: existingTask.id, title: m.title, trade, status: existingTask.status || "Not Started" });
     }
   }
 
-  // 5. ARCHIVE DOCUMENT IN REPOSITORY
-  const documentId = crypto.randomUUID();
+  // 5. ARCHIVE OR UPDATE DOCUMENT IN REPOSITORY
+  const baseDocName = fileMeta.name.replace(/\.[^/.]+$/, "");
+  const existingDoc = db.prepare(
+    `SELECT id, revision FROM documents WHERE project_id = ? AND (LOWER(attachment_name) = LOWER(?) OR LOWER(name) = LOWER(?)) ORDER BY rowid DESC LIMIT 1`
+  ).get(projectId, fileMeta.name, baseDocName) as any;
+
   const base64Data = fileMeta.buffer.toString("base64");
   const dataUrl = `data:${fileMeta.mimeType || "application/octet-stream"};base64,${base64Data}`;
+  let documentId: string;
 
-  db.prepare(`
-    INSERT INTO documents (
-      id, project_id, name, category, revision, date_added,
-      attachment_name, attachment_data, uploaded_by, status, visibility
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    documentId,
-    projectId,
-    fileMeta.name.replace(/\.[^/.]+$/, ""),
-    "Contract & Legal",
-    "Rev-0",
-    now,
-    fileMeta.name,
-    dataUrl,
-    userId,
-    "Approved",
-    "Internal"
-  );
+  if (existingDoc) {
+    documentId = existingDoc.id;
+    const prevRevMatch = String(existingDoc.revision || "Rev-0").match(/(\d+)/);
+    const nextRevNum = prevRevMatch ? Number(prevRevMatch[1]) + 1 : 1;
+    const nextRev = `Rev-${nextRevNum}`;
+    db.prepare(`
+      UPDATE documents
+      SET revision = ?, date_added = ?, attachment_name = ?, attachment_data = ?, uploaded_by = ?, status = 'Approved'
+      WHERE id = ?
+    `).run(nextRev, now, fileMeta.name, dataUrl, userId, documentId);
+  } else {
+    documentId = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO documents (
+        id, project_id, name, category, revision, date_added,
+        attachment_name, attachment_data, uploaded_by, status, visibility
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      documentId,
+      projectId,
+      baseDocName,
+      "Contract & Legal",
+      "Rev-0",
+      now,
+      fileMeta.name,
+      dataUrl,
+      userId,
+      "Approved",
+      "Internal"
+    );
+  }
 
-  // 5B. POPULATE BOQ ITEMS, WBS, JOB COSTING BUDGET & MATERIAL REQUESTS
+  // 5B. POPULATE OR UPDATE BOQ ITEMS, WBS, JOB COSTING BUDGET & MATERIAL REQUESTS
   const boqToInsert = Array.isArray(extracted.boqItems) && extracted.boqItems.length > 0
     ? extracted.boqItems
     : extractBoqItemsFromText("", fileMeta.name, extracted.trades, extracted.budget);
 
-  const existingBoqDesc = new Set(
-    (db.prepare("SELECT LOWER(description) as d FROM boq_items WHERE project_id=?").all(projectId) as any[]).map(r => r.d)
-  );
+  const existingBoqRows = db.prepare("SELECT id, description FROM boq_items WHERE project_id=?").all(projectId) as any[];
+  const existingBoqByDesc = new Map<string, string>();
+  for (const r of existingBoqRows) {
+    if (r.description) existingBoqByDesc.set(String(r.description).toLowerCase(), r.id);
+  }
   const existingMatItems = new Set(
     (db.prepare("SELECT LOWER(COALESCE(material, description, '')) as i FROM material_requests WHERE project_id=?").all(projectId) as any[]).map(r => r.i)
   );
@@ -946,13 +987,26 @@ export function applyContractorIntelligenceAndVerify(
       discipline, system, building, floor, area, source_document_id, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const updateBoqStmt = db.prepare(`
+    UPDATE boq_items
+    SET item_number = ?, specification = ?, unit = ?, tender_quantity = ?, tender_rate = ?,
+        tender_amount = ?, revised_quantity = ?, discipline = ?, system = ?,
+        building = ?, floor = ?, area = ?, source_document_id = ?
+    WHERE id = ?
+  `);
   const insertCostStmt = db.prepare("INSERT INTO costs (id, project_id, category, description, planned, actual, date_logged) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const updateCostStmt = db.prepare("UPDATE costs SET planned = ?, category = ? WHERE project_id = ? AND LOWER(description) = LOWER(?)");
   const insertMatStmt = db.prepare(`
     INSERT INTO material_requests (
       id, project_id, location, discipline, system, material, item, specification, spec,
       description, quantity, unit, required_date, boq_reference, boq_item_id, wbs_code,
       supplier, work_package_id, requested_by, status
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateMatStmt = db.prepare(`
+    UPDATE material_requests
+    SET specification = ?, spec = ?, description = ?, quantity = ?, unit = ?, discipline = ?, system = ?, boq_reference = ?, wbs_code = ?
+    WHERE project_id = ? AND (boq_item_id = ? OR LOWER(COALESCE(material, item, '')) = LOWER(?))
   `);
   const insertProcStmt = db.prepare(`
     INSERT INTO procurement_items (
@@ -965,13 +1019,15 @@ export function applyContractorIntelligenceAndVerify(
   const reqDateIso = extracted.startDate || new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0];
 
   for (const bItem of boqToInsert) {
-    if (!existingBoqDesc.has(bItem.description.toLowerCase())) {
-      const bId = crypto.randomUUID();
-      const specText =
-        bItem.specification ||
-        `${bItem.discipline} — ${bItem.system} | ${bItem.description} (BOQ #${bItem.item_number}, UOM: ${bItem.unit})`;
-      const wpIdForTrade = wpMap.get((bItem.discipline || "").toUpperCase()) || allCurrentWps[0]?.id || null;
+    const descKey = bItem.description.toLowerCase();
+    const specText =
+      bItem.specification ||
+      `${bItem.discipline} — ${bItem.system} | ${bItem.description} (BOQ #${bItem.item_number}, UOM: ${bItem.unit})`;
+    const wpIdForTrade = wpMap.get((bItem.discipline || "").toUpperCase()) || allCurrentWps[0]?.id || null;
+    const existingBoqId = existingBoqByDesc.get(descKey);
 
+    if (!existingBoqId) {
+      const bId = crypto.randomUUID();
       insertBoqStmt.run(
         bId,
         projectId,
@@ -994,9 +1050,9 @@ export function applyContractorIntelligenceAndVerify(
         documentId,
         now
       );
-      existingBoqDesc.add(bItem.description.toLowerCase());
+      existingBoqByDesc.set(descKey, bId);
 
-      if (!existingCostDesc.has(bItem.description.toLowerCase())) {
+      if (!existingCostDesc.has(descKey)) {
         insertCostStmt.run(
           crypto.randomUUID(),
           projectId,
@@ -1006,10 +1062,10 @@ export function applyContractorIntelligenceAndVerify(
           0,
           todayIso
         );
-        existingCostDesc.add(bItem.description.toLowerCase());
+        existingCostDesc.add(descKey);
       }
 
-      if (!existingMatItems.has(bItem.description.toLowerCase())) {
+      if (!existingMatItems.has(descKey)) {
         const mrId = crypto.randomUUID();
         insertMatStmt.run(
           mrId,
@@ -1045,7 +1101,43 @@ export function applyContractorIntelligenceAndVerify(
           reqDateIso,
           "Requested"
         );
-        existingMatItems.add(bItem.description.toLowerCase());
+        existingMatItems.add(descKey);
+      }
+    } else {
+      updateBoqStmt.run(
+        bItem.item_number,
+        specText,
+        bItem.unit,
+        bItem.tender_quantity,
+        bItem.tender_rate,
+        bItem.tender_amount,
+        bItem.tender_quantity,
+        bItem.discipline,
+        bItem.system,
+        bItem.building || "Main Building",
+        bItem.floor || "All Levels",
+        bItem.area || "Site-Wide",
+        documentId,
+        existingBoqId
+      );
+      if (existingCostDesc.has(descKey)) {
+        updateCostStmt.run(bItem.tender_amount, bItem.discipline || "MEP", projectId, bItem.description);
+      }
+      if (existingMatItems.has(descKey)) {
+        updateMatStmt.run(
+          specText,
+          specText,
+          specText,
+          bItem.tender_quantity,
+          bItem.unit,
+          bItem.discipline || "MEP",
+          bItem.system || "General",
+          bItem.item_number,
+          bItem.item_number,
+          projectId,
+          existingBoqId,
+          bItem.description
+        );
       }
     }
   }
@@ -1073,6 +1165,18 @@ export function applyContractorIntelligenceAndVerify(
     }),
     now
   );
+
+  for (const mod of ["projects", "documents", "boq_items", "tasks"]) {
+    broadcastRealtimeEvent({
+      type: "mutation",
+      userId,
+      module: mod,
+      recordId: projectId,
+      projectId,
+      action: isNewProject ? "create" : "update",
+      timestamp: now,
+    });
+  }
 
   // 7. AUTOMATED VERIFICATION CHECKS
   // Verify project row exists and is valid

@@ -154,7 +154,9 @@ export const ContractorDocUploadModal: React.FC<ContractorDocUploadModalProps> =
         ...(approvedFields.budget > 0 ? { budget: Number(approvedFields.budget) } : {}),
         ...(approvedFields.start_date ? { start_date: approvedFields.start_date } : {}),
         ...(approvedFields.end_date ? { end_date: approvedFields.end_date } : {}),
-        ...(approvedFields.location ? { address: approvedFields.location } : {}),
+        ...(approvedFields.main_contractor ? { main_contractor: approvedFields.main_contractor } : {}),
+        ...(approvedFields.consultant ? { consultant: approvedFields.consultant } : {}),
+        ...(approvedFields.location ? { location: approvedFields.location, site_address: approvedFields.location } : {}),
       });
       const finalResult = data || {
         success: true,

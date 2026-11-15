@@ -827,6 +827,33 @@ export function registerCrudController(app: Express): void {
         if (data.unit_rate !== undefined && data.tender_rate === undefined) data.tender_rate = Number(data.unit_rate);
         if (data.completed_qty !== undefined && data.installed_quantity === undefined) data.installed_quantity = Number(data.completed_qty);
         if (data.spec !== undefined && data.specification === undefined) data.specification = data.spec;
+        if (data.tender_quantity !== undefined && data.revised_quantity === undefined) {
+          data.revised_quantity = Number(data.tender_quantity);
+        }
+        if ((data.tender_quantity !== undefined || data.tender_rate !== undefined) && data.tender_amount === undefined) {
+          const effQty = Number(data.tender_quantity ?? existing.tender_quantity ?? 0);
+          const effRate = Number(data.tender_rate ?? existing.tender_rate ?? 0);
+          data.tender_amount = Math.round(effQty * effRate * 100) / 100;
+        }
+      }
+      if (actualTable === "tasks") {
+        if (data.progress !== undefined) {
+          const prog = Math.min(100, Math.max(0, Number(data.progress) || 0));
+          data.progress = prog;
+          if (prog === 100 && data.status === undefined) {
+            data.status = "Completed";
+          } else if (prog > 0 && prog < 100 && data.status === undefined && existing.status === "Not Started") {
+            data.status = "In Progress";
+          } else if (prog === 0 && data.status === undefined && existing.status === "Completed") {
+            data.status = "Not Started";
+          }
+        }
+        if (data.status === "Completed") {
+          if (data.progress === undefined) data.progress = 100;
+          if (!data.actual_end_date && !existing.actual_end_date) {
+            data.actual_end_date = new Date().toISOString().slice(0, 10);
+          }
+        }
       }
       if (actualTable === "change_orders") {
         if (data.cost_impact === undefined && data.amount !== undefined) data.cost_impact = Number(data.amount);
@@ -886,6 +913,20 @@ export function registerCrudController(app: Express): void {
 
       if (actualTable === "boq_items") {
         syncBoqToMaterialRequestAndCosts(updated, req.user!.user_id);
+        try {
+          const qty = Number(updated.revised_quantity ?? updated.tender_quantity ?? 0);
+          const inst = Number(updated.installed_quantity ?? 0);
+          if (qty > 0 && ("installed_quantity" in data || "tender_quantity" in data || "revised_quantity" in data)) {
+            const pct = Math.min(100, Math.max(0, Math.round((inst / qty) * 100)));
+            const linkedStatus = pct >= 100 ? "Completed" : pct > 0 ? "In Progress" : "Not Started";
+            db.prepare(`
+              UPDATE tasks
+              SET progress = ?, status = ?
+              WHERE project_id = ? AND (boq_item_id = ? OR (boq_ref IS NOT NULL AND boq_ref = ?))
+            `).run(pct, linkedStatus, updated.project_id, updated.id, updated.item_number || "");
+            recalculateProjectProgress(updated.project_id);
+          }
+        } catch {}
       }
       if (actualTable === "tasks") {
         recalculateProjectProgress(updated.project_id);

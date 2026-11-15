@@ -116,11 +116,12 @@ export const ProjectDocumentsSection: React.FC<ProjectDocumentsSectionProps> = (
     setStatusMsg(null);
 
     try {
-      const res = await projectsApi.extractSetupData(projectId, [doc.id], true);
+      await projectsApi.extractSetupData(projectId, [doc.id], true);
       setStatusMsg({
         type: 'success',
-        text: `✓ Project Master, Budget & Work Packages synchronized from "${doc.name || doc.attachment_name}"!`,
+        text: `✓ Project Master, BOQ, Tasks & Work Packages synchronized from "${doc.name || doc.attachment_name}"!`,
       });
+      await loadDocuments();
       onProjectUpdated?.();
     } catch (err: any) {
       setStatusMsg({

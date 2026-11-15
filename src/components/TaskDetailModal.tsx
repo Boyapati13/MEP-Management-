@@ -175,7 +175,7 @@ export function TaskDetailModal({ open, onClose, onSaved, task, projectId }: Tas
     setError(null);
     try {
       const payload: any = {
-        project_id: projectId,
+        ...(task?.id ? {} : { project_id: projectId }),
         title: formData.title,
         description: formData.description || null,
         trade: formData.trade,

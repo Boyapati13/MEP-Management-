@@ -323,7 +323,11 @@ const BoqAndJobCostingWorkspace: React.FC<{
         tender_amount: nextTotal,
         installed_quantity: nextInstalled,
       });
-    } catch {}
+      onProjectUpdated?.();
+    } catch (err: any) {
+      setBoqUploadMsg(`BOQ update error: ${err?.message || 'Failed to save BOQ item'}`);
+      await loadData();
+    }
   };
 
   const exportValuationCertificatePdf = () => {
