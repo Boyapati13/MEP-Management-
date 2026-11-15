@@ -365,19 +365,11 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
               <ShieldCheck size={28} />
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
-                  ADMIN PROFILE &amp; ORGANIZATIONAL COMMAND TREE
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                  Active Session: {adminProfile.username}
-                </span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold text-white mt-1.5">
-                {adminProfile.name} — System Administrator
+              <h1 className="text-xl sm:text-2xl font-bold text-white">
+                {adminProfile.name}
               </h1>
-              <p className="text-xs text-slate-300 mt-1">
-                Direct Line-of-Command: <strong>Admin</strong> → <strong>Project Managers</strong> → <strong>Projects &amp; Geofenced Sites</strong> → <strong>Site Supervisors</strong> → <strong>Field Workers &amp; Trades</strong>
+              <p className="text-xs text-slate-300 mt-0.5">
+                {adminProfile.company || 'Organization & Team Management'}
               </p>
             </div>
           </div>
@@ -489,55 +481,18 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
         </div>
       )}
 
-      {/* ======================================================================
-          COMPANY MAIN ADMIN -> STAKEHOLDER ACCOUNT PROVISIONING HUB
-          Customer Main Admin creates accounts for Employees, Clients/Employers & Subcontractors
-          ====================================================================== */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-blue-950 px-6 py-4 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* Team & Partner Accounts Directory */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/30 text-blue-200 border border-blue-400/40">
-                Organization Main Admin · User Provisioning Hub
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                {user?.company || adminProfile.company || 'Licensed Organization'}
-              </span>
-            </div>
-            <h2 className="text-base sm:text-lg font-bold text-white mt-1">
-              Create &amp; Manage Accounts for Employees, Clients/Employers &amp; Subcontractors
+            <h2 className="text-base font-bold text-slate-900">
+              Team &amp; Partner Accounts
             </h2>
-            <p className="text-xs text-slate-300 mt-0.5">
-              As your company&apos;s authorized <strong>Main Admin</strong>, create role-scoped accounts for your <strong>Internal Employees (PMs / Site Supervisors)</strong>, <strong>Clients / Employers</strong>, and <strong>Subcontractors</strong>.
+            <p className="text-xs text-slate-500">
+              Employees, Clients / Employers, Consultants &amp; Subcontractors
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => openStakeholderModal('Employee (Internal)')}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <Plus size={14} /> + Create Employee / Client / Subcontractor
-            </button>
-          </div>
-        </div>
-
-        <div className="p-5 bg-slate-50/50">
-          {/* Main Admin -> Provision Employees, Clients/Employers & Subcontractors */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-2xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-              <div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800 border border-blue-200">
-                  Company User Directory &amp; Role Portals
-                </span>
-                <h3 className="text-sm font-bold text-slate-900 mt-1">
-                  Create Tier 3 Accounts for Employees, Clients/Employers &amp; Subcontractors
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Once logged in, the Main Admin creates role-scoped Tier 3 accounts with Email ID &amp; Password for internal staff and external partners.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => openStakeholderModal('Employee (Internal)')}
@@ -687,8 +642,6 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
       </div>
 
       {/* Command Tree: Project Managers -> Projects -> Sites & Site Supervisors -> Workers */}

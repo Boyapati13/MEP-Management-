@@ -176,20 +176,11 @@ export function ProjectControlTower({ projectId, navigate }: ProjectControlTower
       {/* Enterprise Executive Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 px-5 py-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Operational Telemetry Active
-            </span>
-            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-              {projectId ? `SCOPE: ${projectId.toUpperCase()}` : 'SCOPE: ENTERPRISE PORTFOLIO'}
-            </span>
-          </div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white mt-1">
-            Executive Operations &amp; Lookahead Control Tower
+          <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+            Control Tower &amp; Lookahead
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Real-time field attendance verification, exception queue, critical-path lookahead schedule, and trade constraint register
+            Attendance, exceptions, lookahead schedule &amp; site constraints
           </p>
         </div>
         <div className="flex items-center gap-2">
