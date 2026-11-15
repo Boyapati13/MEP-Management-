@@ -92,6 +92,14 @@ namespace MepFieldHub
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            bool useLocal = Array.Exists(args, a => a == "--local") || Environment.GetEnvironmentVariable("MEP_LOCAL") == "1";
+            string cloudUrl = Environment.GetEnvironmentVariable("MEP_CLOUD_URL") ?? "https://mep-server-production.up.railway.app";
+            if (!useLocal)
+            {
+                LaunchDesktopWindow(cloudUrl);
+                return;
+            }
+
             string appUrl = "http://127.0.0.1:3000";
             string workDir = AppDomain.CurrentDomain.BaseDirectory;
 
