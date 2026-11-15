@@ -176,7 +176,7 @@ export function getProjectCopilotContext(projectId?: string, user?: Authenticate
   // Handle portfolio level query ("all")
   if (projectId === "all" || projectId === "ALL") {
     const primaryProj = accessibleProjects.find(p => p.budget > 0 && !p.name.includes("Untitled")) || accessibleProjects[0];
-    return buildSingleProjectContext(primaryProj.id, accessibleProjects);
+    return buildSingleProjectContext(primaryProj.id, accessibleProjects, user);
   }
 
   // If no projectId specified, pick the best active project
@@ -185,10 +185,10 @@ export function getProjectCopilotContext(projectId?: string, user?: Authenticate
     projectId = bestProj.id;
   }
 
-  return buildSingleProjectContext(projectId, accessibleProjects);
+  return buildSingleProjectContext(projectId, accessibleProjects, user);
 }
 
-function buildSingleProjectContext(projectId: string, allProjects: any[]): CopilotProjectContext | null {
+function buildSingleProjectContext(projectId: string, allProjects: any[], user?: AuthenticatedUser): CopilotProjectContext | null {
   const project = safeGet("SELECT * FROM projects WHERE id = ?", projectId);
   if (!project) return null;
 
@@ -233,7 +233,7 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
     FROM boq_items
     WHERE project_id = ?
     ORDER BY tender_amount DESC
-    LIMIT 60
+    LIMIT 500
   `, projectId);
 
   // 3. Change Orders / Variations
@@ -404,13 +404,27 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
     LIMIT 10
   `, projectId);
 
-  // 15. Workforce Today
+  // 15. Workforce Today (role-scoped based on logged-in user)
   const today = new Date().toISOString().split("T")[0];
-  const workforceToday = safeAll(`
-    SELECT *
-    FROM attendance
-    WHERE project_id = ? AND (work_date = ? OR date = ?)
-  `, projectId, today, today);
+  let workforceSql = `
+    SELECT a.*, s.name as site_name, w.trade as worker_trade, w.company_id as worker_company_id
+    FROM attendance a
+    LEFT JOIN sites s ON s.id = a.site_id
+    LEFT JOIN workers w ON w.id = a.worker_id
+    WHERE a.project_id = ? AND (a.work_date = ? OR a.date = ?)
+  `;
+  const workforceParams: any[] = [projectId, today, today];
+  if (user?.role === "Subcontractor" && user.company_id) {
+    workforceSql += ` AND w.company_id = ?`;
+    workforceParams.push(user.company_id);
+  } else if (user?.role === "SiteSupervisor") {
+    workforceSql += ` AND (s.supervisor_id = ? OR EXISTS (SELECT 1 FROM worker_assignments wa WHERE wa.worker_id = a.worker_id AND wa.supervisor_id = ? AND wa.status = 'Active'))`;
+    workforceParams.push(user.user_id, user.user_id);
+  } else if (user?.role === "Worker") {
+    workforceSql += ` AND w.user_id = ?`;
+    workforceParams.push(user.user_id);
+  }
+  const workforceToday = safeAll(workforceSql, ...workforceParams);
 
   return {
     project,
@@ -753,6 +767,38 @@ export function generateDeterministicCopilotAnswer(question: string, ctx: Copilo
   const p = ctx.project;
   const cur = p.currency || "USD";
 
+  // 0a. Live Site Attendance & Presence (Role-Scoped)
+  if (
+    q.includes("present") ||
+    q.includes("presence") ||
+    q.includes("attendance") ||
+    q.includes("in the site") ||
+    q.includes("on site") ||
+    q.includes("at site") ||
+    q.includes("headcount") ||
+    q.includes("punched in") ||
+    (q.includes("how many") && (q.includes("site") || q.includes("worker") || q.includes("staff") || q.includes("people")))
+  ) {
+    const activeOnSite = ctx.workforceToday.filter(w => !w.punch_out);
+    let out = `### 👷 Live Site Attendance & Presence — **${p.name}**\n\n`;
+    out += `- **Currently Present On Site Now:** **${activeOnSite.length}** worker(s)\n`;
+    out += `- **Total Punched In Today:** **${ctx.workforceToday.length}** worker(s)\n\n`;
+    if (ctx.workforceToday.length === 0) {
+      out += `No workers matching your access scope have punched in for **${p.name}** today yet. Attendance updates in real time as workers punch in via GPS.\n`;
+    } else {
+      const list = activeOnSite.length > 0 ? activeOnSite : ctx.workforceToday;
+      out += activeOnSite.length > 0 ? `**Currently On Site:**\n\n` : `**Today's Attendance Log:**\n\n`;
+      list.slice(0, 25).forEach(w => {
+        const timeIn = w.punch_in ? new Date(w.punch_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Logged';
+        const siteLabel = w.site_name ? ` · Site: *${w.site_name}*` : '';
+        const tradeLabel = w.worker_trade ? ` (${w.worker_trade})` : '';
+        const geoLabel = w.punch_in_geofence_status ? ` · Geofence: *${w.punch_in_geofence_status}*` : '';
+        out += `- **${w.worker || 'Worker'}**${tradeLabel} — In: ${timeIn}${siteLabel}${geoLabel} · Status: *${w.status || 'Present'}*\n`;
+      });
+    }
+    return out;
+  }
+
   // 0. Portfolio / All Projects Queries
   if (
     q.includes("all projects") ||
@@ -1038,6 +1084,15 @@ export function generateDeterministicCopilotAnswer(question: string, ctx: Copilo
   const docSearch = searchDocumentsAndDrawings(question, ctx);
   const isExplicitDocOrDrawingQuery =
     q.includes("document") ||
+    q.includes("contract") ||
+    q.includes("boq") ||
+    q.includes("technical") ||
+    q.includes("cable") ||
+    q.includes("wire") ||
+    q.includes("pipe") ||
+    q.includes("duct") ||
+    q.includes("panel") ||
+    q.includes("breaker") ||
     q.includes("drawing") ||
     q.includes("dwg") ||
     q.includes("schematic") ||
@@ -1065,7 +1120,7 @@ export function generateDeterministicCopilotAnswer(question: string, ctx: Copilo
     q.includes("boardroom") ||
     q.includes("server room");
 
-  if (isExplicitDocOrDrawingQuery || (docSearch.excerpts.length > 0 && docSearch.excerpts[0].score >= 10)) {
+  if (isExplicitDocOrDrawingQuery || (docSearch.excerpts.length > 0 && docSearch.excerpts[0].score >= 5)) {
     let out = `### 📐 Grounded Intelligence from Project Documents, Drawings & Submittals (**${p.name}**)\n\n`;
 
     if (docSearch.excerpts.length > 0) {
