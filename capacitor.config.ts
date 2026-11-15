@@ -5,8 +5,10 @@ const config: CapacitorConfig = {
   appName: 'MEP Management',
   webDir: 'dist',
   server: {
+    url: 'https://mep-server-production.up.railway.app',
     androidScheme: 'https',
     cleartext: true,
+    allowNavigation: ['mep-server-production.up.railway.app'],
   },
   plugins: {
     Geolocation: {
