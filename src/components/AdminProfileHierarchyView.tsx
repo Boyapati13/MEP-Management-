@@ -489,26 +489,27 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
       )}
 
       {/* ======================================================================
-          2-TIER ENTERPRISE ONBOARDING & ACCOUNT PROVISIONING HUB
-          Tier 1: Our Company -> Grant Permission to Main Admin (by Email ID)
-          Tier 2: Main Admin -> Create Accounts for Employees, Clients/Employers & Subcontractors
+          3-TIER ENTERPRISE ERP ACCESS & ACCOUNT PROVISIONING HUB
+          Tier 1: Platform Owner (Our Company) -> Grants Permission to Main Admin (by Email ID)
+          Tier 2: Organization Main Admin -> Creates Accounts for Employees, Clients/Employers & Subcontractors
+          Tier 3: Project Delivery & External Portals -> PMs, Supervisors, Clients, Subcontractors & Workers
           ====================================================================== */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-blue-950 px-6 py-4 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
-                2-Tier Enterprise Permission &amp; Account Provisioning
+                3-Tier Enterprise ERP Access Architecture
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                 Email ID Based Authorization
               </span>
             </div>
             <h2 className="text-base sm:text-lg font-bold text-white mt-1">
-              Step 1: Our Company Authorizes Main Admin (Email ID) → Step 2: Main Admin Creates Employee, Client &amp; Subcontractor Accounts
+              Tier 1: Our Company (Platform Owner) → Tier 2: Organization Main Admin (Email ID) → Tier 3: Employees, Clients &amp; Subcontractors
             </h2>
             <p className="text-xs text-slate-300 mt-0.5">
-              Our Company grants Main Admin permission to an Email ID. Once authorized, that Main Admin signs in with their Email ID and creates accounts for their <strong>Employees / Staff</strong>, <strong>Employers / Clients</strong>, and <strong>Subcontractors</strong>.
+              <strong>Tier 1 (Our Company)</strong> grants Main Admin permission to an Email ID. <strong>Tier 2 (Main Admin)</strong> signs in with their Email ID and creates accounts for <strong>Tier 3 (Employees/PMs/Supervisors, Clients/Employers, Consultants &amp; Subcontractors)</strong> scoped to their Project &amp; Work Package portals.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -517,15 +518,57 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
               onClick={() => setShowAuthorizeMainAdmin(true)}
               className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
-              <ShieldCheck size={14} /> + Step 1: Authorize Main Admin (Email ID)
+              <ShieldCheck size={14} /> + Tier 1→2: Authorize Main Admin (Email ID)
             </button>
             <button
               type="button"
               onClick={() => openStakeholderModal('Employee (Internal)')}
               className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
-              <Plus size={14} /> + Step 2: Create Employee / Client / Subcontractor
+              <Plus size={14} /> + Tier 2→3: Create Employee / Client / Subcontractor
             </button>
+          </div>
+        </div>
+
+        {/* 3-Tier Visual Architecture Strip */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-5 pt-4 bg-slate-50/50">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+            <div className="flex items-center justify-between">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-600 text-white">
+                Tier 1 · Platform Super Admin
+              </span>
+              <span className="text-[10px] font-mono font-bold text-indigo-800">Our Company</span>
+            </div>
+            <p className="text-xs font-bold text-slate-900 mt-1.5">Platform Owner &amp; Tenant Licensing</p>
+            <p className="text-[11px] text-slate-600 mt-0.5">
+              Whitelists &amp; grants <strong>Main Admin</strong> permission by <strong>Email ID</strong>, assigns Enterprise plans, and can activate or revoke tenant Main Admins.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+            <div className="flex items-center justify-between">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-600 text-white">
+                Tier 2 · Organization Main Admin
+              </span>
+              <span className="text-[10px] font-mono font-bold text-blue-800">Email ID Verified</span>
+            </div>
+            <p className="text-xs font-bold text-slate-900 mt-1.5">Company / Tenant Main Administrator</p>
+            <p className="text-[11px] text-slate-600 mt-0.5">
+              Activates account via authorized <strong>Email ID</strong>, creates Projects &amp; Sites, and provisions accounts for <strong>Employees, Clients &amp; Subcontractors</strong>.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+            <div className="flex items-center justify-between">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-600 text-white">
+                Tier 3 · Scoped Role Portals
+              </span>
+              <span className="text-[10px] font-mono font-bold text-emerald-800">Project &amp; WBS Scoped</span>
+            </div>
+            <p className="text-xs font-bold text-slate-900 mt-1.5">Employees, Clients &amp; Subcontractors</p>
+            <p className="text-[11px] text-slate-600 mt-0.5">
+              Routes on login to <strong>Internal ERP</strong> (PMs/Supervisors), <strong>Client Portal</strong> (Employers), <strong>Subcontractor Portal</strong> (WBS Package), or <strong>Worker Mobile App</strong>.
+            </p>
           </div>
         </div>
 
@@ -536,13 +579,13 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
               <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
                 <div>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 text-indigo-800 border border-indigo-200">
-                    Tier 1 · Platform Owner (Our Company)
+                    Tier 1 → Tier 2 · Platform Owner (Our Company)
                   </span>
                   <h3 className="text-sm font-bold text-slate-900 mt-1">
                     Authorized Main Admin Accounts (by Email ID)
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Main Admin Email IDs granted permission by Our Company to manage their organization and provision accounts.
+                    Main Admin Email IDs granted permission by Our Company to manage their organization and provision Tier 3 accounts.
                   </p>
                 </div>
                 <button
@@ -618,13 +661,13 @@ export const AdminProfileHierarchyView: React.FC<AdminProfileHierarchyViewProps>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
               <div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800 border border-blue-200">
-                  Tier 2 · Main Admin Account Provisioning
+                  Tier 2 → Tier 3 · Main Admin Account Provisioning
                 </span>
                 <h3 className="text-sm font-bold text-slate-900 mt-1">
-                  Create User Accounts for Employees, Clients/Employers &amp; Subcontractors
+                  Create Tier 3 Accounts for Employees, Clients/Employers &amp; Subcontractors
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Once logged in, the Main Admin creates role-scoped accounts with Email ID &amp; Password for internal staff and external partners.
+                  Once logged in, the Main Admin creates role-scoped Tier 3 accounts with Email ID &amp; Password for internal staff and external partners.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
