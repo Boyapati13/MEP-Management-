@@ -3130,24 +3130,6 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
                 <Plus size={15} /> Create Project
               </button>
             )}
-            <button
-              onClick={() => navigate('documents-hub')}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition cursor-pointer"
-            >
-              <Layers size={14} className="text-sky-300" /> Drawings
-            </button>
-            <button
-              onClick={() => navigate('material-submittals')}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition cursor-pointer"
-            >
-              <FileCheck2 size={14} className="text-emerald-300" /> Submittals
-            </button>
-            <button
-              onClick={() => navigate('admin-hierarchy')}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition cursor-pointer"
-            >
-              <Shield size={14} className="text-amber-300" /> Team &amp; Access
-            </button>
           </div>
         </div>
 
