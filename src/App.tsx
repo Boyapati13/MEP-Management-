@@ -482,231 +482,111 @@ function LoginPage() {
 
   const SPOTLIGHT_FEATURES = {
     drawings: {
-      badge: 'ISO 19650 CDE & Live Markups',
-      title: 'Drawing Revisions & Site Vector Redlines',
-      desc: 'Upload Rev A → Rev B → Rev C shop drawings, draw freehand pen, revision clouds, callout arrows & text pins directly on sheets, and carry site markings across revisions.',
-      metrics: [
-        { label: 'Markup Tools', value: 'Pen · Cloud · Arrow · Pin' },
-        { label: 'Revision Chain', value: 'Rev A → B → C Audit' },
-        { label: 'Spatial Pins', value: 'Grid & Zone Linked' },
-      ],
-      accent: 'from-sky-500/25 via-blue-600/15 to-transparent border-sky-400/35',
+      title: 'Drawings, Revisions & Live Markups',
+      desc: 'Publish drawing revisions and mark up sheets directly on site with pen, clouds, arrows, and pins.',
+      accent: 'from-sky-500/20 via-blue-600/10 to-transparent border-sky-400/30',
     },
     submittals: {
-      badge: 'Technical Submittal Register + AI',
-      title: 'Material Submittals & Grounded AI Copilot',
-      desc: 'Track Code A / B / C / D consultant review cycles, manufacturer compliance specs, and ask the MEP AI Copilot technical questions grounded in your uploaded drawings and documents.',
-      metrics: [
-        { label: 'Review Codes', value: 'Code A · B · C · D' },
-        { label: 'AI Grounding', value: 'Drawings + Submittals' },
-        { label: 'Lead-Time Link', value: 'Procurement Synced' },
-      ],
-      accent: 'from-emerald-500/25 via-teal-600/15 to-transparent border-emerald-400/35',
+      title: 'Material Submittals & AI Copilot',
+      desc: 'Manage technical submittals and get instant answers grounded in your project drawings and documents.',
+      accent: 'from-emerald-500/20 via-teal-600/10 to-transparent border-emerald-400/30',
     },
     hierarchy: {
-      badge: '3-Tier Enterprise RBAC',
-      title: 'Email-Authorized Main Admin & Stakeholder Portal',
-      desc: 'Our Company grants Main Admin permission by Email ID. Main Admins then provision isolated portals for Internal Employees (PMs/Supervisors), Clients/Employers, and Subcontractors.',
-      metrics: [
-        { label: 'Tier 1', value: 'Platform Root Governance' },
-        { label: 'Tier 2', value: 'Authorized Main Admin' },
-        { label: 'Tier 3', value: 'Employees · Clients · Subs' },
-      ],
-      accent: 'from-indigo-500/25 via-purple-600/15 to-transparent border-indigo-400/35',
+      title: 'Team & Partner Access',
+      desc: 'Dedicated workspaces for your project managers, site supervisors, clients, and subcontractors.',
+      accent: 'from-indigo-500/20 via-purple-600/10 to-transparent border-indigo-400/30',
     },
     control: {
-      badge: 'Real-Time Field Telemetry',
-      title: 'Executive Control Tower, WBS & GPS Workforce',
-      desc: 'Monitor critical-path 14-day lookahead schedules, trade interface blockers, geofenced worker punch-ins, automated timesheets, ITP quality gates, and variation orders in real time.',
-      metrics: [
-        { label: 'Field Attendance', value: 'GPS Geofence Verified' },
-        { label: 'Lookahead Radar', value: '14-Day Critical Path' },
-        { label: 'Commercial', value: 'BOQ · IPC · Variations' },
-      ],
-      accent: 'from-amber-500/25 via-orange-600/15 to-transparent border-amber-400/35',
+      title: 'Control Tower & Field Workforce',
+      desc: 'Track schedules, blockers, site attendance, quality inspections, and commercial progress.',
+      accent: 'from-amber-500/20 via-orange-600/10 to-transparent border-amber-400/30',
     },
   } as const;
 
   const currentSpotlight = SPOTLIGHT_FEATURES[activeSpotlight];
 
   return (
-    <main className="min-h-screen bg-[#040d1a] text-white flex flex-col lg:grid lg:grid-cols-[minmax(0,1.38fr)_minmax(440px,0.92fr)]">
-      {/* Desktop / Laptop Interactive Hero Showcase */}
-      <section aria-label="MEP FieldHub platform overview" className="relative isolate hidden md:flex flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:min-h-screen lg:px-14 lg:py-10 border-b lg:border-b-0 lg:border-r border-slate-800/80">
-        {/* Layered Architectural Background */}
+    <main className="min-h-screen bg-[#040d1a] text-white flex flex-col lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.9fr)]">
+      {/* Left Hero Showcase */}
+      <section aria-label="MEP FieldHub platform overview" className="relative isolate hidden md:flex flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:min-h-screen lg:px-14 lg:py-12 border-b lg:border-b-0 lg:border-r border-slate-800/80">
         <div className="absolute inset-0 -z-30 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1800&q=85')] bg-cover bg-center opacity-35 scale-105" />
         <div className="absolute inset-0 -z-20 bg-gradient-to-br from-[#040d1a]/95 via-[#071930]/92 to-[#091e3a]/88" />
-        <div className="absolute inset-0 -z-10 opacity-25 [background-image:linear-gradient(rgba(56,189,248,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,.16)_1px,transparent_1px)] [background-size:38px_38px]" />
+        <div className="absolute inset-0 -z-10 opacity-20 [background-image:linear-gradient(rgba(56,189,248,.16)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,.16)_1px,transparent_1px)] [background-size:40px_40px]" />
         <div className="pointer-events-none absolute -top-28 -left-28 -z-10 h-96 w-96 rounded-full bg-sky-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-10 right-10 -z-10 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
 
-        {/* Top Brand & Live Status Bar */}
-        <header className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="relative rounded-2xl border border-sky-400/40 bg-gradient-to-br from-sky-500/30 to-blue-700/30 p-3 shadow-lg shadow-sky-500/10">
-              <HardHat size={26} className="text-sky-300" />
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border border-slate-900" />
-              </span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
-                  MEP <span className="bg-gradient-to-r from-sky-400 to-indigo-300 bg-clip-text text-transparent">FieldHub</span>
-                </span>
-                <span className="rounded-md bg-sky-500/20 border border-sky-400/30 px-2 py-0.5 text-[10px] font-mono font-bold text-sky-300">
-                  ENTERPRISE v1.5
-                </span>
-              </div>
-              <p className="text-[10px] font-semibold uppercase tracking-[.24em] text-sky-200/75 mt-0.5">
-                Design · Submittals · Site Execution · Handover
-              </p>
-            </div>
+        <header className="flex items-center gap-3.5">
+          <div className="rounded-2xl border border-sky-400/40 bg-gradient-to-br from-sky-500/30 to-blue-700/30 p-3 shadow-lg shadow-sky-500/10">
+            <HardHat size={26} className="text-sky-300" />
           </div>
-
-          <div className="hidden xl:flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1.5 text-[11px] font-semibold text-emerald-300">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            ISO 19650 CDE &amp; 3-Tier RBAC Active
+          <div>
+            <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
+              MEP <span className="bg-gradient-to-r from-sky-400 to-indigo-300 bg-clip-text text-transparent">FieldHub</span>
+            </span>
+            <p className="text-[10px] font-semibold uppercase tracking-[.24em] text-sky-200/75 mt-0.5">
+              Plan · Build · Track · Deliver
+            </p>
           </div>
         </header>
 
-        {/* Center Hero Value Proposition + Interactive Spotlight */}
-        <div className="my-auto max-w-2xl py-6 space-y-6">
+        <div className="my-auto max-w-xl py-8 space-y-6">
           <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-400/10 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[.14em] text-sky-200">
-              <Sparkles size={13} className="text-amber-300" /> Next-Generation MEP Construction Platform
-            </div>
-            <h1 className="text-3xl font-extrabold leading-[1.12] tracking-tight sm:text-4xl xl:text-[42px] text-white">
-              Command Every <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">Drawing, Submittal &amp; Site Crew</span> in One Hub.
+            <h1 className="text-3xl font-extrabold leading-[1.14] tracking-tight sm:text-4xl xl:text-[42px] text-white">
+              From <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">Design</span> to <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">Handover.</span>
             </h1>
-            <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-300 max-w-xl">
-              Purpose-built for Mechanical, Electrical, Plumbing &amp; Fire Protection contractors—unifying live drawing redlines, material approvals, AI document intelligence, and 3-tier stakeholder governance.
+            <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-300">
+              One connected platform for Mechanical, Electrical, Plumbing &amp; Fire Protection projects.
             </p>
           </div>
 
-          {/* Interactive Module Selector Tabs */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                { id: 'drawings' as const, Icon: Layers, label: 'BIM & Markups', sub: 'Rev A/B/C + Pen' },
-                { id: 'submittals' as const, Icon: FileCheck2, label: 'Submittals & AI', sub: 'Copilot Grounded' },
-                { id: 'hierarchy' as const, Icon: Shield, label: '3-Tier Access', sub: 'Email Provisioned' },
-                { id: 'control' as const, Icon: BarChart3, label: 'Control Tower', sub: 'Lookahead & GPS' },
-              ].map(({ id, Icon, label, sub }) => {
-                const active = activeSpotlight === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setActiveSpotlight(id)}
-                    className={cn(
-                      'text-left rounded-xl border p-3 transition-all cursor-pointer backdrop-blur-md',
-                      active
-                        ? 'border-sky-400 bg-sky-500/20 shadow-lg shadow-sky-500/10 -translate-y-0.5'
-                        : 'border-white/10 bg-slate-900/50 hover:border-white/25 hover:bg-slate-900/70'
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <Icon size={18} className={active ? 'text-sky-300' : 'text-slate-400'} />
-                      {active && <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />}
-                    </div>
-                    <span className="text-xs font-bold text-white block leading-tight">{label}</span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">{sub}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Dynamic Spotlight Preview Card */}
-            <div className={cn('rounded-2xl border bg-gradient-to-br p-5 backdrop-blur-md transition-all', currentSpotlight.accent)}>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-200 border border-white/15">
-                  <Zap size={11} className="text-amber-300" /> {currentSpotlight.badge}
-                </span>
-                <span className="text-[11px] font-mono text-slate-300">Click tabs above to preview capabilities</span>
-              </div>
-              <h3 className="text-base sm:text-lg font-bold text-white">{currentSpotlight.title}</h3>
-              <p className="mt-1 text-xs sm:text-sm text-slate-200/90 leading-relaxed">{currentSpotlight.desc}</p>
-              <div className="mt-4 grid grid-cols-3 gap-2.5 pt-3 border-t border-white/10">
-                {currentSpotlight.metrics.map(m => (
-                  <div key={m.label} className="rounded-lg bg-slate-950/45 border border-white/10 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{m.label}</span>
-                    <span className="block text-xs font-bold text-sky-200 mt-0.5 truncate">{m.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {[
+              { id: 'drawings' as const, Icon: Layers, label: 'Drawings' },
+              { id: 'submittals' as const, Icon: FileCheck2, label: 'Submittals' },
+              { id: 'hierarchy' as const, Icon: Shield, label: 'Team Access' },
+              { id: 'control' as const, Icon: BarChart3, label: 'Control Tower' },
+            ].map(({ id, Icon, label }) => {
+              const active = activeSpotlight === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveSpotlight(id)}
+                  className={cn(
+                    'text-left rounded-xl border p-3.5 transition-all cursor-pointer backdrop-blur-md',
+                    active
+                      ? 'border-sky-400 bg-sky-500/20 shadow-lg shadow-sky-500/10'
+                      : 'border-white/10 bg-slate-900/50 hover:border-white/25 hover:bg-slate-900/70'
+                  )}
+                >
+                  <Icon size={18} className={cn('mb-2', active ? 'text-sky-300' : 'text-slate-400')} />
+                  <span className="text-xs font-bold text-white block leading-tight">{label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* 3-Tier Enterprise Architecture Visual Strip */}
-          <div className="rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-sky-300">Enterprise 3-Tier Security Architecture</span>
-              <span className="text-[10px] text-emerald-300 font-semibold">Strict Tenant &amp; Package Isolation</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-[11px]">
-              <div className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5">
-                <span className="text-[9px] font-bold uppercase text-amber-300 block">Tier 1 · Platform Root</span>
-                <span className="font-semibold text-white">Our Company</span>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5">
-                <span className="text-[9px] font-bold uppercase text-sky-300 block">Tier 2 · Tenant Owner</span>
-                <span className="font-semibold text-white">Authorized Main Admin</span>
-              </div>
-              <div className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5">
-                <span className="text-[9px] font-bold uppercase text-emerald-300 block">Tier 3 · Project Portals</span>
-                <span className="font-semibold text-white">Staff · Clients · Subs</span>
-              </div>
-            </div>
+          <div className={cn('rounded-2xl border bg-gradient-to-br p-5 backdrop-blur-md transition-all', currentSpotlight.accent)}>
+            <h3 className="text-base font-bold text-white">{currentSpotlight.title}</h3>
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-200/90 leading-relaxed">{currentSpotlight.desc}</p>
           </div>
         </div>
 
-        {/* Footer Discipline Strip */}
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4 text-xs text-slate-400">
-          <span>HVAC &amp; Mechanical · HV/LV Electrical &amp; ELV · Public Health &amp; Plumbing · Fire Protection · T&amp;C</span>
-          <span className="font-mono text-[11px] text-sky-300/80">100% Audit-Ready CDE</span>
+        <footer className="border-t border-white/10 pt-4 text-xs text-slate-400">
+          Mechanical · Electrical · Plumbing · Fire Protection
         </footer>
       </section>
 
-      {/* Right Authentication Portal (Mobile, Tablet & Laptop Friendly) */}
+      {/* Right Sign-In Card */}
       <section aria-label="Secure sign in" className="relative flex flex-1 items-center justify-center bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e8eff8] px-4 py-8 sm:px-8 sm:py-12 text-slate-900 lg:min-h-screen lg:px-12">
         <div className="w-full max-w-md mx-auto">
-          {/* Mobile Top Brand Header */}
-          <div className="mb-6 flex md:hidden items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 p-2.5 text-white shadow-md">
-                <HardHat size={22}/>
-              </div>
-              <div>
-                <p className="text-lg font-extrabold tracking-tight text-slate-900 leading-none">MEP <span className="text-blue-700">FieldHub</span></p>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Enterprise MEP Platform</p>
-              </div>
+          <div className="mb-6 flex md:hidden items-center gap-2.5">
+            <div className="rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 p-2 text-white shadow-md">
+              <HardHat size={20}/>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-100 text-blue-800 border border-blue-200">
-              v1.5.0
-            </span>
+            <p className="text-lg font-extrabold tracking-tight text-slate-900">MEP <span className="text-blue-700">FieldHub</span></p>
           </div>
 
-          {/* Elevated White Auth Card */}
           <div className="rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-xl shadow-slate-900/5 p-6 sm:p-8">
-            {/* Desktop/Tablet Brand Pill Inside Card */}
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-2.5 text-white shadow-md shadow-blue-600/20">
-                  <HardHat size={22}/>
-                </div>
-                <div>
-                  <p className="text-base font-extrabold tracking-tight text-slate-900 leading-tight">MEP FieldHub</p>
-                  <p className="text-[11px] font-semibold text-slate-500">Enterprise Construction Portal</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
-                <Lock size={10} /> TLS / RBAC
-              </span>
-            </div>
-
-            {/* Segmented Mode Switcher */}
             <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1 border border-slate-200/80">
               <button
                 type="button"
@@ -718,7 +598,7 @@ function LoginPage() {
                     : 'text-slate-600 hover:text-slate-900'
                 )}
               >
-                Sign In to Workspace
+                Sign In
               </button>
               <button
                 type="button"
@@ -730,21 +610,14 @@ function LoginPage() {
                     : 'text-slate-600 hover:text-slate-900'
                 )}
               >
-                Activate Main Admin
+                Activate Account
               </button>
             </div>
 
             <div className="mb-5">
               <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900">
-                {authMode === 'signin' ? 'Welcome back' : authMode === 'signup' ? 'Activate Main Admin' : 'Recover Password'}
+                {authMode === 'signin' ? 'Welcome back' : authMode === 'signup' ? 'Activate Main Admin' : 'Reset Password'}
               </h2>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                {authMode === 'signin'
-                  ? 'Sign in with your Email ID or username. Your role, project scope, and work packages load automatically.'
-                  : authMode === 'signup'
-                  ? 'Verify the Main Admin Email ID authorized by Our Company to activate your organization workspace.'
-                  : 'Enter your registered work Email ID or username to request a password reset.'}
-              </p>
             </div>
 
             {loginError && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">{loginError}</div>}
@@ -759,7 +632,7 @@ function LoginPage() {
                   id="mep-login-username"
                   autoComplete="username"
                   className="w-full rounded-xl border border-slate-300 bg-slate-50/60 focus:bg-white px-3.5 py-3 text-sm text-slate-900 shadow-xs outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 touch-manipulation"
-                  placeholder="e.g. admin@mepfieldhub.com or admin"
+                  placeholder="Enter your email or username"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   required
@@ -798,14 +671,14 @@ function LoginPage() {
                 {loading ? (
                   <><Spinner size={16}/> Signing in…</>
                 ) : (
-                  <><Lock size={15}/> Sign in securely <ChevronRight size={16}/></>
+                  <><Lock size={15}/> Sign in <ChevronRight size={16}/></>
                 )}
               </button>
             </form>
             )}
 
             {authMode === 'signin' && (
-              <div className="mt-4 flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+              <div className="mt-4 flex items-center justify-between text-xs pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => { setAuthMode('forgot'); setLoginError(''); setResetNotice(''); }}
@@ -818,40 +691,37 @@ function LoginPage() {
                   onClick={() => { setAuthMode('signup'); setLoginError(''); }}
                   className="font-bold text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer"
                 >
-                  Activate Main Admin (Email ID) →
+                  Activate Account →
                 </button>
               </div>
             )}
 
             {authMode === 'signup' && (
               <form onSubmit={handleOrgSignup} className="space-y-3">
-                <div className="text-[11px] text-indigo-950 bg-indigo-50/90 border border-indigo-200 rounded-xl p-3">
-                  Enter the <strong>Main Admin Email ID</strong> granted permission by <strong>Our Company</strong>, then click <strong>Verify Email ID</strong> to load your company profile.
-                </div>
                 {verifiedEmailInfo && (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
                     {verifiedEmailInfo}
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <input required type="email" placeholder="Authorized Main Admin Email ID *" value={orgForm.email} onChange={e => { setOrgForm(s => ({ ...s, email: e.target.value })); setVerifiedEmailInfo(''); }} className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 font-mono" />
+                  <input required type="email" placeholder="Authorized Email ID *" value={orgForm.email} onChange={e => { setOrgForm(s => ({ ...s, email: e.target.value })); setVerifiedEmailInfo(''); }} className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 font-mono" />
                   <button type="button" onClick={() => verifyMainAdminEmail()} className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold whitespace-nowrap cursor-pointer">
-                    Verify Email ID
+                    Verify
                   </button>
                 </div>
-                <input required placeholder="Main Admin Full Name *" value={orgForm.admin_name} onChange={e => setOrgForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
-                <input required placeholder="Company / Organization Name *" value={orgForm.organization_name} onChange={e => setOrgForm(s => ({ ...s, organization_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+                <input required placeholder="Full Name *" value={orgForm.admin_name} onChange={e => setOrgForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+                <input required placeholder="Company Name *" value={orgForm.organization_name} onChange={e => setOrgForm(s => ({ ...s, organization_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
                 <div className="grid grid-cols-2 gap-2">
-                  <input placeholder="Optional Username" value={orgForm.username} onChange={e => setOrgForm(s => ({ ...s, username: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 font-mono" />
+                  <input placeholder="Username (optional)" value={orgForm.username} onChange={e => setOrgForm(s => ({ ...s, username: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 font-mono" />
                   <select value={orgForm.plan} onChange={e => setOrgForm(s => ({ ...s, plan: e.target.value }))} className="rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 bg-white">
-                    <option value="Enterprise">Enterprise Plan</option>
-                    <option value="Professional">Professional Plan</option>
-                    <option value="Starter">Starter Plan</option>
+                    <option value="Enterprise">Enterprise</option>
+                    <option value="Professional">Professional</option>
+                    <option value="Starter">Starter</option>
                   </select>
                 </div>
-                <input required type="password" minLength={6} placeholder="Set Main Admin Password (min 6 chars) *" value={orgForm.password} onChange={e => setOrgForm(s => ({ ...s, password: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+                <input required type="password" minLength={6} placeholder="Create Password (min 6 chars) *" value={orgForm.password} onChange={e => setOrgForm(s => ({ ...s, password: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
                 <button type="submit" disabled={loading} className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 py-3 text-sm font-bold text-white shadow-md cursor-pointer">
-                  {loading ? 'Activating Main Admin Account...' : 'Activate Authorized Main Admin Account'}
+                  {loading ? 'Activating...' : 'Activate Account'}
                 </button>
               </form>
             )}
@@ -869,26 +739,13 @@ function LoginPage() {
                     {resetNotice}
                   </div>
                 )}
-                <input required placeholder="Enter your username or work Email ID" value={resetIdentifier} onChange={e => setResetIdentifier(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+                <input required placeholder="Enter your email or username" value={resetIdentifier} onChange={e => setResetIdentifier(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
                 <button type="submit" disabled={loading} className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 py-3 text-sm font-bold text-white cursor-pointer">
-                  {loading ? 'Submitting...' : 'Request Password Reset'}
+                  {loading ? 'Submitting...' : 'Request Reset'}
                 </button>
               </form>
             )}
-
-            {/* Role Portals Info Footer Inside Card */}
-            <div className="mt-5 rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
-              <div className="flex items-center gap-1.5 font-bold text-slate-800 mb-0.5">
-                <Shield size={13} className="text-blue-600 flex-shrink-0" />
-                Role-Based Portal Routing
-              </div>
-              Main Admins, Project Managers, Site Supervisors, Clients/Employers &amp; Subcontractors sign in here and are routed to their scoped workspace automatically.
-            </div>
           </div>
-
-          <p className="mt-5 text-center text-xs text-slate-500 font-medium">
-            MEP FieldHub v1.5.0 · Enterprise Construction Edition
-          </p>
         </div>
       </section>
     </main>
@@ -3040,60 +2897,45 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
 
   return (
     <div className="space-y-6">
-      {/* Executive Welcome Hero Banner & Quick-Action Command Deck */}
+      {/* Executive Welcome Banner & Quick Actions */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-blue-950 to-indigo-950 text-white p-6 shadow-xl border border-slate-800">
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-sky-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl" />
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Enterprise CDE Online
-              </span>
-              <span className="rounded-full bg-sky-500/15 border border-sky-400/30 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-200">
-                {user?.stakeholder_type || user?.role || 'Administrator'}
-              </span>
-              {user?.company && (
-                <span className="rounded-full bg-white/10 border border-white/15 px-2.5 py-0.5 text-[10px] font-semibold text-slate-200">
-                  {user.company}
-                </span>
-              )}
-            </div>
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
               Welcome back, <span className="bg-gradient-to-r from-sky-300 to-indigo-200 bg-clip-text text-transparent">{user?.name || 'Administrator'}</span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Manage your MEP projects, shop drawing revisions &amp; live redline markups, material submittals, 3-tier stakeholder access, and site workforce from one executive command hub.
-            </p>
+            {user?.company && (
+              <p className="text-xs text-slate-300 mt-1">{user.company}</p>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {['Admin', 'ProjectManager'].includes(user?.role) && (
               <button
                 onClick={() => setShowNewProjectModal(true)}
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 px-4 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-sky-500/25 transition cursor-pointer"
               >
-                <Plus size={15} /> Create New Project
+                <Plus size={15} /> Create Project
               </button>
             )}
             <button
               onClick={() => navigate('documents-hub')}
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition cursor-pointer"
             >
-              <Layers size={14} className="text-sky-300" /> Drawings &amp; Markups
+              <Layers size={14} className="text-sky-300" /> Drawings
             </button>
             <button
               onClick={() => navigate('material-submittals')}
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition cursor-pointer"
             >
-              <FileCheck2 size={14} className="text-emerald-300" /> Material Submittals
+              <FileCheck2 size={14} className="text-emerald-300" /> Submittals
             </button>
             <button
               onClick={() => navigate('admin-hierarchy')}
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white backdrop-blur-sm transition cursor-pointer"
             >
-              <Shield size={14} className="text-amber-300" /> 3-Tier Access &amp; Team
+              <Shield size={14} className="text-amber-300" /> Team &amp; Access
             </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('open-copilot', { detail: { projectId: selectedProject } }))}
@@ -3104,55 +2946,50 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
           </div>
         </div>
 
-        {/* 4-Pillar Quick Launch Cards inside Hero when Portfolio is Empty (Clean State Onboarding) */}
         {portfolio.length === 0 && !loading && (
-          <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div
               onClick={() => setShowNewProjectModal(true)}
               className="group rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-sky-400/50 p-3.5 transition-all cursor-pointer"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-sky-300">Step 01 · Project Setup</span>
-                <Plus size={15} className="text-sky-300 group-hover:translate-x-0.5 transition-transform" />
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-white">Create First Project</span>
+                <Plus size={15} className="text-sky-300" />
               </div>
-              <p className="text-xs font-bold text-white">Create Your First MEP Project</p>
-              <p className="text-[11px] text-slate-300/85 mt-0.5">Define project code, client, budget &amp; upload contract documents.</p>
+              <p className="text-[11px] text-slate-300/80">Set up project details &amp; budget</p>
             </div>
 
             <div
               onClick={() => navigate('admin-hierarchy')}
               className="group rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-indigo-400/50 p-3.5 transition-all cursor-pointer"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-300">Step 02 · 3-Tier Access</span>
-                <ChevronRight size={15} className="text-indigo-300 group-hover:translate-x-0.5 transition-transform" />
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-white">Add Team &amp; Partners</span>
+                <ChevronRight size={15} className="text-indigo-300" />
               </div>
-              <p className="text-xs font-bold text-white">Authorize Main Admins &amp; Team</p>
-              <p className="text-[11px] text-slate-300/85 mt-0.5">Grant Main Admin Email IDs &amp; create Employee, Client and Subcontractor logins.</p>
+              <p className="text-[11px] text-slate-300/80">Employees, clients &amp; subcontractors</p>
             </div>
 
             <div
               onClick={() => navigate('documents-hub')}
               className="group rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-400/50 p-3.5 transition-all cursor-pointer"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300">Step 03 · Drawings CDE</span>
-                <ChevronRight size={15} className="text-emerald-300 group-hover:translate-x-0.5 transition-transform" />
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-white">Upload Drawings</span>
+                <ChevronRight size={15} className="text-emerald-300" />
               </div>
-              <p className="text-xs font-bold text-white">Upload Drawings &amp; Vector Markups</p>
-              <p className="text-[11px] text-slate-300/85 mt-0.5">Publish Rev A/B/C drawings and draw pen, cloud &amp; callout redlines.</p>
+              <p className="text-[11px] text-slate-300/80">Revisions &amp; site markups</p>
             </div>
 
             <div
               onClick={() => navigate('material-submittals')}
               className="group rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-400/50 p-3.5 transition-all cursor-pointer"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300">Step 04 · Submittals &amp; AI</span>
-                <ChevronRight size={15} className="text-amber-300 group-hover:translate-x-0.5 transition-transform" />
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-white">Material Submittals</span>
+                <ChevronRight size={15} className="text-amber-300" />
               </div>
-              <p className="text-xs font-bold text-white">Material Submittals &amp; Copilot</p>
-              <p className="text-[11px] text-slate-300/85 mt-0.5">Track technical approvals and query the AI Copilot on project specs.</p>
+              <p className="text-[11px] text-slate-300/80">Technical approvals &amp; AI search</p>
             </div>
           </div>
         )}
