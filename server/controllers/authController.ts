@@ -1,5 +1,7 @@
 import { Express, Request, Response } from "express";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
 import { MEP_REFERENCE_KNOWLEDGE, MEP_DEFECT_PATTERNS, suggestFixFallback } from "../../mep_brain";
@@ -89,12 +91,19 @@ export function registerAuthController(app: Express): void {
   });
 
   // Health & Readiness Observability
+  let appVersion = "1.5.1";
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+    if (pkg?.version) appVersion = String(pkg.version);
+  } catch {}
+  const gitSha = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GITHUB_SHA || "live").slice(0, 7);
+
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       service: "mep-project-manager",
-      version: "1.4.1",
-      git_sha: "c539a9d",
+      version: appVersion,
+      git_sha: gitSha,
       uptime: process.uptime()
     });
   });
@@ -107,7 +116,7 @@ export function registerAuthController(app: Express): void {
         ready: true,
         db: ping && ping.ok === 1 ? "connected" : "error",
         migrations_applied: migrations ? migrations.count : 0,
-        version: "1.4.1",
+        version: appVersion,
         timestamp: new Date().toISOString()
       });
     } catch (e: any) {
