@@ -1,0 +1,10 @@
+{
+  "name": "MEP FieldHub — Construction & MEP Operations",
+  "short_name": "MEP FieldHub",
+  "description": "Site attendance geofencing, employee registration, snagging PDF registers, and MEP project operations.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary"
+}

@@ -43,6 +43,7 @@ import { ClientPortalContent } from './components/ClientPortalContent';
 import { MepAssistantDrawer } from './components/MepAssistantDrawer';
 import { ContractorDocUploadModal } from './components/ContractorDocUploadModal';
 import { CompleteTaskModal } from './components/CompleteTaskModal';
+import { SiteGeofenceMap } from './components/SiteGeofenceMap';
 import { OctoInbox } from './components/OctoInbox';
 import { TasksBoardPage } from './components/TasksBoardPage';
 import { EnterpriseModulesView } from './components/EnterpriseModulesView';
@@ -1280,9 +1281,18 @@ function PunchClockPage() {
   return (
     <div className="max-w-lg mx-auto space-y-6">
       {/* Header */}
-      <div className="text-center">
+      <div className="text-center space-y-2">
         <h1 className="text-2xl font-bold text-gray-900">Punch Clock</h1>
-        <p className="text-gray-500 text-sm mt-1">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <p className="text-gray-500 text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <div className="flex justify-center">
+          <a
+            href="/api/mobile/android-apk"
+            download="mep-fieldhub-android.apk"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+          >
+            <Smartphone size={13} /> Download Android App (.apk)
+          </a>
+        </div>
       </div>
 
       {/* Status Card */}
@@ -1335,6 +1345,23 @@ function PunchClockPage() {
                   </select>
                 </FormField>
               )}
+              {(() => {
+                const chosenSite = sites.find((s: any) => s.id === selectedSite);
+                if (!chosenSite?.latitude || !chosenSite?.longitude) return null;
+                return (
+                  <div className="pt-1">
+                    <SiteGeofenceMap
+                      readOnly
+                      height="210px"
+                      latitude={Number(chosenSite.latitude)}
+                      longitude={Number(chosenSite.longitude)}
+                      geofenceRadius={Number(chosenSite.geofence_radius_m || 100)}
+                      warningRadius={Number(chosenSite.geofence_warning_radius_m || 150)}
+                      workerLocation={gps}
+                    />
+                  </div>
+                );
+              })()}
             </div>
             <div className="mb-4">
               <button onClick={getGPS} disabled={gpsLoading} className={cn(btnSecondary, 'w-full justify-center py-2')}>
@@ -1440,6 +1467,20 @@ function SitesPage({ navigate }: { navigate: (p: Page, param?: string) => void }
             <FormField label="City"><input className={inputCls} value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></FormField>
             <FormField label="Country"><input className={inputCls} value={form.country} onChange={e => setForm({...form, country: e.target.value})} /></FormField>
           </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-gray-700">Site Map Point &amp; Attendance Boundary</label>
+            <SiteGeofenceMap
+              height="240px"
+              latitude={form.latitude ? parseFloat(form.latitude) : null}
+              longitude={form.longitude ? parseFloat(form.longitude) : null}
+              geofenceRadius={parseInt(form.geofence_radius_m) || 100}
+              warningRadius={parseInt(form.geofence_warning_radius_m) || 150}
+              onChange={(lat, lng) => setForm(prev => ({ ...prev, latitude: String(lat), longitude: String(lng) }))}
+              onRadiusChange={(validR, warnR) =>
+                setForm(prev => ({ ...prev, geofence_radius_m: String(validR), geofence_warning_radius_m: String(warnR) }))
+              }
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Latitude"><input type="number" step="any" className={inputCls} value={form.latitude} onChange={e => setForm({...form, latitude: e.target.value})} placeholder="25.2048" /></FormField>
             <FormField label="Longitude"><input type="number" step="any" className={inputCls} value={form.longitude} onChange={e => setForm({...form, longitude: e.target.value})} placeholder="55.2708" /></FormField>
@@ -1461,17 +1502,58 @@ function SitesPage({ navigate }: { navigate: (p: Page, param?: string) => void }
 
 // ─── Site Detail Page ─────────────────────────────────────────────────────────
 function SiteDetailPage({ siteId, navigate }: { siteId: string; navigate: (p: Page, param?: string) => void }) {
+  const { addToast } = useToast();
   const [site, setSite] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { sitesApi.get(siteId).then(setSite).catch(() => {}).finally(() => setLoading(false)); }, [siteId]);
+  const [editingGeo, setEditingGeo] = useState(false);
+  const [geoForm, setGeoForm] = useState({ latitude: '', longitude: '', geofence_radius_m: '100', geofence_warning_radius_m: '150' });
+  const [savingGeo, setSavingGeo] = useState(false);
+
+  const loadSite = useCallback(() => {
+    setLoading(true);
+    sitesApi.get(siteId).then(s => {
+      setSite(s);
+      setGeoForm({
+        latitude: s.latitude != null ? String(s.latitude) : '',
+        longitude: s.longitude != null ? String(s.longitude) : '',
+        geofence_radius_m: String(s.geofence_radius_m || 100),
+        geofence_warning_radius_m: String(s.geofence_warning_radius_m || 150),
+      });
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [siteId]);
+
+  useEffect(() => { loadSite(); }, [loadSite]);
+
+  async function saveGeofence(e: FormEvent) {
+    e.preventDefault();
+    setSavingGeo(true);
+    try {
+      const updated = await sitesApi.update(siteId, {
+        latitude: geoForm.latitude ? parseFloat(geoForm.latitude) : null,
+        longitude: geoForm.longitude ? parseFloat(geoForm.longitude) : null,
+        geofence_radius_m: parseInt(geoForm.geofence_radius_m) || 100,
+        geofence_warning_radius_m: parseInt(geoForm.geofence_warning_radius_m) || 150,
+      });
+      setSite(updated);
+      setEditingGeo(false);
+      addToast('success', 'Site map point & geofence updated');
+    } catch (err: any) { addToast('error', err.message); }
+    finally { setSavingGeo(false); }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><Spinner size={32} /></div>;
   if (!site) return <EmptyState icon={MapPin} title="Site not found" />;
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('sites')} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={20} /></button>
-        <h1 className="text-2xl font-bold text-gray-900">{site.name}</h1>
-        <Badge label={site.status} />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('sites')} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={20} /></button>
+          <h1 className="text-2xl font-bold text-gray-900">{site.name}</h1>
+          <Badge label={site.status} />
+        </div>
+        <button onClick={() => setEditingGeo(true)} className={btnSecondary}>
+          <MapPin size={15} /> Edit Map Point &amp; Geofence
+        </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-5">
@@ -1493,7 +1575,53 @@ function SiteDetailPage({ siteId, navigate }: { siteId: string; navigate: (p: Pa
           </div>
         </Card>
       </div>
+      {site.latitude && site.longitude ? (
+        <Card className="p-5">
+          <h3 className="font-semibold text-gray-800 mb-3">Attendance Geofence Map</h3>
+          <SiteGeofenceMap
+            readOnly
+            height="280px"
+            latitude={Number(site.latitude)}
+            longitude={Number(site.longitude)}
+            geofenceRadius={Number(site.geofence_radius_m || 100)}
+            warningRadius={Number(site.geofence_warning_radius_m || 150)}
+          />
+        </Card>
+      ) : (
+        <Card className="p-5 border-dashed border-amber-300 bg-amber-50/50 flex items-center justify-between gap-4">
+          <p className="text-sm text-amber-900">No map point set for this site yet. Drop a pin to enable GPS attendance geofencing.</p>
+          <button onClick={() => setEditingGeo(true)} className={btnPrimary}><MapPin size={14} /> Set Map Point</button>
+        </Card>
+      )}
       <button onClick={() => navigate('site-control', siteId)} className={cn(btnPrimary, 'w-full justify-center py-3')}><Activity size={16} />Open Site Control</button>
+
+      <Modal open={editingGeo} onClose={() => setEditingGeo(false)} title="Edit Site Map Point & Geofence">
+        <form onSubmit={saveGeofence} className="space-y-4">
+          <SiteGeofenceMap
+            height="270px"
+            latitude={geoForm.latitude ? parseFloat(geoForm.latitude) : null}
+            longitude={geoForm.longitude ? parseFloat(geoForm.longitude) : null}
+            geofenceRadius={parseInt(geoForm.geofence_radius_m) || 100}
+            warningRadius={parseInt(geoForm.geofence_warning_radius_m) || 150}
+            onChange={(lat, lng) => setGeoForm(prev => ({ ...prev, latitude: String(lat), longitude: String(lng) }))}
+            onRadiusChange={(validR, warnR) =>
+              setGeoForm(prev => ({ ...prev, geofence_radius_m: String(validR), geofence_warning_radius_m: String(warnR) }))
+            }
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Latitude"><input type="number" step="any" className={inputCls} value={geoForm.latitude} onChange={e => setGeoForm({ ...geoForm, latitude: e.target.value })} /></FormField>
+            <FormField label="Longitude"><input type="number" step="any" className={inputCls} value={geoForm.longitude} onChange={e => setGeoForm({ ...geoForm, longitude: e.target.value })} /></FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Valid Radius (m)"><input type="number" className={inputCls} value={geoForm.geofence_radius_m} onChange={e => setGeoForm({ ...geoForm, geofence_radius_m: e.target.value })} /></FormField>
+            <FormField label="Warning Radius (m)"><input type="number" className={inputCls} value={geoForm.geofence_warning_radius_m} onChange={e => setGeoForm({ ...geoForm, geofence_warning_radius_m: e.target.value })} /></FormField>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={savingGeo} className={btnPrimary}>{savingGeo ? <Spinner size={14} /> : 'Save Map Point'}</button>
+            <button type="button" onClick={() => setEditingGeo(false)} className={btnSecondary}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -1577,17 +1705,36 @@ function WorkersPage({ navigate }: { navigate: (p: Page, param?: string) => void
   const { selectedProject } = useProject();
   const { addToast } = useToast();
   const [workers, setWorkers] = useState<any[]>([]);
+  const [sites, setSites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: '', trade: '', employment_type: 'Permanent', nationality: '', phone: '', email: '', company_id: '', employee_id: '' });
+  const [form, setForm] = useState({
+    name: '',
+    trade: '',
+    employment_type: 'Permanent',
+    nationality: '',
+    phone: '',
+    email: '',
+    company_id: '',
+    employee_id: '',
+    site_id: '',
+    create_account: true,
+    username: '',
+    password: '',
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string,string> = {};
       if (selectedProject) params.project_id = selectedProject;
-      setWorkers(await workersApi.list(params));
+      const [wList, sList] = await Promise.all([
+        workersApi.list(params),
+        selectedProject ? sitesApi.list(selectedProject).catch(() => []) : Promise.resolve([]),
+      ]);
+      setWorkers(wList);
+      setSites(Array.isArray(sList) ? sList : []);
     } catch {} finally { setLoading(false); }
   }, [selectedProject]);
 
@@ -1598,9 +1745,17 @@ function WorkersPage({ navigate }: { navigate: (p: Page, param?: string) => void
   async function createWorker(e: FormEvent) {
     e.preventDefault();
     try {
-      await workersApi.create({ ...form, project_id: selectedProject });
-      addToast('success', 'Worker created');
+      await workersApi.create({
+        ...form,
+        project_id: selectedProject,
+        site_id: form.site_id || undefined,
+      });
+      addToast('success', form.create_account ? 'Employee registered with mobile login account' : 'Employee registered');
       setShowCreate(false);
+      setForm({
+        name: '', trade: '', employment_type: 'Permanent', nationality: '', phone: '', email: '',
+        company_id: '', employee_id: '', site_id: '', create_account: true, username: '', password: '',
+      });
       load();
     } catch (err: any) { addToast('error', err.message); }
   }
@@ -1608,8 +1763,11 @@ function WorkersPage({ navigate }: { navigate: (p: Page, param?: string) => void
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Workers</h1>
-        <button onClick={() => setShowCreate(true)} className={btnPrimary}><Plus size={16} />Add Worker</button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Employee Registration &amp; Workforce</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Register site employees, assign geofenced work sites, and issue mobile attendance logins.</p>
+        </div>
+        <button onClick={() => setShowCreate(true)} className={btnPrimary}><Plus size={16} />Register Employee</button>
       </div>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1648,24 +1806,54 @@ function WorkersPage({ navigate }: { navigate: (p: Page, param?: string) => void
           </div>
         </Card>
       )}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add Worker">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Register Employee">
         <form onSubmit={createWorker} className="space-y-3">
           <FormField label="Full Name" required><input className={inputCls} value={form.name} onChange={e => setForm({...form, name: e.target.value})} required /></FormField>
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Employee ID"><input className={inputCls} value={form.employee_id} onChange={e => setForm({...form, employee_id: e.target.value})} /></FormField>
+            <FormField label="Employee ID"><input className={inputCls} value={form.employee_id} onChange={e => setForm({...form, employee_id: e.target.value})} placeholder="EMP-104" /></FormField>
             <FormField label="Trade"><input className={inputCls} value={form.trade} onChange={e => setForm({...form, trade: e.target.value})} placeholder="Electrician, Plumber..." /></FormField>
           </div>
-          <FormField label="Employment Type">
-            <select className={selectCls} value={form.employment_type} onChange={e => setForm({...form, employment_type: e.target.value})}>
-              {['Permanent','Contract','Daily','Temporary'].map(t => <option key={t}>{t}</option>)}
-            </select>
-          </FormField>
           <div className="grid grid-cols-2 gap-3">
+            <FormField label="Employment Type">
+              <select className={selectCls} value={form.employment_type} onChange={e => setForm({...form, employment_type: e.target.value})}>
+                {['Permanent','Contract','Daily','Temporary'].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Assigned Site (Attendance)">
+              <select className={selectCls} value={form.site_id} onChange={e => setForm({...form, site_id: e.target.value})}>
+                <option value="">Any project site</option>
+                {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <FormField label="Phone"><input className={inputCls} value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></FormField>
+            <FormField label="Email"><input type="email" className={inputCls} value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></FormField>
             <FormField label="Nationality"><input className={inputCls} value={form.nationality} onChange={e => setForm({...form, nationality: e.target.value})} /></FormField>
           </div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 space-y-2.5">
+            <label className="flex items-center gap-2 text-xs font-semibold text-blue-900 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.create_account}
+                onChange={e => setForm({ ...form, create_account: e.target.checked })}
+                className="rounded border-blue-300 text-blue-600"
+              />
+              Create Mobile &amp; Site Attendance Login Account
+            </label>
+            {form.create_account && (
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Username" required>
+                  <input className={inputCls} value={form.username} onChange={e => setForm({...form, username: e.target.value})} placeholder="emp.name" required />
+                </FormField>
+                <FormField label="Password (min 6 chars)" required>
+                  <input type="password" minLength={6} className={inputCls} value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••" required />
+                </FormField>
+              </div>
+            )}
+          </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" className={btnPrimary}>Add Worker</button>
+            <button type="submit" className={btnPrimary}>Register Employee</button>
             <button type="button" onClick={() => setShowCreate(false)} className={btnSecondary}>Cancel</button>
           </div>
         </form>

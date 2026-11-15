@@ -194,7 +194,7 @@ export function registerWorkforceController(app: Express): void {
 
   app.post('/api/workers', authRequired, (req, res) => {
     if (!canEdit(req.user!, 'workers')) { res.status(403).json({ error: 'No edit access' }); return; }
-    const { project_id, site_id, company_id, user_id, name, employee_id, trade, employment_type, nationality, phone, email, supervisor_id, work_package_id } = req.body;
+    const { project_id, site_id, company_id, user_id, name, employee_id, trade, employment_type, nationality, phone, email, supervisor_id, work_package_id, create_account, username, password } = req.body;
     if (!name) { res.status(400).json({ error: 'name required' }); return; }
     if (project_id && !hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
 
@@ -213,12 +213,52 @@ export function registerWorkforceController(app: Express): void {
       }
     }
 
+    let linkedUserId = user_id || null;
+    if (create_account) {
+      const cleanUsername = String(username || '').trim();
+      const cleanPassword = String(password || '');
+      if (!cleanUsername || !cleanPassword) {
+        res.status(400).json({ error: 'username and password are required when creating a mobile login account' });
+        return;
+      }
+      if (cleanPassword.length < 6) {
+        res.status(400).json({ error: 'password must be at least 6 characters' });
+        return;
+      }
+      const existingUser = db.prepare('SELECT id FROM users WHERE username=?').get(cleanUsername);
+      if (existingUser) {
+        res.status(400).json({ error: 'A user with this username already exists' });
+        return;
+      }
+      linkedUserId = crypto.randomUUID();
+      const userNow = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO users (id, username, name, password_hash, role, email, phone, company_id, trade, work_package_id, status, created_at)
+        VALUES (?, ?, ?, ?, 'Worker', ?, ?, ?, ?, ?, 'Active', ?)
+      `).run(
+        linkedUserId,
+        cleanUsername,
+        String(name).trim(),
+        hashPassword(cleanPassword),
+        email ? String(email).trim() : null,
+        phone ? String(phone).trim() : null,
+        company_id || null,
+        trade || 'General MEP',
+        work_package_id || null,
+        userNow,
+      );
+      if (project_id) {
+        db.prepare('INSERT OR IGNORE INTO project_memberships (user_id, project_id, role, is_active) VALUES (?, ?, ?, 1)')
+          .run(linkedUserId, project_id, 'Worker');
+      }
+    }
+
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     db.prepare('INSERT INTO workers (id,project_id,site_id,company_id,user_id,name,employee_id,trade,employment_type,nationality,phone,email,supervisor_id,work_package_id,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .run(id, project_id||null, site_id||null, company_id||null, user_id||null, name, employee_id||null, trade||null, employment_type||'Permanent', nationality||null, phone||null, email||null, supervisor_id||null, work_package_id||null, 'Active', now);
-    if (user_id) db.prepare('UPDATE users SET worker_id=? WHERE id=?').run(id, user_id);
-    writeAudit(req.user!.user_id, 'workers', id, project_id||null, 'create', null, { name, company_id, site_id, work_package_id });
+      .run(id, project_id||null, site_id||null, company_id||null, linkedUserId, name, employee_id||null, trade||null, employment_type||'Permanent', nationality||null, phone||null, email||null, supervisor_id||null, work_package_id||null, 'Active', now);
+    if (linkedUserId) db.prepare('UPDATE users SET worker_id=? WHERE id=?').run(id, linkedUserId);
+    writeAudit(req.user!.user_id, 'workers', id, project_id||null, 'create', null, { name, company_id, site_id, work_package_id, create_account: !!create_account });
     res.status(201).json(db.prepare('SELECT * FROM workers WHERE id=?').get(id));
   });
 

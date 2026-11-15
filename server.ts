@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import path from "path";
 import { db, PORT } from "./server/db/connection";
 import { initDb } from "./server/db/schema";
@@ -21,6 +22,15 @@ async function startServer() {
   const app = express();
   configureAppMiddleware(app);
   registerAllServerRoutes(app);
+
+  app.get("/api/mobile/android-apk", (_req, res) => {
+    const apkPath = path.join(process.cwd(), "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
+    if (!fs.existsSync(apkPath)) {
+      res.status(404).json({ error: "Android APK not built yet. Run npm run mobile:build:android." });
+      return;
+    }
+    res.download(apkPath, "mep-fieldhub-android.apk");
+  });
 
   // Catch unmatched API routes - NEVER let API calls fall through to Vite SPA middleware
   app.all("/api/*", (req, res) => {

@@ -4,6 +4,7 @@ import {
   FileDown, Printer, Sparkles, Check, Layers, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { api } from '../api';
+import { exportFormalDocumentPdf } from '../utils/printDocument';
 
 interface FieldNotesAndSnagCreatorViewProps {
   projectId: string;
@@ -807,13 +808,45 @@ export function FieldNotesAndSnagCreatorView({
                 <AlertTriangle size={15} className="text-amber-500" />
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">Active Project Snag List ({punchItems.length})</h2>
               </div>
-              <button
-                type="button"
-                onClick={exportSnagCsv}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 no-print"
-              >
-                <FileDown size={13} /> Export CSV
-              </button>
+              <div className="flex items-center gap-2 no-print">
+                <button
+                  type="button"
+                  onClick={() =>
+                    exportFormalDocumentPdf({
+                      documentType: 'Field Snagging & Punch List',
+                      referenceCode: `SNAG-${new Date().toISOString().slice(0, 10)}`,
+                      title: `${activeProject?.name || 'Project'} — Snag List Register`,
+                      subtitle: 'Field Installation Snags & QA/QC Rectification Register',
+                      projectCode: activeProject?.name || projectId,
+                      status: `${punchItems.length} SNAGS`,
+                      columns: [
+                        { key: 'location', label: 'Location' },
+                        { key: 'discipline', label: 'Discipline' },
+                        { key: 'title', label: 'Snag Description' },
+                        { key: 'priority', label: 'Priority', align: 'center' },
+                        { key: 'status', label: 'Status', align: 'center' },
+                      ],
+                      rows: punchItems.map((p: any) => ({
+                        location: p.location || p.zone || 'General',
+                        discipline: p.discipline || 'MEP',
+                        title: p.title || p.description || 'Untitled Snag',
+                        priority: p.priority || 'Medium',
+                        status: p.status || 'Open',
+                      })),
+                    })
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-900"
+                >
+                  <Printer size={13} /> Export PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={exportSnagCsv}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200"
+                >
+                  <FileDown size={13} /> Export CSV
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
