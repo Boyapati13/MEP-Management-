@@ -1220,6 +1220,9 @@ export function seedData() {
   // rather than legacy synthetic data:image/svg+xml strings.
   try {
     db.exec(`
+      DELETE FROM documents WHERE name LIKE 'big_upload_%' OR LENGTH(attachment_data) > 15000000;
+    `);
+    db.exec(`
       UPDATE documents
       SET document_number = '2618-L-ACO-01',
           attachment_name = '2618-L-ACO-01.png',
@@ -1267,6 +1270,39 @@ export function seedData() {
       SET extracted_text = 'Drawing ' || COALESCE(document_number, 'DWG') || ' (' || COALESCE(revision, 'Rev A') || '): ' || name || ' — Roof Plant & Level 2 Mechanical HVAC Layout. Includes Eurovent certified Air Handling Units (AHUs), chilled water supply/return headers (1.5x hydrostatic test pressure = 15 bar), VRF condensing units, acoustic vibration isolators, motorised fire/smoke dampers, and BMS temperature/pressure sensors.'
       WHERE name LIKE '%M-HVAC-L2-001%' AND (extracted_text IS NULL OR extracted_text = '');
     `);
+
+    // Add supervisor columns to sites & workers for Admin -> Project Manager -> Site -> Site Supervisor -> Workers hierarchy
+    try { db.exec("ALTER TABLE sites ADD COLUMN supervisor_id TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE sites ADD COLUMN supervisor_name TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE workers ADD COLUMN supervisor_name TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE workers ADD COLUMN role_on_site TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_id TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_name TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE users ADD COLUMN created_by_admin TEXT;"); } catch {}
+    try { db.exec("ALTER TABLE users ADD COLUMN stakeholder_type TEXT;"); } catch {}
+
+    // Table for Our Company (Platform Owner) granting permission to Main Admins by Email ID
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS authorized_main_admins (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        admin_name TEXT NOT NULL,
+        company_name TEXT NOT NULL,
+        plan TEXT DEFAULT 'Enterprise',
+        status TEXT DEFAULT 'Authorized',
+        username TEXT,
+        user_id TEXT,
+        authorized_by TEXT DEFAULT 'Our Company (Platform Owner)',
+        notes TEXT,
+        created_at TEXT,
+        activated_at TEXT
+      );
+    `);
+
+    const hasBovProject = Boolean(db.prepare("SELECT 1 FROM projects WHERE id = 'bov-st-venera-2618'").get());
+    if (!hasBovProject) {
+      return;
+    }
 
     // Seed authentic Material Submittals for BOV St. Venera (bov-st-venera-2618) if none exist yet
     const bovSubCount = (db.prepare("SELECT COUNT(*) as c FROM submittals WHERE project_id = 'bov-st-venera-2618'").get() as any)?.c || 0;
@@ -1411,34 +1447,6 @@ export function seedData() {
           lead_time_weeks = COALESCE(lead_time_weeks, 6),
           extracted_text = COALESCE(extracted_text, 'Material Submittal ' || COALESCE(number, 'SUB') || ': ' || COALESCE(title, item, 'AHU Technical Submittal') || ' — Manufacturer: Daikin / Systemair, Model: Geniox 14 Eurovent Certified AHU, Drawing Ref: M-HVAC-L2-001, Spec: Sec 23 73 13, Status: ' || COALESCE(status, 'Approved'))
       WHERE manufacturer IS NULL;
-    `);
-
-    // Add supervisor columns to sites & workers for Admin -> Project Manager -> Site -> Site Supervisor -> Workers hierarchy
-    try { db.exec("ALTER TABLE sites ADD COLUMN supervisor_id TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE sites ADD COLUMN supervisor_name TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE workers ADD COLUMN supervisor_name TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE workers ADD COLUMN role_on_site TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_id TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE projects ADD COLUMN site_supervisor_name TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE users ADD COLUMN created_by_admin TEXT;"); } catch {}
-    try { db.exec("ALTER TABLE users ADD COLUMN stakeholder_type TEXT;"); } catch {}
-
-    // Table for Our Company (Platform Owner) granting permission to Main Admins by Email ID
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS authorized_main_admins (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        admin_name TEXT NOT NULL,
-        company_name TEXT NOT NULL,
-        plan TEXT DEFAULT 'Enterprise',
-        status TEXT DEFAULT 'Authorized',
-        username TEXT,
-        user_id TEXT,
-        authorized_by TEXT DEFAULT 'Our Company (Platform Owner)',
-        notes TEXT,
-        created_at TEXT,
-        activated_at TEXT
-      );
     `);
 
     // Seed Project Managers, Site Supervisors, Sites, and Workers for BOV St. Venera (bov-st-venera-2618) & enterprise hierarchy

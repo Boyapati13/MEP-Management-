@@ -648,6 +648,9 @@ export function registerCrudController(app: Express): void {
         data.created_at = data.created_at || new Date().toISOString();
       }
 
+      if (typeof data.attachment_data === "string" && data.attachment_data.length > 10 * 1024 * 1024) {
+        data.attachment_data = data.attachment_data.slice(0, 512);
+      }
       const values = cols.map(c => (c === "id" ? id : data[c] !== undefined ? data[c] : null));
       const placeholders = cols.map(() => "?").join(",");
       db.prepare(`INSERT INTO ${actualTable} (${cols.join(",")}) VALUES (${placeholders})`).run(...values);
