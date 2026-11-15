@@ -173,23 +173,42 @@ export function getProjectCopilotContext(projectId?: string, user?: Authenticate
     }
   }
 
-  // Handle portfolio level query ("all")
-  if (projectId === "all" || projectId === "ALL") {
-    const primaryProj = accessibleProjects.find(p => p.budget > 0 && !p.name.includes("Untitled")) || accessibleProjects[0];
-    return buildSingleProjectContext(primaryProj.id, accessibleProjects, user);
+  // Handle portfolio level query ("all" / "ALL" / omitted = Overall across all accessible projects)
+  if (!projectId || projectId === "all" || projectId === "ALL") {
+    return buildScopedProjectsContext(
+      accessibleProjects.map(p => p.id),
+      accessibleProjects,
+      user,
+      true
+    );
   }
 
-  // If no projectId specified, pick the best active project
-  if (!projectId) {
-    const bestProj = accessibleProjects.find(p => p.budget > 0 && !p.name.includes("Untitled")) || accessibleProjects[0];
-    projectId = bestProj.id;
-  }
-
-  return buildSingleProjectContext(projectId, accessibleProjects, user);
+  return buildScopedProjectsContext([projectId], accessibleProjects, user, false);
 }
 
-function buildSingleProjectContext(projectId: string, allProjects: any[], user?: AuthenticatedUser): CopilotProjectContext | null {
-  const project = safeGet("SELECT * FROM projects WHERE id = ?", projectId);
+function buildScopedProjectsContext(
+  projectIds: string[],
+  allProjects: any[],
+  user?: AuthenticatedUser,
+  isOverall = false
+): CopilotProjectContext | null {
+  if (!projectIds.length) return null;
+  const inClause = projectIds.map(() => "?").join(",");
+
+  const project = isOverall
+    ? {
+        id: "all",
+        name: `All Projects (${allProjects.length} Active)`,
+        code: "OVERALL",
+        client: `${allProjects.length} Projects Portfolio`,
+        main_contractor: "All Active Contractors",
+        consultant: "Portfolio-Wide",
+        budget: allProjects.reduce((sum, p) => sum + Number(p.budget || p.contract_value || 0), 0),
+        currency: allProjects[0]?.currency || "EUR",
+        status: "Active",
+        stage: "Portfolio Overall",
+      }
+    : safeGet("SELECT * FROM projects WHERE id = ?", projectIds[0]);
   if (!project) return null;
 
   // 1. Work packages
@@ -197,9 +216,9 @@ function buildSingleProjectContext(projectId: string, allProjects: any[], user?:
     SELECT wp.*, c.name as company_name
     FROM work_packages wp
     LEFT JOIN companies c ON wp.company_id = c.id
-    WHERE wp.project_id = ?
+    WHERE wp.project_id IN (${inClause})
     ORDER BY wp.created_at ASC
-  `, projectId);
+  `, ...projectIds);
   const workPackages = rawWorkPackages.map(wp => ({
     id: wp.id,
     name: wp.name,
@@ -217,129 +236,129 @@ function buildSingleProjectContext(projectId: string, allProjects: any[], user?:
   const boqAgg = safeGet(`
     SELECT COUNT(*) as cnt, COALESCE(SUM(tender_amount), 0) as total
     FROM boq_items
-    WHERE project_id = ?
-  `, projectId);
+    WHERE project_id IN (${inClause})
+  `, ...projectIds);
 
   const boqByDiscipline = safeAll(`
     SELECT COALESCE(discipline, 'General MEP') as discipline, COUNT(*) as count, COALESCE(SUM(tender_amount), 0) as total_amount
     FROM boq_items
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     GROUP BY discipline
     ORDER BY total_amount DESC
-  `, projectId);
+  `, ...projectIds);
 
   const sampleBoqItems = safeAll(`
     SELECT item_number, description, specification, unit, tender_quantity, tender_rate, tender_amount, discipline, system, area
     FROM boq_items
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY tender_amount DESC
     LIMIT 500
-  `, projectId);
+  `, ...projectIds);
 
   // 3. Change Orders / Variations
   const changeOrders = safeAll(`
     SELECT id, number, title, trade, reason, cost_impact, schedule_impact_days, date_raised, status
     FROM change_orders
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date_raised DESC
-    LIMIT 20
-  `, projectId);
+    LIMIT 40
+  `, ...projectIds);
 
   // 4. Purchase Orders
   const purchaseOrders = safeAll(`
     SELECT id, po_number, vendor, trade, description, amount, order_date, expected_delivery, status
     FROM purchase_orders
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY order_date DESC
-    LIMIT 20
-  `, projectId);
+    LIMIT 40
+  `, ...projectIds);
 
   // 5. Material Requests & Procurement Items
   const materialRequests = safeAll(`
     SELECT material, description, quantity, unit, required_date, status, discipline, specification, pr_number
     FROM material_requests
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY required_date ASC
-    LIMIT 15
-  `, projectId);
+    LIMIT 30
+  `, ...projectIds);
 
   const procurementItems = safeAll(`
     SELECT pr_number, material, quantity, unit, required_on_site, selected_supplier, po_number, status
     FROM procurement_items
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY required_on_site ASC
-    LIMIT 15
-  `, projectId);
+    LIMIT 30
+  `, ...projectIds);
 
   // 6. Documents & Drawings (including extracted text & drawing markups)
   const documents = safeAll(`
     SELECT id, document_number, name, category, discipline, revision, date_added, attachment_name, attachment_data, extracted_text, markup_data, status, visibility
     FROM documents
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date_added DESC
-    LIMIT 50
-  `, projectId);
+    LIMIT 100
+  `, ...projectIds);
 
   // 7. Tasks & Programme Schedule
-  const taskCount = safeGet("SELECT COUNT(*) as c FROM tasks WHERE project_id = ?", projectId);
+  const taskCount = safeGet(`SELECT COUNT(*) as c FROM tasks WHERE project_id IN (${inClause})`, ...projectIds);
   const tasksByStatus = safeAll(`
     SELECT status, COUNT(*) as count
     FROM tasks
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     GROUP BY status
-  `, projectId);
+  `, ...projectIds);
 
   const activeTasks = safeAll(`
     SELECT title, trade, assignee, start, end, progress, status, priority, wbs_code, drawing_ref, boq_ref
     FROM tasks
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY CASE WHEN status = 'In Progress' THEN 0 WHEN status = 'Not Started' THEN 1 ELSE 2 END, end ASC
-    LIMIT 35
-  `, projectId);
+    LIMIT 60
+  `, ...projectIds);
 
   // 8. Quality & Inspections
   const inspections = safeAll(`
     SELECT id, title, type, discipline, result, status, verified_progress, COALESCE(date, '2026-06-15') as date, COALESCE(inspector, 'Paul Camilleri') as inspector
     FROM inspections
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date DESC
-    LIMIT 20
-  `, projectId);
+    LIMIT 40
+  `, ...projectIds);
 
   const ncrs = safeAll(`
     SELECT id, number, description as title, root_cause, corrective_action, status, raised_date as date_issued
     FROM ncrs
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY raised_date DESC
-    LIMIT 10
-  `, projectId);
+    LIMIT 20
+  `, ...projectIds);
 
   // 9. Punch List / Snags
-  const punchAgg = safeGet("SELECT COUNT(*) as c FROM punchlist WHERE project_id = ?", projectId);
-  const punchOpen = safeGet("SELECT COUNT(*) as c FROM punchlist WHERE project_id = ? AND status != 'Closed'", projectId);
+  const punchAgg = safeGet(`SELECT COUNT(*) as c FROM punchlist WHERE project_id IN (${inClause})`, ...projectIds);
+  const punchOpen = safeGet(`SELECT COUNT(*) as c FROM punchlist WHERE project_id IN (${inClause}) AND status != 'Closed'`, ...projectIds);
   const punchByPriority = safeAll(`
     SELECT priority, COUNT(*) as count
     FROM punchlist
-    WHERE project_id = ? AND status != 'Closed'
+    WHERE project_id IN (${inClause}) AND status != 'Closed'
     GROUP BY priority
-  `, projectId);
+  `, ...projectIds);
 
   const openSnags = safeAll(`
     SELECT id, item, trade, location, priority, date_raised, status
     FROM punchlist
-    WHERE project_id = ? AND status != 'Closed'
+    WHERE project_id IN (${inClause}) AND status != 'Closed'
     ORDER BY CASE priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, date_raised DESC
-    LIMIT 15
-  `, projectId);
+    LIMIT 30
+  `, ...projectIds);
 
   // 10. RFIs & Material Submittals
   const rfis = safeAll(`
     SELECT id, number, subject, question, answer, trade, discipline, drawing_ref, date_raised, due_date, status
     FROM rfis
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date_raised DESC
-    LIMIT 25
-  `, projectId);
+    LIMIT 50
+  `, ...projectIds);
 
   const submittals = safeAll(`
     SELECT id, number, item, title, trade, subcontractor, spec_section,
@@ -348,72 +367,73 @@ function buildSingleProjectContext(projectId: string, allProjects: any[], user?:
            sample_submitted, country_of_origin, lead_time_weeks,
            attachment_name, description, extracted_text, date_submitted, due_date, status
     FROM submittals
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date_submitted DESC
-    LIMIT 40
-  `, projectId);
+    LIMIT 80
+  `, ...projectIds);
 
   // 11. Daily Logs & Site Updates
   const dailyLogs = safeAll(`
     SELECT id, date, weather, progress_summary, issues, headcount
     FROM dailylogs
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date DESC
-    LIMIT 10
-  `, projectId);
+    LIMIT 20
+  `, ...projectIds);
 
   // 12. Safety Incidents
   const safetyIncidents = safeAll(`
     SELECT date, trade, incident_type, severity, description, corrective_action, status
     FROM safety_incidents
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY date DESC
-    LIMIT 10
-  `, projectId);
+    LIMIT 20
+  `, ...projectIds);
 
   // 13. Progress Reports
   const progressReports = safeAll(`
     SELECT id, report_number, report_no, reporting_date, overall_progress, status
     FROM progress_reports
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY reporting_date DESC
-    LIMIT 5
-  `, projectId);
+    LIMIT 10
+  `, ...projectIds);
 
   // 14. Governance: Risks, Actions & Decisions
   const risks = safeAll(`
     SELECT risk_no, title, category, probability, impact, risk_score, risk_level, mitigation, status
     FROM risks
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY risk_score DESC
-    LIMIT 10
-  `, projectId);
+    LIMIT 20
+  `, ...projectIds);
 
   const actions = safeAll(`
     SELECT action_no, title, assigned_to_name, priority, status, due_date
     FROM project_actions
-    WHERE project_id = ? AND status != 'Completed'
-    LIMIT 10
-  `, projectId);
+    WHERE project_id IN (${inClause}) AND status != 'Completed'
+    LIMIT 20
+  `, ...projectIds);
 
   const decisions = safeAll(`
     SELECT decision_no, title, decision_taken, decided_by, decision_date
     FROM project_decisions
-    WHERE project_id = ?
+    WHERE project_id IN (${inClause})
     ORDER BY decision_date DESC
-    LIMIT 10
-  `, projectId);
+    LIMIT 20
+  `, ...projectIds);
 
   // 15. Workforce Today (role-scoped based on logged-in user)
   const today = new Date().toISOString().split("T")[0];
   let workforceSql = `
-    SELECT a.*, s.name as site_name, w.trade as worker_trade, w.company_id as worker_company_id
+    SELECT a.*, s.name as site_name, p.name as project_name, w.trade as worker_trade, w.company_id as worker_company_id
     FROM attendance a
     LEFT JOIN sites s ON s.id = a.site_id
+    LEFT JOIN projects p ON p.id = a.project_id
     LEFT JOIN workers w ON w.id = a.worker_id
-    WHERE a.project_id = ? AND (a.work_date = ? OR a.date = ?)
+    WHERE a.project_id IN (${inClause}) AND (a.work_date = ? OR a.date = ?)
   `;
-  const workforceParams: any[] = [projectId, today, today];
+  const workforceParams: any[] = [...projectIds, today, today];
   if (user?.role === "Subcontractor" && user.company_id) {
     workforceSql += ` AND w.company_id = ?`;
     workforceParams.push(user.company_id);
@@ -1315,9 +1335,13 @@ export async function answerCopilotQuestion(
   }
 
   const p = projectContext.project;
-  // Also ensure the resolved project's documents are extracted if requestedProjectId was omitted or 'all'
-  await ensureProjectDocumentsExtracted(p.id);
-  const refreshedContext = getProjectCopilotContext(p.id, user, userQuery) || projectContext;
+  // Also ensure the resolved project's documents are extracted if a single project was resolved
+  if (p.id !== "all") {
+    await ensureProjectDocumentsExtracted(p.id);
+  }
+  const refreshedContext = p.id === "all"
+    ? projectContext
+    : (getProjectCopilotContext(p.id, user, userQuery) || projectContext);
   const searchResults = searchDocumentsAndDrawings(userQuery, refreshedContext);
 
   const apiKey = process.env.GEMINI_API_KEY;
