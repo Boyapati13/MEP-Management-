@@ -371,6 +371,7 @@ export const copilotApi = {
     quick_facts?: any;
     suggested_followups?: string[];
     model_used?: string;
+    cited_sources?: Array<{ type: 'document' | 'drawing' | 'submittal' | 'rfi' | 'boq'; title: string; ref?: string }>;
   }>('/api/ai/chat', data),
   getContext: (projectId?: string) =>
     api.get<any>(`/api/ai/copilot/context${projectId ? `?project_id=${projectId}` : ''}`),

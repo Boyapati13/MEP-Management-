@@ -174,7 +174,7 @@ export const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete
     ],
     edit: [
       "costs", "budget", "change_orders", "purchase_orders",
-      "procurement", "material_requests", "risks", "handover", "documents",
+      "procurement", "material_requests", "risks", "handover", "documents", "submittals",
       "companies", "work_packages", "clarifications", "progress_reports", "transmittals", "progress_submissions",
       "payroll_periods", "payroll_entries", "payroll_profiles", "project_updates",
       "project_actions", "project_decisions"
@@ -191,7 +191,7 @@ export const ROLE_PERMS: Record<string, { view: string[]; edit: string[]; delete
     ],
     edit: [
       "punchlist", "inspections", "ncrs", "commissioning",
-      "handover", "documents",
+      "handover", "documents", "submittals",
       "clarifications", "transmittals", "project_updates",
       "project_actions", "project_decisions"
     ],
@@ -303,7 +303,14 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
     module: "rfis",
   },
   submittals: {
-    cols: ["id", "project_id", "number", "item", "title", "trade", "subcontractor", "spec_section", "date_submitted", "due_date", "status", "work_package_id", "company_id"],
+    cols: [
+      "id", "project_id", "number", "item", "title", "trade", "subcontractor", "spec_section",
+      "manufacturer", "model_no", "supplier", "drawing_ref", "boq_ref", "revision",
+      "approval_code", "consultant_comments", "reviewed_by", "reviewed_date",
+      "sample_submitted", "country_of_origin", "lead_time_weeks",
+      "attachment_name", "attachment_data", "description", "extracted_text",
+      "date_submitted", "due_date", "status", "work_package_id", "company_id"
+    ],
     module: "submittals",
   },
   punchlist: {
@@ -319,11 +326,11 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
     module: "dailylogs",
   },
   documents: {
-    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "subcontractor_id", "uploaded_by", "markup_data", "visibility", "published_by", "published_at", "work_package_id", "status", "document_number", "discipline"],
+    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "extracted_text", "subcontractor_id", "uploaded_by", "markup_data", "visibility", "published_by", "published_at", "work_package_id", "status", "document_number", "discipline"],
     module: "documents",
   },
   drawings: {
-    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "subcontractor_id", "uploaded_by", "markup_data", "visibility", "published_by", "published_at", "work_package_id", "status", "document_number", "discipline"],
+    cols: ["id", "project_id", "name", "category", "revision", "date_added", "attachment_name", "attachment_data", "extracted_text", "subcontractor_id", "uploaded_by", "markup_data", "visibility", "published_by", "published_at", "work_package_id", "status", "document_number", "discipline"],
     module: "documents",
   },
   costs: {
@@ -495,13 +502,16 @@ export const TABLE_CONFIG: Record<string, { cols: string[]; module: string }> = 
 
 export const WORKFLOW_STATUSES: Record<string, Record<string, string[]>> = {
   submittals: {
-    Draft: ["Submitted"],
-    Submitted: ["Under Review"],
-    "Under Review": ["Approved", "Approved With Comments", "Revise and Resubmit", "Rejected"],
-    Approved: ["Closed"],
-    "Approved With Comments": ["Closed"],
-    "Revise and Resubmit": ["Submitted"],
-    Rejected: ["Draft"],
+    Draft: ["Submitted", "Under Review", "Approved", "Approved with Comments", "Approved With Comments", "Revise & Resubmit", "Revise and Resubmit", "Rejected"],
+    Submitted: ["Under Review", "Approved", "Approved with Comments", "Approved With Comments", "Revise & Resubmit", "Revise and Resubmit", "Rejected", "Closed"],
+    "Under Review": ["Approved", "Approved with Comments", "Approved With Comments", "Revise & Resubmit", "Revise and Resubmit", "Rejected", "Closed"],
+    Approved: ["Closed", "Revise & Resubmit", "Under Review"],
+    "Approved with Comments": ["Closed", "Approved", "Revise & Resubmit", "Under Review"],
+    "Approved With Comments": ["Closed", "Approved", "Revise & Resubmit", "Under Review"],
+    "Revise & Resubmit": ["Submitted", "Under Review", "Approved", "Approved with Comments", "Draft"],
+    "Revise and Resubmit": ["Submitted", "Under Review", "Approved", "Approved with Comments", "Draft"],
+    Rejected: ["Draft", "Submitted", "Under Review"],
+    Closed: ["Under Review"],
   },
   change_orders: {
     "Potential Variation": ["Under Preparation", "Rejected"],

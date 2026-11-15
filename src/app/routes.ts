@@ -129,6 +129,7 @@ export const ROUTE_ITEMS: RouteItem[] = [
   { id: 'dashboard', label: 'Executive Control Tower', icon: LayoutDashboard, domain: 'dashboard' },
   { id: 'projects', label: 'Projects Portfolio', icon: Briefcase, domain: 'dashboard' },
   { id: 'project-detail', label: 'Work Packages & WBS', icon: Layers, domain: 'dashboard' },
+  { id: 'material-submittals', label: 'Material Submittals', icon: FileCheck2, domain: 'dashboard' },
 
   // Pillar 1: Commercial & Financial Control
   { id: 'boq', label: 'BOQ & Job Costing', icon: FileSpreadsheet, domain: 'commercial', allowedRoles: ['Admin', 'ProjectManager', 'CommercialManager'] },

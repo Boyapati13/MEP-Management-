@@ -2,9 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles, Send, X, Loader2, ShieldCheck, DollarSign, Package,
   AlertTriangle, FileText, Users, Calendar, Copy, Check, RotateCcw,
-  Building2, ChevronDown, ArrowRight, CornerDownLeft, Bot, User
+  Building2, ChevronDown, ArrowRight, CornerDownLeft, Bot, User, FileCheck2, Layers
 } from 'lucide-react';
 import { copilotApi } from '../api';
+
+interface CitedSource {
+  type: 'document' | 'drawing' | 'submittal' | 'rfi' | 'boq';
+  title: string;
+  ref?: string;
+}
 
 interface Message {
   id: string;
@@ -13,6 +19,7 @@ interface Message {
   timestamp: string;
   suggestedFollowups?: string[];
   modelUsed?: string;
+  citedSources?: CitedSource[];
 }
 
 interface Props {
@@ -21,6 +28,8 @@ interface Props {
   projectId?: string;
   projects?: any[];
   onSelectProject?: (id: string) => void;
+  initialPrompt?: string;
+  onPromptConsumed?: () => void;
 }
 
 export function MepAssistantDrawer({
@@ -29,6 +38,8 @@ export function MepAssistantDrawer({
   projectId,
   projects = [],
   onSelectProject,
+  initialPrompt,
+  onPromptConsumed,
 }: Props) {
   const [activeProjectId, setActiveProjectId] = useState<string>(projectId || '');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -79,18 +90,29 @@ export function MepAssistantDrawer({
         {
           id: 'welcome',
           role: 'assistant',
-          text: `👋 **Welcome to the MEP Project Copilot!**\n\nI have complete, live access to all records for **${activeProjName}**, including:\n- 💰 **Contract value, budget & trade BOQ breakdowns**\n- 📦 **Work packages, disciplines & subcontractor allocations**\n- ⚠️ **Open snags, punch list defects & high-severity risks**\n- 📑 **Uploaded contracts, tender agreements & drawings**\n- 📅 **Programme tasks, milestones & handover schedules**\n- 👷 **Live workforce attendance & on-site presence**\n\nAsk me any specific question below, or select one of the suggested prompts to get started.`,
+          text: `👋 **Welcome to the MEP Project Copilot!**\n\nI am grounded directly in the uploaded **CAD Drawings, Technical Specifications, DB Schedules, Material Submittals, and BOQ** for **${activeProjName}**:\n- 📐 **CAD Drawings & DB Schedules** (\`2618-S-ELE-01\`, \`2618-L-LTG-01\`, \`DB1\`, \`UP1\`, \`DB2\`, \`UP2\`)\n- 📋 **Material & Equipment Submittals** (Consultant approval codes, manufacturers, models & spec sections)\n- 📑 **Tender Specifications & PDFs** (Enser Ltd full technical spec & master programme)\n- 💰 **Contract value, budget & trade BOQ breakdowns**\n- ⚠️ **Open RFIs, snags, punch list defects & programme tasks**\n\nAsk me any question about a drawing, circuit schedule, cable specification, or material submittal below!`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           suggestedFollowups: [
+            "What do the drawings and DB schedules (DB1, UP1, 2618-L-LTG-01) specify?",
+            "What is the status of all Material Submittals and approval codes?",
             "What is the total budget and trade breakdown?",
-            "List all work packages and assigned subcontractors",
-            "What open punch list snags require attention?",
-            "What documents and BOQs are on file?",
+            "What documents, drawings, and specifications are indexed?",
           ]
         }
       ]);
     }
   }, [open, activeProjectId, projectFacts]);
+
+  // Handle initialPrompt passed when opening Copilot from Material Submittals or Drawings
+  useEffect(() => {
+    if (open && initialPrompt && !loading) {
+      const promptToRun = initialPrompt;
+      if (onPromptConsumed) onPromptConsumed();
+      setTimeout(() => {
+        handleSend(promptToRun);
+      }, 100);
+    }
+  }, [open, initialPrompt]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -176,6 +198,7 @@ export function MepAssistantDrawer({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedFollowups: res?.suggested_followups,
         modelUsed: res?.model_used,
+        citedSources: Array.isArray(res?.cited_sources) ? res.cited_sources : undefined,
       };
 
       setMessages(prev => [...prev, assistantMsg]);
@@ -207,12 +230,12 @@ export function MepAssistantDrawer({
       {
         id: 'welcome-new',
         role: 'assistant',
-        text: `Conversation cleared. Ready for your questions about **${activeProjName}**!`,
+        text: `Conversation cleared. Ready for your questions about **${activeProjName}** drawings, specifications, material submittals, and BOQ!`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedFollowups: [
+          "What do the drawings and DB schedules (DB1, UP1, 2618-L-LTG-01) specify?",
+          "What is the status of all Material Submittals and approval codes?",
           "What is the total budget and trade breakdown?",
-          "List all work packages and assigned subcontractors",
-          "What open punch list snags require attention?",
         ]
       }
     ]);
@@ -220,14 +243,13 @@ export function MepAssistantDrawer({
 
   // Quick prompt chips
   const QUICK_PROMPTS = [
-    { label: "📊 Summary", q: "Summarize this project status, budget, schedule, and key metrics." },
+    { label: "📐 Drawings & DBs", q: "What do the drawings and DB schedules (2618-S-ELE-01, 2618-L-LTG-01, DB1, UP1) specify for this project?" },
+    { label: "📋 Submittals", q: "Show all Material Submittals, their manufacturers, model numbers, spec sections, and consultant approval codes." },
+    { label: "📑 Docs & Specs", q: "What contracts, tender specifications, or drawings have been uploaded and indexed for this project?" },
     { label: "💰 Budget & BOQ", q: "What is the total project budget, contract value, and trade BOQ breakdown?" },
-    { label: "📦 Work Packages", q: "List all work packages, their scopes, budgets, and assigned subcontractors." },
+    { label: "📊 Summary", q: "Summarize this project status, budget, schedule, and key metrics." },
     { label: "⚠️ Open Snags", q: "What open punch list defects require attention? Show urgent and high-priority items." },
-    { label: "📑 Documents", q: "What contracts, tender documents, or drawings have been uploaded for this project?" },
     { label: "📅 Schedule", q: "What are the start date, target handover date, and current task milestones?" },
-    { label: "👷 Workforce", q: "Who is on site today and what trades are currently active?" },
-    { label: "🚚 Procurement", q: "What material requests and procurement items are pending on site?" },
   ];
 
   // Helper to render basic markdown formatting: headers, bold, bullet points, inline code
@@ -251,13 +273,13 @@ export function MepAssistantDrawer({
 
       // Headers
       if (line.startsWith('#### ')) {
-        return <h4 key={idx} className="font-bold text-slate-900 text-xs uppercase tracking-wider mt-3 mb-1">{line.slice(5)}</h4>;
+        return <h4 key={idx} className="font-bold text-slate-900 text-xs uppercase tracking-wider mt-3 mb-1">{formatInline(line.slice(5))}</h4>;
       }
       if (line.startsWith('### ')) {
-        return <h3 key={idx} className="font-bold text-slate-900 text-sm mt-3 mb-1 flex items-center gap-1.5">{line.slice(4)}</h3>;
+        return <h3 key={idx} className="font-bold text-slate-900 text-sm mt-3 mb-1 flex items-center gap-1.5 flex-wrap">{formatInline(line.slice(4))}</h3>;
       }
       if (line.startsWith('## ')) {
-        return <h2 key={idx} className="font-bold text-slate-900 text-base mt-4 mb-2">{line.slice(3)}</h2>;
+        return <h2 key={idx} className="font-bold text-slate-900 text-base mt-4 mb-2">{formatInline(line.slice(3))}</h2>;
       }
 
       // Bullet points
@@ -411,20 +433,20 @@ export function MepAssistantDrawer({
           {projectFacts && (
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-[11px]">
               <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-0.5 text-slate-700 flex-shrink-0 shadow-2xs">
+                <FileText size={12} className="text-purple-600" />
+                <span className="font-semibold">{(projectFacts.documents_count || 0) + (projectFacts.drawings_count || 0)} Docs &amp; Drawings</span>
+              </div>
+              <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-0.5 text-slate-700 flex-shrink-0 shadow-2xs">
+                <FileCheck2 size={12} className="text-blue-600" />
+                <span className="font-semibold">{projectFacts.submittals_count || 0} Submittals</span>
+              </div>
+              <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-0.5 text-slate-700 flex-shrink-0 shadow-2xs">
                 <DollarSign size={12} className="text-emerald-600" />
                 <span className="font-semibold">{projectFacts.currency} {Number(projectFacts.budget || 0).toLocaleString()}</span>
               </div>
               <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-0.5 text-slate-700 flex-shrink-0 shadow-2xs">
-                <Package size={12} className="text-blue-600" />
-                <span>{projectFacts.work_packages_count || 0} Packages</span>
-              </div>
-              <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-0.5 text-slate-700 flex-shrink-0 shadow-2xs">
                 <AlertTriangle size={12} className="text-amber-600" />
                 <span>{projectFacts.open_snags_count || 0} Open Snags</span>
-              </div>
-              <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-md px-2 py-0.5 text-slate-700 flex-shrink-0 shadow-2xs">
-                <FileText size={12} className="text-purple-600" />
-                <span>{projectFacts.documents_count || 0} Files</span>
               </div>
             </div>
           )}
@@ -471,6 +493,26 @@ export function MepAssistantDrawer({
                   <div className="text-xs leading-relaxed whitespace-pre-wrap">
                     {isUser ? msg.text : renderMarkdown(msg.text)}
                   </div>
+
+                  {/* Cited Documents, Drawings & Material Submittals */}
+                  {!isUser && msg.citedSources && msg.citedSources.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-slate-100">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
+                        <Layers size={11} className="text-blue-600" /> Grounded Sources ({msg.citedSources.length}):
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {msg.citedSources.slice(0, 6).map((src, sIdx) => (
+                          <span
+                            key={sIdx}
+                            className="inline-flex items-center gap-1 text-[10px] font-medium bg-slate-50 text-slate-700 border border-slate-200 rounded-md px-2 py-0.5"
+                          >
+                            <span className="font-mono font-bold text-blue-700">{src.ref || src.type.toUpperCase()}</span>
+                            <span className="truncate max-w-[180px]">{src.title}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Context-aware follow-up suggestion chips */}
                   {!isUser && msg.suggestedFollowups && msg.suggestedFollowups.length > 0 && (

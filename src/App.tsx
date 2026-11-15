@@ -14,7 +14,7 @@ import {
   ThumbsUp, ThumbsDown, Coffee, Plane, Stethoscope, Star,
   ChevronLeft, Upload, Map, Cpu, Package, HardHat, Grid,
   PieChart, Sun, Moon, ChevronUp, Pin, Image as ImageIcon, CheckSquare, Folder, Trash2,
-  Smartphone, Sparkles
+  Smartphone, Sparkles, FileCheck2
 } from 'lucide-react';
 import {
   api, authApi, sitesApi, workersApi, workforceApi, attendanceApi,
@@ -50,6 +50,7 @@ import { CreateProjectModal } from './components/CreateProjectModal';
 import { ProjectDocumentsSection } from './components/ProjectDocumentsSection';
 import { SelectionsManagerView } from './components/SelectionsManagerView';
 import { ProjectMessagesPage } from './components/ProjectMessagesPage';
+import { MaterialSubmittalsView } from './components/MaterialSubmittalsView';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 interface AuthCtx {
@@ -715,7 +716,7 @@ type Page =
   | 'payroll' | 'payroll-detail'
   | 'punch-clock'
   // V1.4.1 Domains & Consolidations
-  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist' | 'field-notes';
+  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist' | 'field-notes' | 'submittals' | 'material-submittals';
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -724,11 +725,13 @@ function AppShell() {
   const [pageParam, setPageParam] = useState<string>('');
   const [activeDomain, setActiveDomain] = useState<NavigationDomain>('dashboard');
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [initialCopilotPrompt, setInitialCopilotPrompt] = useState<string | undefined>(undefined);
   const { addToast } = useToast();
 
   useEffect(() => {
     const handler = (e: any) => {
       if (e.detail?.projectId) setSelectedProject(e.detail.projectId);
+      if (e.detail?.prompt) setInitialCopilotPrompt(e.detail.prompt);
       setAssistantOpen(true);
     };
     window.addEventListener('open-copilot', handler);
@@ -792,6 +795,8 @@ function AppShell() {
       case 'punch-clock': return <PunchClockPage />;
       case 'setup-checklist': return <div className="space-y-6"><AdminSetupChecklist projectId={selectedProject} onNavigate={(r) => navigate(r as Page)} /></div>;
       case 'field-notes': return <FieldNotesAndSnagCreatorView projectId={selectedProject} projects={projects} user={user} addToast={addToast} onNavigate={(r) => navigate(r as Page)} />;
+      case 'submittals':
+      case 'material-submittals': return <MaterialSubmittalsView projectId={selectedProject} projects={projects} user={user} onSubmittalsChanged={reload} />;
       case 'site-quality': return <EnterpriseModulesView page="inspections" selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
       default: return <EnterpriseModulesView page={page} selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
     }
@@ -835,6 +840,8 @@ function AppShell() {
           projectId={selectedProject || undefined}
           projects={projects}
           onSelectProject={setSelectedProject}
+          initialPrompt={initialCopilotPrompt}
+          onPromptConsumed={() => setInitialCopilotPrompt(undefined)}
         />
       </>
     );
@@ -864,6 +871,8 @@ function AppShell() {
           projectId={selectedProject || undefined}
           projects={projects}
           onSelectProject={setSelectedProject}
+          initialPrompt={initialCopilotPrompt}
+          onPromptConsumed={() => setInitialCopilotPrompt(undefined)}
         />
       </>
     );
@@ -893,6 +902,8 @@ function AppShell() {
         projectId={selectedProject || undefined}
         projects={projects}
         onSelectProject={setSelectedProject}
+        initialPrompt={initialCopilotPrompt}
+        onPromptConsumed={() => setInitialCopilotPrompt(undefined)}
       />
     </>
   );
@@ -3452,7 +3463,7 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
   const [project, setProject] = useState<any | null>(null);
   const [feed, setFeed] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'documents' | 'feed' | 'tasks' | 'actions' | 'decisions' | 'team'>('master');
+  const [activeTab, setActiveTab] = useState<'master' | 'overview' | 'submittals' | 'documents' | 'feed' | 'tasks' | 'actions' | 'decisions' | 'team'>('master');
   const [showRiskMatrix, setShowRiskMatrix] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -3695,10 +3706,11 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
       <div className="flex gap-1 border-b border-slate-200 overflow-x-auto no-scrollbar">
         {[
           { id: 'master', label: 'Hierarchy', icon: Layers },
+          { id: 'submittals', label: 'Material Submittals', icon: FileCheck2 },
+          { id: 'documents', label: 'Documents & Drawings', icon: Folder },
           { id: 'overview', label: 'Overview', icon: Briefcase },
           { id: 'tasks', label: 'Tasks', count: tasks.length, icon: CheckSquare },
           { id: 'feed', label: 'Live feed', count: feed.length, icon: TrendingUp },
-          { id: 'documents', label: 'Documents', icon: Folder },
           { id: 'actions', label: 'Actions', icon: AlertCircle },
           { id: 'decisions', label: 'Decisions', icon: Shield },
           { id: 'team', label: 'Team', icon: Users },
@@ -3773,6 +3785,16 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
             </div>
           </Card>
         </div>
+      )}
+
+      {/* Tab: Material Submittals */}
+      {activeTab === 'submittals' && (
+        <MaterialSubmittalsView
+          projectId={activeProjectId}
+          projects={projects}
+          user={user}
+          onSubmittalsChanged={loadProjectDetails}
+        />
       )}
 
       {/* Tab: Documents & Contract */}

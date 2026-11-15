@@ -1004,10 +1004,29 @@ Provide a structured list of at least 3-5 verified locations/suppliers including
         boq_total_amount: ctx.boqSummary.totalAmount,
         open_snags_count: ctx.punchlist.openCount,
         documents_count: ctx.documents.length,
+        submittals_count: ctx.submittals.length,
         tasks_count: ctx.tasks.total,
         risks_count: ctx.risks.length,
         workforce_today_count: ctx.workforceToday.length,
         disciplines: ctx.boqSummary.byDiscipline.map(d => d.discipline),
+        documents_list: ctx.documents.slice(0, 16).map(d => ({
+          id: d.id,
+          code: d.document_number || d.category || "DOC",
+          name: d.name || d.attachment_name,
+          category: d.category,
+          discipline: d.discipline,
+          revision: d.revision,
+        })),
+        submittals_list: ctx.submittals.slice(0, 12).map(s => ({
+          id: s.id,
+          number: s.number || "SUB",
+          title: s.title || s.item,
+          manufacturer: s.manufacturer,
+          model_no: s.model_no,
+          drawing_ref: s.drawing_ref,
+          approval_code: s.approval_code || s.status,
+          status: s.status,
+        })),
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

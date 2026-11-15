@@ -2,6 +2,17 @@ import { GoogleGenAI } from "@google/genai";
 import { db } from "../db/connection";
 import { AuthenticatedUser } from "../middleware/auth";
 import { MEP_REFERENCE_KNOWLEDGE } from "../../mep_brain";
+import { extractDocumentText } from "./documentParserService";
+
+export interface CitedSource {
+  type: "drawing" | "document" | "submittal" | "rfi" | "boq";
+  code: string;
+  title: string;
+  revision?: string;
+  status?: string;
+  discipline?: string;
+  excerpt?: string;
+}
 
 export interface CopilotProjectContext {
   project: any;
@@ -218,11 +229,11 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
   `, projectId);
 
   const sampleBoqItems = safeAll(`
-    SELECT item_number, description, unit, tender_quantity, tender_rate, tender_amount, discipline, system, area
+    SELECT item_number, description, specification, unit, tender_quantity, tender_rate, tender_amount, discipline, system, area
     FROM boq_items
     WHERE project_id = ?
     ORDER BY tender_amount DESC
-    LIMIT 15
+    LIMIT 60
   `, projectId);
 
   // 3. Change Orders / Variations
@@ -260,13 +271,13 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
     LIMIT 15
   `, projectId);
 
-  // 6. Documents & Drawings
+  // 6. Documents & Drawings (including extracted text & drawing markups)
   const documents = safeAll(`
-    SELECT id, name, category, revision, date_added, attachment_name, status, visibility
+    SELECT id, document_number, name, category, discipline, revision, date_added, attachment_name, attachment_data, extracted_text, markup_data, status, visibility
     FROM documents
     WHERE project_id = ?
     ORDER BY date_added DESC
-    LIMIT 25
+    LIMIT 50
   `, projectId);
 
   // 7. Tasks & Programme Schedule
@@ -279,11 +290,11 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
   `, projectId);
 
   const activeTasks = safeAll(`
-    SELECT title, trade, assignee, start, end, progress, status, priority, wbs_code
+    SELECT title, trade, assignee, start, end, progress, status, priority, wbs_code, drawing_ref, boq_ref
     FROM tasks
     WHERE project_id = ?
     ORDER BY CASE WHEN status = 'In Progress' THEN 0 WHEN status = 'Not Started' THEN 1 ELSE 2 END, end ASC
-    LIMIT 25
+    LIMIT 35
   `, projectId);
 
   // 8. Quality & Inspections
@@ -321,21 +332,25 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
     LIMIT 15
   `, projectId);
 
-  // 10. RFIs & Submittals
+  // 10. RFIs & Material Submittals
   const rfis = safeAll(`
-    SELECT number, subject, trade, date_raised, due_date, status, answer
+    SELECT id, number, subject, question, answer, trade, discipline, drawing_ref, date_raised, due_date, status
     FROM rfis
     WHERE project_id = ?
     ORDER BY date_raised DESC
-    LIMIT 15
+    LIMIT 25
   `, projectId);
 
   const submittals = safeAll(`
-    SELECT submittal_number, title, specification_section, review_status, date_submitted, subcontractor_company
+    SELECT id, number, item, title, trade, subcontractor, spec_section,
+           manufacturer, model_no, supplier, drawing_ref, boq_ref, revision,
+           approval_code, consultant_comments, reviewed_by, reviewed_date,
+           sample_submitted, country_of_origin, lead_time_weeks,
+           attachment_name, description, extracted_text, date_submitted, due_date, status
     FROM submittals
     WHERE project_id = ?
     ORDER BY date_submitted DESC
-    LIMIT 15
+    LIMIT 40
   `, projectId);
 
   // 11. Daily Logs & Site Updates
@@ -437,6 +452,277 @@ function buildSingleProjectContext(projectId: string, allProjects: any[]): Copil
   };
 }
 
+/**
+ * Ensures any project documents or submittals with readable file attachments (PDF, DOCX, XLSX, CSV, TXT, or local /original_drawings/*.pdf)
+ * have their full text extracted and cached in SQLite `extracted_text` so Copilot can answer directly from them.
+ */
+export async function ensureProjectDocumentsExtracted(projectId?: string): Promise<void> {
+  try {
+    const docsToExtract = projectId
+      ? safeAll(
+          `SELECT id, name, document_number, category, discipline, revision, attachment_name, attachment_data, markup_data
+           FROM documents
+           WHERE project_id = ? AND (extracted_text IS NULL OR extracted_text = '')`,
+          projectId
+        )
+      : safeAll(
+          `SELECT id, name, document_number, category, discipline, revision, attachment_name, attachment_data, markup_data
+           FROM documents
+           WHERE extracted_text IS NULL OR extracted_text = ''
+           LIMIT 30`
+        );
+
+    for (const d of docsToExtract) {
+      let textOut = "";
+      if (d.attachment_data || d.attachment_name) {
+        const res = await extractDocumentText(d.attachment_data || "", d.attachment_name || d.name || "").catch(() => null);
+        if (res && res.kind === "text" && res.text.trim().length > 0) {
+          textOut = res.text.trim().slice(0, 120000);
+        }
+      }
+      if (!textOut) {
+        // Synthesize structured drawing/document intelligence from metadata + markup_data
+        let markupSummary = "";
+        if (d.markup_data) {
+          try {
+            const parsed = typeof d.markup_data === "string" ? JSON.parse(d.markup_data) : d.markup_data;
+            if (Array.isArray(parsed)) {
+              markupSummary = parsed.map((m: any) => m.text || m.label || m.note || "").filter(Boolean).join("; ");
+            } else if (parsed && typeof parsed === "object") {
+              markupSummary = [
+                parsed.scale ? `Scale: ${parsed.scale}` : "",
+                parsed.consultant ? `Consultant: ${parsed.consultant}` : "",
+                parsed.pdfPage ? `PDF Page: ${parsed.pdfPage}` : "",
+                parsed.issueDate ? `Issue Date: ${parsed.issueDate}` : "",
+              ].filter(Boolean).join(", ");
+            }
+          } catch {}
+        }
+        textOut = `Document/Drawing ${d.document_number || "DOC"} (${d.revision || "Rev 0"}): ${d.name || d.attachment_name || "Project Document"} — Category: ${d.category || "Drawing"}, Discipline: ${d.discipline || "MEP"}. ${markupSummary}`.trim();
+      }
+      if (textOut) {
+        try {
+          db.prepare("UPDATE documents SET extracted_text = ? WHERE id = ?").run(textOut, d.id);
+        } catch {}
+      }
+    }
+  } catch {}
+}
+
+/**
+ * Search across all project Documents, Drawings, Specifications, Material Submittals, RFIs, and BOQ items
+ * to answer questions directly from the uploaded documents & drawings with exact citations.
+ */
+export function searchDocumentsAndDrawings(
+  question: string,
+  ctx: CopilotProjectContext
+): {
+  excerpts: Array<{
+    sourceType: "Drawing" | "Document" | "Material Submittal" | "RFI" | "BOQ Specification";
+    code: string;
+    title: string;
+    revision?: string;
+    discipline?: string;
+    status?: string;
+    snippet: string;
+    score: number;
+  }>;
+  citedSources: CitedSource[];
+} {
+  const qLower = question.toLowerCase();
+  const stopWords = new Set([
+    "what", "where", "when", "which", "who", "whom", "whose", "why", "how",
+    "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "do", "does", "did", "can", "could", "will", "would", "shall", "should",
+    "the", "and", "for", "with", "from", "into", "onto", "upon", "about",
+    "tell", "show", "give", "list", "find", "explain", "summary", "summarize",
+    "our", "my", "this", "that", "these", "those", "project", "please",
+    "document", "documents", "drawing", "drawings", "file", "files", "according", "answer"
+  ]);
+
+  const rawTokens = qLower
+    .replace(/[^a-z0-9.\-]/g, " ")
+    .split(/\s+/)
+    .filter(t => t.length >= 2 && !stopWords.has(t));
+
+  const results: Array<{
+    sourceType: "Drawing" | "Document" | "Material Submittal" | "RFI" | "BOQ Specification";
+    code: string;
+    title: string;
+    revision?: string;
+    discipline?: string;
+    status?: string;
+    snippet: string;
+    score: number;
+  }> = [];
+
+  // 1. Search Documents & Engineering Drawings (including multi-page PDF chunks)
+  for (const doc of ctx.documents) {
+    const isDrawing =
+      String(doc.category || "").toLowerCase().includes("drawing") ||
+      String(doc.category || "").toLowerCase().includes("plan") ||
+      String(doc.category || "").toLowerCase().includes("schematic") ||
+      String(doc.category || "").toLowerCase().includes("schedule") ||
+      String(doc.document_number || "").startsWith("2618-");
+
+    const docCode = doc.document_number || doc.category || "DOC";
+    const docTitle = doc.name || doc.attachment_name || "Project Document";
+    const fullText = String(doc.extracted_text || "");
+
+    // Split large documents by page markers (-- X of Y --) or double newlines
+    const rawChunks = fullText.includes("-- ") && /--\s*\d+\s*of\s*\d+\s*--/.test(fullText)
+      ? fullText.split(/(?=--\s*\d+\s*of\s*\d+\s*--)/g)
+      : fullText.split(/\n{2,}/g);
+
+    const chunks = rawChunks.length > 0 && fullText.trim().length > 0
+      ? rawChunks
+      : [`${docCode} ${docTitle} (${doc.discipline || "MEP"}, ${doc.revision || "Rev 0"})`];
+
+    let bestChunk = "";
+    let bestScore = 0;
+    const headerLower = `${docCode} ${docTitle} ${doc.discipline || ""} ${doc.category || ""}`.toLowerCase();
+
+    for (const chunk of chunks) {
+      const cTrim = chunk.trim();
+      if (!cTrim) continue;
+      const cLower = `${headerLower} ${cTrim.toLowerCase()}`;
+      let score = 0;
+
+      // Exact drawing/doc code match in question
+      if (doc.document_number && qLower.includes(String(doc.document_number).toLowerCase())) {
+        score += 35;
+      }
+
+      for (const tok of rawTokens) {
+        if (cLower.includes(tok)) {
+          score += headerLower.includes(tok) ? 8 : 5;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestChunk = cTrim;
+      }
+    }
+
+    // If user asked broadly about drawings/documents and no specific token matched, include key drawings/specs with baseline score
+    if (bestScore === 0 && rawTokens.length === 0) {
+      bestScore = isDrawing ? 3 : 2;
+      bestChunk = (chunks[0] || docTitle).trim();
+    }
+
+    if (bestScore > 0) {
+      results.push({
+        sourceType: isDrawing ? "Drawing" : "Document",
+        code: docCode,
+        title: docTitle,
+        revision: doc.revision || "Rev 0",
+        discipline: doc.discipline || doc.category || "MEP",
+        status: doc.status || "Approved",
+        snippet: bestChunk.replace(/\s+/g, " ").slice(0, 520),
+        score: bestScore,
+      });
+    }
+  }
+
+  // 2. Search Material Submittals
+  for (const sub of ctx.submittals) {
+    const subCode = sub.number || "SUB";
+    const subTitle = sub.title || sub.item || "Material Submittal";
+    const combined = [
+      subCode,
+      subTitle,
+      sub.trade,
+      sub.manufacturer,
+      sub.model_no,
+      sub.spec_section,
+      sub.drawing_ref,
+      sub.boq_ref,
+      sub.approval_code,
+      sub.status,
+      sub.consultant_comments,
+      sub.description,
+      sub.extracted_text
+    ].filter(Boolean).join(" ");
+    const cLower = combined.toLowerCase();
+
+    let score = 0;
+    if (sub.number && qLower.includes(String(sub.number).toLowerCase())) score += 35;
+    if (sub.drawing_ref && qLower.includes(String(sub.drawing_ref).toLowerCase())) score += 20;
+    for (const tok of rawTokens) {
+      if (cLower.includes(tok)) score += 6;
+    }
+
+    if (score > 0 || qLower.includes("submittal") || qLower.includes("submitted") || qLower.includes("material")) {
+      const snippet = `Manufacturer: ${sub.manufacturer || "Specified Vendor"} · Model: ${sub.model_no || "Standard"} · Spec: ${sub.spec_section || "MEP"} · Drawing Ref: ${sub.drawing_ref || "N/A"} · BOQ Ref: ${sub.boq_ref || "N/A"} · Approval: ${sub.approval_code || sub.status || "Submitted"}${sub.consultant_comments ? ` — Consultant Review: "${sub.consultant_comments}"` : ""}`;
+      results.push({
+        sourceType: "Material Submittal",
+        code: subCode,
+        title: subTitle,
+        revision: sub.revision || "Rev 0",
+        discipline: sub.trade || "MEP",
+        status: sub.approval_code || sub.status || "Submitted",
+        snippet,
+        score: score + (qLower.includes("submittal") || qLower.includes("submitted") ? 15 : 0),
+      });
+    }
+  }
+
+  // 3. Search Technical RFIs referencing Drawings
+  for (const rfi of ctx.rfis) {
+    const combined = `${rfi.number || ""} ${rfi.subject || ""} ${rfi.question || ""} ${rfi.answer || ""} ${rfi.drawing_ref || ""}`.toLowerCase();
+    let score = 0;
+    for (const tok of rawTokens) {
+      if (combined.includes(tok)) score += 5;
+    }
+    if (score > 0) {
+      results.push({
+        sourceType: "RFI",
+        code: rfi.number || "RFI",
+        title: rfi.subject || rfi.question || "Technical Clarification",
+        discipline: rfi.trade || rfi.discipline || "MEP",
+        status: rfi.status || "Open",
+        snippet: `Drawing Ref: ${rfi.drawing_ref || "General"} · Q: ${rfi.question || rfi.subject}${rfi.answer ? ` → Answer: ${rfi.answer}` : ""}`,
+        score,
+      });
+    }
+  }
+
+  // 4. Search BOQ Items & Specification Clauses
+  for (const boq of ctx.boqSummary.sampleItems) {
+    const combined = `${boq.item_number || ""} ${boq.description || ""} ${boq.specification || ""} ${boq.discipline || ""} ${boq.system || ""}`.toLowerCase();
+    let score = 0;
+    for (const tok of rawTokens) {
+      if (combined.includes(tok)) score += 4;
+    }
+    if (score >= 8) {
+      results.push({
+        sourceType: "BOQ Specification",
+        code: `BOQ #${boq.item_number || "Item"}`,
+        title: boq.description || "MEP BOQ Item",
+        discipline: boq.discipline || "MEP",
+        status: `Qty: ${boq.tender_quantity} ${boq.unit || "Item"}`,
+        snippet: `${boq.specification || boq.description} — Qty: ${boq.tender_quantity} ${boq.unit || "Item"}, Rate: ${boq.tender_rate}, Total: ${boq.tender_amount}`,
+        score,
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  const topExcerpts = results.slice(0, 8);
+
+  const citedSources: CitedSource[] = topExcerpts.map(r => ({
+    type: r.sourceType === "Drawing" ? "drawing" : r.sourceType === "Material Submittal" ? "submittal" : r.sourceType === "RFI" ? "rfi" : r.sourceType === "BOQ Specification" ? "boq" : "document",
+    code: r.code,
+    title: r.title,
+    revision: r.revision,
+    status: r.status,
+    discipline: r.discipline,
+    excerpt: r.snippet,
+  }));
+
+  return { excerpts: topExcerpts, citedSources };
+}
 /**
  * Generate a deterministic portfolio response when querying across all projects.
  */
@@ -689,38 +975,141 @@ export function generateDeterministicCopilotAnswer(question: string, ctx: Copilo
     return out;
   }
 
-  // 9. RFIs & Submittals
-  if (q.includes("rfi") || q.includes("clarification") || q.includes("submittal") || q.includes("technical query")) {
-    let out = `### ❓ RFIs & Material Submittals for **${p.name}**\n\n`;
-    if (ctx.rfis.length > 0) {
+  // 9. Material Submittals & RFIs
+  if (
+    q.includes("submittal") ||
+    q.includes("submitted") ||
+    q.includes("approval code") ||
+    q.includes("code a") ||
+    q.includes("code b") ||
+    q.includes("code c") ||
+    q.includes("data sheet") ||
+    q.includes("datasheet") ||
+    q.includes("rfi") ||
+    q.includes("clarification") ||
+    q.includes("technical query")
+  ) {
+    const searchRes = searchDocumentsAndDrawings(question, ctx);
+    let out = `### 📋 Material Submittals & Technical Clarifications for **${p.name}**\n\n`;
+
+    if (ctx.submittals.length > 0) {
+      const approvedCount = ctx.submittals.filter(s => String(s.status || "").toLowerCase().includes("approved")).length;
+      const reviewCount = ctx.submittals.filter(s => s.status === "Submitted" || s.status === "Under Review").length;
+      const reviseCount = ctx.submittals.filter(s => String(s.status || "").toLowerCase().includes("revise") || s.status === "Rejected").length;
+
+      out += `**Submittal Summary:** **${ctx.submittals.length} total** (${approvedCount} Approved [Code A/B] · ${reviewCount} Under Review · ${reviseCount} Revise/Resubmit [Code C/D])\n\n`;
+      out += `#### Registered Material & Equipment Submittals:\n`;
+      ctx.submittals.slice(0, 12).forEach((s, idx) => {
+        const code = s.number || `SUB-${idx + 1}`;
+        const title = s.title || s.item || "MEP Material Submittal";
+        const appBadge = s.approval_code || s.status || "Submitted";
+        out += `${idx + 1}. **\`${code}\` (${s.revision || "Rev 0"}): ${title}** — **[${appBadge}]**\n`;
+        out += `   - **Discipline:** ${s.trade || "MEP"} · **Manufacturer:** **${s.manufacturer || "Specified Vendor"}** (${s.model_no || "Standard Model"})\n`;
+        out += `   - **Spec Clause:** ${s.spec_section || "Project Specification"} · **Drawing Ref:** \`${s.drawing_ref || "N/A"}\` · **BOQ Ref:** \`${s.boq_ref || "N/A"}\`\n`;
+        if (s.consultant_comments) {
+          out += `   - **Consultant Review (${s.reviewed_by || p.consultant || "Consultant"}):** *"${s.consultant_comments}"*\n`;
+        }
+      });
+      out += `\n`;
+    } else {
+      out += `No material submittals have been logged for **${p.name}** yet. Open the **Material Submittals** section to submit technical data sheets.\n\n`;
+    }
+
+    if (ctx.rfis.length > 0 && (q.includes("rfi") || q.includes("clarification") || q.includes("query"))) {
       out += `#### Technical RFIs (${ctx.rfis.length} total):\n`;
       ctx.rfis.slice(0, 8).forEach(r => {
-        out += `- **${r.number || 'RFI'}: ${r.subject}** (${r.trade || 'MEP'}) — Status: *${r.status}*\n`;
-        if (r.answer) out += `  *Answer:* ${r.answer}\n`;
+        out += `- **\`${r.number || "RFI"}\`: ${r.subject || r.question}** (${r.trade || "MEP"}, Dwg: \`${r.drawing_ref || "General"}\`) — Status: *${r.status}*\n`;
+        if (r.answer) out += `  *Consultant Answer:* ${r.answer}\n`;
       });
       out += `\n`;
     }
-    if (ctx.submittals.length > 0) {
-      out += `#### Material Submittals (${ctx.submittals.length} total):\n`;
-      ctx.submittals.slice(0, 8).forEach(s => {
-        out += `- **${s.submittal_number || 'SUB'}: ${s.title}** — Section: ${s.specification_section || 'MEP'} · Status: *${s.review_status || 'Submitted'}*\n`;
+
+    const docMatches = searchRes.excerpts.filter(e => e.sourceType === "Drawing" || e.sourceType === "Document");
+    if (docMatches.length > 0) {
+      out += `#### Referenced Drawings & Specifications on File:\n`;
+      docMatches.slice(0, 4).forEach(m => {
+        out += `- **[\`${m.code}\`] ${m.title}:** ${m.snippet}\n`;
       });
     }
     return out;
   }
 
-  // 10. Documents, Drawings & Files
-  if (q.includes("document") || q.includes("file") || q.includes("contract") || q.includes("drawing") || q.includes("upload") || q.includes("plan")) {
-    let out = `### 📑 Drawings & Technical Documents for **${p.name}**\n\n`;
-    if (ctx.documents.length === 0) {
-      out += `No documents have been uploaded for this project yet. Use the Documents & Contract section to upload contract agreements, BOQs, or drawings.\n`;
-    } else {
-      out += `Total Uploaded Documents: **${ctx.documents.length}**\n\n`;
-      ctx.documents.slice(0, 15).forEach((d, idx) => {
-        out += `${idx + 1}. **${d.name || d.attachment_name}**\n`;
-        out += `   - **Category:** ${d.category || 'General'} · **Rev:** ${d.revision || '0'} · **Visibility:** ${d.visibility || 'Internal'} · **Date:** ${d.date_added || 'N/A'}\n`;
+  // 10. Documents, Drawings, Specifications, Schedules & Grounded Technical Lookup
+  const docSearch = searchDocumentsAndDrawings(question, ctx);
+  const isExplicitDocOrDrawingQuery =
+    q.includes("document") ||
+    q.includes("drawing") ||
+    q.includes("dwg") ||
+    q.includes("schematic") ||
+    q.includes("layout") ||
+    q.includes("specification") ||
+    q.includes("spec") ||
+    q.includes("clause") ||
+    q.includes("db1") ||
+    q.includes("db2") ||
+    q.includes("up1") ||
+    q.includes("up2") ||
+    q.includes("rcbo") ||
+    q.includes("luminaire") ||
+    q.includes("lighting") ||
+    q.includes("ups") ||
+    q.includes("cctv") ||
+    q.includes("access control") ||
+    q.includes("fire alarm") ||
+    q.includes("containment") ||
+    q.includes("trunking") ||
+    q.includes("vrf") ||
+    q.includes("cassette") ||
+    q.includes("2618-") ||
+    q.includes("m-hvac") ||
+    q.includes("boardroom") ||
+    q.includes("server room");
+
+  if (isExplicitDocOrDrawingQuery || (docSearch.excerpts.length > 0 && docSearch.excerpts[0].score >= 10)) {
+    let out = `### 📐 Grounded Intelligence from Project Documents, Drawings & Submittals (**${p.name}**)\n\n`;
+
+    if (docSearch.excerpts.length > 0) {
+      out += `#### 🔍 Direct Findings & Citations from Project Files:\n`;
+      docSearch.excerpts.slice(0, 6).forEach((ex, idx) => {
+        out += `${idx + 1}. **[${ex.sourceType}: \`${ex.code}\` — ${ex.title}]** (${ex.discipline || "MEP"}${ex.revision ? ` · ${ex.revision}` : ""}${ex.status ? ` · *${ex.status}*` : ""})\n`;
+        out += `   > ${ex.snippet}\n\n`;
       });
     }
+
+    if (ctx.documents.length > 0) {
+      const drawingsList = ctx.documents.filter(
+        d =>
+          String(d.category || "").toLowerCase().includes("drawing") ||
+          String(d.category || "").toLowerCase().includes("plan") ||
+          String(d.category || "").toLowerCase().includes("schematic") ||
+          String(d.category || "").toLowerCase().includes("schedule") ||
+          String(d.document_number || "").startsWith("2618-")
+      );
+      const contractDocs = ctx.documents.filter(d => !drawingsList.includes(d));
+
+      if (drawingsList.length > 0) {
+        out += `#### 🗺️ Engineering Drawings & Schedules Register (${drawingsList.length} sheets):\n`;
+        drawingsList.slice(0, 14).forEach(d => {
+          out += `- **\`${d.document_number || "DWG"}\`:** ${d.name || d.attachment_name} (*${d.discipline || d.category || "MEP"}* · Rev: ${d.revision || "0"})\n`;
+        });
+        out += `\n`;
+      }
+      if (contractDocs.length > 0) {
+        out += `#### 📑 Contracts, Specifications & Master Documents (${contractDocs.length} files):\n`;
+        contractDocs.slice(0, 8).forEach(d => {
+          out += `- **\`${d.document_number || d.category || "DOC"}\`:** ${d.name || d.attachment_name} (Rev: ${d.revision || "Original"})\n`;
+        });
+        out += `\n`;
+      }
+    }
+
+    if (ctx.submittals.length > 0) {
+      out += `#### ✅ Linked Material Submittals (${ctx.submittals.length} on file):\n`;
+      ctx.submittals.slice(0, 5).forEach(s => {
+        out += `- **\`${s.number || "SUB"}\` (${s.approval_code || s.status}):** ${s.title || s.item} — *${s.manufacturer || ""} ${s.model_no || ""}* (Dwg: \`${s.drawing_ref || "N/A"}\`)\n`;
+      });
+    }
+
     return out;
   }
 
@@ -845,11 +1234,15 @@ export async function answerCopilotQuestion(
   project_id?: string;
   project_name?: string;
   quick_facts?: any;
+  cited_sources?: CitedSource[];
   suggested_followups?: string[];
   model_used?: string;
 }> {
   const userQuery = body.question || body.message || (Array.isArray(body.messages) && body.messages.length > 0 ? (body.messages[body.messages.length - 1].content || body.messages[body.messages.length - 1].text) : "") || "Provide a summary of this project";
   const requestedProjectId = body.project_id || body.context?.project_id;
+
+  // Ensure any PDFs, drawings, or documents without extracted_text are indexed first
+  await ensureProjectDocumentsExtracted(requestedProjectId && requestedProjectId !== "all" && requestedProjectId !== "ALL" ? requestedProjectId : undefined);
 
   const projectContext = getProjectCopilotContext(requestedProjectId, user, userQuery);
 
@@ -867,6 +1260,11 @@ export async function answerCopilotQuestion(
   }
 
   const p = projectContext.project;
+  // Also ensure the resolved project's documents are extracted if requestedProjectId was omitted or 'all'
+  await ensureProjectDocumentsExtracted(p.id);
+  const refreshedContext = getProjectCopilotContext(p.id, user, userQuery) || projectContext;
+  const searchResults = searchDocumentsAndDrawings(userQuery, refreshedContext);
+
   const apiKey = process.env.GEMINI_API_KEY;
   const isValidApiKey = apiKey && !apiKey.startsWith("MY_") && !apiKey.startsWith("your_") && apiKey.length > 15;
   let reply = "";
@@ -883,13 +1281,25 @@ export async function answerCopilotQuestion(
         },
       });
 
+      const docSummaries = refreshedContext.documents.map(d => ({
+        document_number: d.document_number || "DOC",
+        name: d.name || d.attachment_name,
+        category: d.category,
+        discipline: d.discipline,
+        revision: d.revision,
+        status: d.status,
+        extracted_summary: String(d.extracted_text || "").slice(0, 1200),
+      }));
+
       const systemInstruction = `You are the Senior MEP Project Copilot and Technical Lead for the construction management platform.
 You are embedded directly inside the active project: "${p.name}" (Code: ${p.code || 'N/A'}, ID: ${p.id}).
 
 YOUR MISSION:
-Answer EVERY question about this project with exact, authoritative, and factually grounded details using the live database ground truth below.
-When asked about financials, budgets, variations, POs, dates, client names, contractors, work packages, BOQ quantities, documents, punch list snags, tasks, procurement, or workers, always quote the exact data from the context.
-If asked for technical MEP engineering guidance, combine international engineering standards (BS 7671, ASHRAE 90.1/62.1, NFPA 13/72, CIBSE, SMACNA) with the specific disciplines and systems present on this project.
+Answer EVERY question about this project with exact, authoritative, and factually grounded details using the live database ground truth, uploaded engineering drawings, specifications, DB schedules, and material submittals below.
+Always cite exact Drawing Numbers (e.g. 2618-S-ELE-01, 2618-L-LTG-01, 2618-DB-DB1), Specification Sections, BOQ Item Numbers, and Material Submittal Numbers (e.g. MAT-2618-001) when answering technical or project questions.
+
+TOP MATCHED EXCERPTS FROM UPLOADED DOCUMENTS, DRAWINGS & MATERIAL SUBMITTALS FOR THIS QUERY:
+${JSON.stringify(searchResults.excerpts, null, 2)}
 
 LIVE DATABASE GROUND TRUTH FOR PROJECT "${p.name}":
 - Project Details:
@@ -901,37 +1311,41 @@ LIVE DATABASE GROUND TRUTH FOR PROJECT "${p.name}":
   * Status: ${p.status || 'Active'}
   * Stage: ${p.stage || 'Execution'}
   * Currency: ${p.currency || 'USD'}
-  * Budget / Contract Value: ${p.budget || p.contract_value || projectContext.boqSummary.totalAmount || 0}
+  * Budget / Contract Value: ${p.budget || p.contract_value || refreshedContext.boqSummary.totalAmount || 0}
   * Start Date: ${p.start_date || 'Not specified'}
   * Target End / Handover Date: ${p.end_date || 'Not specified'}
   * Location: ${p.location || 'Site Location'}
   * Contract Type: ${p.contract_type || 'Lump Sum Subcontract'}
 
-- Work Packages (${projectContext.workPackages.length} packages):
-${JSON.stringify(projectContext.workPackages, null, 2)}
+- Engineering Drawings, Schedules & Specifications (${docSummaries.length} files):
+${JSON.stringify(docSummaries, null, 2)}
+
+- Material Submittals & Consultant Approval Codes (${refreshedContext.submittals.length} submittals):
+${JSON.stringify(refreshedContext.submittals, null, 2)}
+
+- Technical RFIs (${refreshedContext.rfis.length}):
+${JSON.stringify(refreshedContext.rfis, null, 2)}
+
+- Work Packages (${refreshedContext.workPackages.length} packages):
+${JSON.stringify(refreshedContext.workPackages, null, 2)}
 
 - Commercial & Job Costing:
-  * BOQ Summary (${projectContext.boqSummary.count} lines, total ${p.currency || 'USD'} ${projectContext.boqSummary.totalAmount}): ${JSON.stringify(projectContext.boqSummary.byDiscipline)}
-  * Change Orders (${projectContext.changeOrders.length}): ${JSON.stringify(projectContext.changeOrders)}
-  * Purchase Orders (${projectContext.purchaseOrders.length}): ${JSON.stringify(projectContext.purchaseOrders)}
+  * BOQ Summary (${refreshedContext.boqSummary.count} lines, total ${p.currency || 'USD'} ${refreshedContext.boqSummary.totalAmount}): ${JSON.stringify(refreshedContext.boqSummary.byDiscipline)}
+  * Change Orders (${refreshedContext.changeOrders.length}): ${JSON.stringify(refreshedContext.changeOrders)}
+  * Purchase Orders (${refreshedContext.purchaseOrders.length}): ${JSON.stringify(refreshedContext.purchaseOrders)}
 
 - Quality & Punch List:
-  * QA/QC Inspections (${projectContext.inspections.length}): ${JSON.stringify(projectContext.inspections)}
-  * NCRs: ${JSON.stringify(projectContext.ncrs)}
-  * Open Snags: ${JSON.stringify(projectContext.punchlist.openItems)}
+  * QA/QC Inspections (${refreshedContext.inspections.length}): ${JSON.stringify(refreshedContext.inspections)}
+  * NCRs: ${JSON.stringify(refreshedContext.ncrs)}
+  * Open Snags: ${JSON.stringify(refreshedContext.punchlist.openItems)}
 
-- Tasks & Programme (${projectContext.tasks.total} total):
-  * Active Tasks: ${JSON.stringify(projectContext.tasks.activeItems)}
-
-- Technical Transmittals & Documents:
-  * Documents (${projectContext.documents.length}): ${JSON.stringify(projectContext.documents)}
-  * RFIs: ${JSON.stringify(projectContext.rfis)}
-  * Submittals: ${JSON.stringify(projectContext.submittals)}
+- Tasks & Programme (${refreshedContext.tasks.total} total):
+  * Active Tasks: ${JSON.stringify(refreshedContext.tasks.activeItems)}
 
 - Site Reports & HSE:
-  * Daily Logs: ${JSON.stringify(projectContext.dailyLogs)}
-  * Safety: ${JSON.stringify(projectContext.safetyIncidents)}
-  * Attendance Today: ${JSON.stringify(projectContext.workforceToday)}
+  * Daily Logs: ${JSON.stringify(refreshedContext.dailyLogs)}
+  * Safety: ${JSON.stringify(refreshedContext.safetyIncidents)}
+  * Attendance Today: ${JSON.stringify(refreshedContext.workforceToday)}
 
 ${MEP_REFERENCE_KNOWLEDGE}`;
 
@@ -964,26 +1378,34 @@ ${MEP_REFERENCE_KNOWLEDGE}`;
 
   // Reliable deterministic engine fallback
   if (!reply || !reply.trim()) {
-    reply = generateDeterministicCopilotAnswer(userQuery, projectContext);
+    reply = generateDeterministicCopilotAnswer(userQuery, refreshedContext);
   }
 
   // Follow-up suggestions
   const suggestedFollowups: string[] = [];
   const qLower = userQuery.toLowerCase();
-  if (qLower.includes("budget") || qLower.includes("boq") || qLower.includes("cost")) {
+  if (qLower.includes("drawing") || qLower.includes("document") || qLower.includes("spec") || qLower.includes("2618")) {
+    suggestedFollowups.push(
+      "What circuits and RCBOs are on Schedule 2618-DB-DB1?",
+      "What material submittals are approved for these drawings?",
+      "What luminaires and cables are specified on 2618-L-LTG-01?"
+    );
+  } else if (qLower.includes("submittal") || qLower.includes("submitted") || qLower.includes("material")) {
+    suggestedFollowups.push(
+      "Which material submittals require revision (Code C)?",
+      "What drawings and spec sections are linked to our submittals?",
+      "Show committed purchase orders and vendors"
+    );
+  } else if (qLower.includes("budget") || qLower.includes("boq") || qLower.includes("cost")) {
     suggestedFollowups.push("What change orders or variations are approved?", "Show committed purchase orders and vendors", "List work packages and trade budgets");
   } else if (qLower.includes("punch") || qLower.includes("snag") || qLower.includes("defect")) {
     suggestedFollowups.push("What are the urgent priority 1 defects?", "Which subcontractors are responsible for open snags?", "Show QA/QC inspection results");
-  } else if (qLower.includes("package") || qLower.includes("trade") || qLower.includes("subcontractor")) {
-    suggestedFollowups.push("What is the budget breakdown for HVAC vs Electrical?", "What open RFIs are blocking these packages?", "Show active tasks by trade");
-  } else if (qLower.includes("portfolio") || qLower.includes("all projects")) {
-    suggestedFollowups.push("Show details for Burj Crown Commercial Tower", "Show details for BOV St. Venera", "Compare project budgets");
   } else {
     suggestedFollowups.push(
+      "Summarize the uploaded drawings, DB schedules, and specifications",
+      "List all material submittals and consultant approval codes",
       "What is the total budget and commercial breakdown?",
-      "List all work packages and assigned subcontractors",
-      "What open punch list snags require attention?",
-      "Show all projects in the portfolio"
+      "What open punch list snags require attention?"
     );
   }
 
@@ -992,21 +1414,23 @@ ${MEP_REFERENCE_KNOWLEDGE}`;
     answer: reply,
     project_id: p.id,
     project_name: p.name,
+    cited_sources: searchResults.citedSources,
     quick_facts: {
       name: p.name,
       code: p.code || p.project_code,
       client: p.client || p.client_name,
-      budget: p.budget || p.contract_value || projectContext.boqSummary.totalAmount,
+      budget: p.budget || p.contract_value || refreshedContext.boqSummary.totalAmount,
       currency: p.currency || "USD",
       start_date: p.start_date,
       end_date: p.end_date,
-      work_packages_count: projectContext.workPackages.length,
-      boq_count: projectContext.boqSummary.count,
-      open_snags_count: projectContext.punchlist.openCount,
-      documents_count: projectContext.documents.length,
-      inspections_count: projectContext.inspections.length,
-      pos_count: projectContext.purchaseOrders.length,
-      change_orders_count: projectContext.changeOrders.length,
+      work_packages_count: refreshedContext.workPackages.length,
+      boq_count: refreshedContext.boqSummary.count,
+      open_snags_count: refreshedContext.punchlist.openCount,
+      documents_count: refreshedContext.documents.length,
+      submittals_count: refreshedContext.submittals.length,
+      inspections_count: refreshedContext.inspections.length,
+      pos_count: refreshedContext.purchaseOrders.length,
+      change_orders_count: refreshedContext.changeOrders.length,
     },
     suggested_followups: suggestedFollowups,
     model_used: modelUsed,

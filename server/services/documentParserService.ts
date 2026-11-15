@@ -1,6 +1,8 @@
 import { PDFParse } from "pdf-parse";
 import * as mammoth from "mammoth";
 import zlib from "zlib";
+import fs from "fs";
+import path from "path";
 
 export function normaliseHeader(val: any): string {
   return String(val || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -168,14 +170,44 @@ export async function extractDocumentText(attachmentData: string, attachmentName
   | { kind: "image"; mimeType: string; base64: string }
   | { kind: "unsupported"; reason: string }
 > {
-  const match = String(attachmentData || "").match(/^data:([^;]+);base64,(.+)$/s);
-  if (!match) {
+  let mimeType = "";
+  let base64 = "";
+  let buffer: Buffer | null = null;
+  const rawData = String(attachmentData || "").trim();
+  const nameLower = String(attachmentName || rawData || "").toLowerCase();
+
+  const match = rawData.match(/^data:([^;]+);base64,(.+)$/s);
+  if (match) {
+    mimeType = match[1];
+    base64 = match[2];
+    buffer = Buffer.from(base64, "base64");
+  } else if (rawData.startsWith("/") || attachmentName) {
+    // Support local files stored in /public (e.g. /original_drawings/BOV-St-Venera-2618-Original-Tender-and-Drawings.pdf)
+    const relCandidate = rawData.startsWith("/") ? rawData.replace(/^\/+/, "").split("#")[0] : `original_drawings/${attachmentName}`;
+    const candidatePaths = [
+      path.join(process.cwd(), "public", relCandidate),
+      attachmentName ? path.join(process.cwd(), "public", "original_drawings", path.basename(attachmentName)) : "",
+    ].filter(Boolean);
+    for (const cp of candidatePaths) {
+      try {
+        if (fs.existsSync(cp) && fs.statSync(cp).isFile()) {
+          buffer = fs.readFileSync(cp);
+          base64 = buffer.toString("base64");
+          if (cp.toLowerCase().endsWith(".pdf")) mimeType = "application/pdf";
+          else if (cp.toLowerCase().endsWith(".png")) mimeType = "image/png";
+          else if (cp.toLowerCase().endsWith(".jpg") || cp.toLowerCase().endsWith(".jpeg")) mimeType = "image/jpeg";
+          else if (cp.toLowerCase().endsWith(".xlsx")) mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+          else if (cp.toLowerCase().endsWith(".docx")) mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          else mimeType = "application/octet-stream";
+          break;
+        }
+      } catch {}
+    }
+  }
+
+  if (!buffer) {
     return { kind: "unsupported", reason: "No readable file content on this document." };
   }
-  const mimeType = match[1];
-  const base64 = match[2];
-  const buffer = Buffer.from(base64, "base64");
-  const nameLower = String(attachmentName || "").toLowerCase();
 
   try {
     if (mimeType.startsWith("image/")) {

@@ -483,8 +483,21 @@ export function registerCrudController(app: Express): void {
         if (!data.item && data.title) data.item = data.title;
         if (!data.title && data.item) data.title = data.item;
         if (!data.trade && data.discipline) data.trade = data.discipline;
+        if (!data.number) data.number = getNextSequence(db, data.project_id, "submittal");
+        if (!data.revision) data.revision = "Rev 0";
+        if (!data.status) data.status = "Submitted";
+        if (!data.approval_code) {
+          if (data.status === "Approved") data.approval_code = "Code A - Approved";
+          else if (data.status === "Approved with Comments" || data.status === "Approved With Comments") data.approval_code = "Code B - Approved as Noted";
+          else if (data.status === "Revise & Resubmit" || data.status === "Revise and Resubmit") data.approval_code = "Code C - Revise & Resubmit";
+          else if (data.status === "Rejected") data.approval_code = "Code D - Rejected";
+          else data.approval_code = "Pending";
+        }
         if (!data.date_submitted) data.date_submitted = new Date().toISOString().slice(0, 10);
         if (!data.due_date) data.due_date = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+        if (!data.extracted_text) {
+          data.extracted_text = `Material Submittal ${data.number}: ${data.title || data.item || ''} | Discipline: ${data.trade || 'MEP'} | Manufacturer: ${data.manufacturer || 'TBD'} | Model: ${data.model_no || 'TBD'} | Spec Section: ${data.spec_section || 'N/A'} | Drawing Ref: ${data.drawing_ref || 'N/A'} | BOQ Ref: ${data.boq_ref || 'N/A'} | Approval: ${data.approval_code} (${data.status}) | Notes: ${data.description || ''} ${data.consultant_comments || ''}`.trim();
+        }
       } else if (table === "change_orders") {
         if (data.cost_impact === undefined && data.amount !== undefined) data.cost_impact = Number(data.amount);
         if (!data.trade && data.discipline) data.trade = data.discipline;
@@ -682,6 +695,19 @@ export function registerCrudController(app: Express): void {
       if (actualTable === "inspections") {
         syncInspectionVerifiedProgress(data, req.user!.name);
       }
+      if ((actualTable === "documents" || actualTable === "submittals") && data.attachment_data) {
+        extractDocumentText(data.attachment_data, data.attachment_name || data.name || data.title || "document.txt")
+          .then(extracted => {
+            if (extracted.kind === "text" && extracted.text.trim().length > 0) {
+              const prefix = actualTable === "submittals" ? `${data.extracted_text || ""}\n\n` : "";
+              db.prepare(`UPDATE ${actualTable} SET extracted_text = ? WHERE id = ?`).run(
+                (prefix + extracted.text.trim()).slice(0, 120000),
+                id
+              );
+            }
+          })
+          .catch(() => {});
+      }
 
       writeAudit(req.user!.user_id, module, id, data.project_id, "create", null, data);
       res.status(201).json(data);
@@ -809,6 +835,21 @@ export function registerCrudController(app: Express): void {
       }
       if (actualTable === "risks") {
         if (data.mitigation === undefined && data.mitigation_plan !== undefined) data.mitigation = data.mitigation_plan;
+      }
+      if (actualTable === "submittals") {
+        if (data.title && !data.item) data.item = data.title;
+        if (data.item && !data.title) data.title = data.item;
+        if (data.discipline && !data.trade) data.trade = data.discipline;
+        if (data.status && !data.approval_code) {
+          if (data.status === "Approved") data.approval_code = "Code A - Approved";
+          else if (data.status === "Approved with Comments" || data.status === "Approved With Comments") data.approval_code = "Code B - Approved as Noted";
+          else if (data.status === "Revise & Resubmit" || data.status === "Revise and Resubmit") data.approval_code = "Code C - Revise & Resubmit";
+          else if (data.status === "Rejected") data.approval_code = "Code D - Rejected";
+        }
+        if ((data.status === "Approved" || data.status === "Approved with Comments" || data.status === "Revise & Resubmit" || data.status === "Rejected") && !data.reviewed_by) {
+          data.reviewed_by = req.user!.name;
+          data.reviewed_date = new Date().toISOString().slice(0, 10);
+        }
       }
 
       const editableCols = cols.filter(c => c !== "id" && c !== "project_id");
