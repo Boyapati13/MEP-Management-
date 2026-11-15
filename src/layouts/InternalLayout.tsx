@@ -98,11 +98,9 @@ export function InternalLayout({
     );
     return unsubscribe;
   }, []);
+  // Accordion navigation: only the active section is expanded so the menu stays short and scannable
   const [expandedDomains, setExpandedDomains] = useState<Record<string, boolean>>({
     [activeDomain]: true,
-    dashboard: true,
-    delivery: true,
-    commercial: true,
   });
 
   // Active Appearance Settings — defaults to clean neutral enterprise Slate with grid OFF
@@ -158,7 +156,7 @@ export function InternalLayout({
   }, [workspaceTheme, gridEnabled, gridStrength, workspaceDensity]);
 
   useEffect(() => {
-    setExpandedDomains(prev => ({ ...prev, [activeDomain]: true }));
+    setExpandedDomains({ [activeDomain]: true });
   }, [activeDomain]);
 
   // Global Ctrl+K shortcut for Enterprise Command Palette
@@ -287,7 +285,12 @@ export function InternalLayout({
         r.domain === domainId &&
         (!r.allowedRoles || r.allowedRoles.includes(role))
     );
-    setExpandedDomains(prev => ({ ...prev, [domainId]: !prev[domainId] }));
+    // Clicking the section you're already in just collapses/expands it (no unexpected page jump)
+    if (domainId === activeDomain) {
+      setExpandedDomains(prev => (prev[domainId] ? {} : { [domainId]: true }));
+      return;
+    }
+    setExpandedDomains({ [domainId]: true });
     onNavigate(domainId, routes[0]?.id || defaultRoute);
   };
 
@@ -311,7 +314,7 @@ export function InternalLayout({
 
       {/* Enterprise Left Navigation Rail */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] bg-[#0b1120] border-r border-slate-800/90 flex-col text-slate-300 transition-transform duration-200 ease-out lg:static lg:flex lg:w-64 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] bg-[#0f172a] border-r border-white/5 flex-col text-slate-300 transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:h-screen lg:flex lg:w-60 lg:translate-x-0 ${
           mobileMenuOpen ? 'flex translate-x-0' : 'hidden -translate-x-full'
         }`}
       >
@@ -366,7 +369,8 @@ export function InternalLayout({
         </div>
 
         {/* Hierarchical Module Tree Navigation */}
-        <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto" aria-label="Primary Navigation">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto no-scrollbar" aria-label="Primary Navigation">
+          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Workspace</p>
           {visibleDomains.map((domain: any) => {
             const Icon = domain.icon;
             const isDomainActive = domain.id === activeDomain;
@@ -376,31 +380,36 @@ export function InternalLayout({
             );
 
             return (
-              <div key={domain.id} className="space-y-0.5">
+              <div key={domain.id}>
                 <button
                   type="button"
                   onClick={() => handleDomainSelect(domain.id, domain.defaultRoute)}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded text-left text-xs font-semibold transition-colors ${
+                  aria-expanded={isExpanded}
+                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left text-[13px] font-medium transition-colors ${
                     isDomainActive
-                      ? 'bg-slate-800/90 text-white'
-                      : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                      ? 'text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Icon size={15} className={isDomainActive ? 'text-blue-400 flex-shrink-0' : 'text-slate-500 flex-shrink-0'} />
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                        isDomainActive ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-400'
+                      }`}
+                    >
+                      <Icon size={15} />
+                    </span>
                     <span className="truncate">{domain.label}</span>
-                  </div>
-                  {isExpanded ? (
-                    <ChevronDown size={13} className="text-slate-500 flex-shrink-0" />
-                  ) : (
-                    <ChevronRight size={13} className="text-slate-500 flex-shrink-0" />
-                  )}
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    className={`text-slate-500 flex-shrink-0 transition-transform duration-150 ${isExpanded ? '' : '-rotate-90'}`}
+                  />
                 </button>
 
                 {isExpanded && domainRoutes.length > 0 && (
-                  <div className="ml-3 pl-2.5 border-l border-slate-800 space-y-0.5 py-0.5">
+                  <div className="mt-0.5 mb-2 ml-[22px] pl-3 border-l border-white/10 space-y-px">
                     {domainRoutes.map((route) => {
-                      const RIcon = route.icon;
                       const isRouteActive = activeRoute === route.id;
                       return (
                         <button
@@ -410,14 +419,14 @@ export function InternalLayout({
                             onNavigate(domain.id, route.id);
                             setMobileMenuOpen(false);
                           }}
-                          className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left text-xs transition-colors ${
+                          aria-current={isRouteActive ? 'page' : undefined}
+                          className={`w-full block px-2.5 py-1.5 rounded-md text-left text-[12.5px] truncate transition-colors ${
                             isRouteActive
-                              ? 'bg-blue-600/15 text-blue-300 font-semibold border-l-2 border-blue-500 -ml-[1px]'
-                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                              ? 'bg-white/10 text-white font-medium'
+                              : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
                           }`}
                         >
-                          <RIcon size={13} className={isRouteActive ? 'text-blue-400 flex-shrink-0' : 'text-slate-500 flex-shrink-0'} />
-                          <span className="truncate">{route.label}</span>
+                          {route.label}
                         </button>
                       );
                     })}
@@ -760,9 +769,9 @@ export function InternalLayout({
               </div>
             </div>
 
-            {/* Domain Sub-Module Tab Strip */}
+            {/* Domain Sub-Module Tab Strip (mobile/tablet only — desktop uses the sidebar to avoid duplicate menus) */}
             {subRoutes.length > 0 && (
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1 border-t border-slate-100 dark:border-slate-800/80">
+              <div className="lg:hidden flex items-center gap-1 overflow-x-auto no-scrollbar pt-1 border-t border-slate-100 dark:border-slate-800/80">
                 {subRoutes.map((r) => {
                   const active = r.id === activeRoute;
                   return (

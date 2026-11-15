@@ -3544,6 +3544,8 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
     }
   };
 
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+
   const handleCreateTask = async (e: FormEvent) => {
     e.preventDefault();
     if (!taskTitle) {
@@ -3581,91 +3583,125 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
 
   return (
     <div className="space-y-6">
-      {/* Top Navigation & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <button onClick={() => navigate('projects')} className={btnSecondary}>
-          <ArrowLeft size={14} /> Back to Projects
+      {/* Top Navigation & Actions — 1 primary, 2 secondary, rest in "More" */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={() => navigate('projects')}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+        >
+          <ArrowLeft size={15} /> Projects
         </button>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={loadProjectDetails} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
-          <button
-            onClick={() => setActiveTab('documents')}
-            className={cn(btnSecondary, activeTab === 'documents' ? 'bg-blue-50 text-blue-700 border-blue-200' : '')}
-          >
-            <Folder size={14} className="text-blue-600" />
-            Documents &amp; Contract
-          </button>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('open-copilot', { detail: { projectId: activeProjectId } }))}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-xs font-bold rounded-xl hover:from-amber-700 hover:to-amber-800 transition-all shadow-sm"
+            className={btnSecondary}
           >
-            <Sparkles size={13} />
-            Ask Copilot
+            <Sparkles size={14} className="text-indigo-600" /> Ask Copilot
           </button>
-          <button
-            onClick={() => setShowContractorDocModal(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
-          >
-            <Sparkles size={13} />
-            Auto-Update from Contractor Doc
+          <button onClick={() => setShowTaskModal(true)} className={btnSecondary}>
+            <CheckSquare size={14} /> Add Task
           </button>
-          <button onClick={() => setShowRiskMatrix(true)} className={btnSecondary}><AlertTriangle size={14} className="text-amber-600" /> 5x5 Risk Heat Map</button>
-          <button onClick={() => setShowUpdateModal(true)} className={btnPrimary}><Plus size={14} />Post Site Update</button>
-          <button onClick={() => setShowTaskModal(true)} className={btnSecondary}><CheckSquare size={14} />Add Task</button>
+          <button onClick={() => setShowUpdateModal(true)} className={btnPrimary}>
+            <Plus size={14} /> Post Site Update
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMoreActionsOpen(o => !o)}
+              aria-haspopup="menu"
+              aria-expanded={moreActionsOpen}
+              aria-label="More project actions"
+              className={cn(btnSecondary, 'px-2.5')}
+            >
+              <MoreVertical size={15} />
+            </button>
+            {moreActionsOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMoreActionsOpen(false)} aria-hidden="true" />
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-60 z-40 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl py-1.5 text-sm"
+                >
+                  {[
+                    { label: 'Refresh project data', icon: RefreshCw, onClick: loadProjectDetails },
+                    { label: 'Auto-update from contractor doc', icon: Sparkles, onClick: () => setShowContractorDocModal(true) },
+                    { label: '5×5 Risk heat map', icon: AlertTriangle, onClick: () => setShowRiskMatrix(true) },
+                    { label: 'Documents & contract', icon: Folder, onClick: () => setActiveTab('documents') },
+                  ].map(item => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <button
+                        key={item.label}
+                        role="menuitem"
+                        type="button"
+                        onClick={() => {
+                          setMoreActionsOpen(false);
+                          item.onClick();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <ItemIcon size={15} className="text-slate-500" /> {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Project Banner Header */}
-      <Card className="p-6 border border-gray-100 shadow-sm bg-gradient-to-r from-white via-blue-50/20 to-white">
+      <Card className="p-5 sm:p-6 border border-slate-200 shadow-sm bg-white">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              {p.code && <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">{p.code}</span>}
+              {p.code && <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">{p.code}</span>}
               <Badge label={p.status || 'Active'} />
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700">
-                <span className={cn('w-2.5 h-2.5 rounded-full', healthBg)} />
-                Health: {health}
-              </div>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                <span className={cn('w-2 h-2 rounded-full', healthBg)} />
+                Health {health}
+              </span>
             </div>
 
-            <h1 className="text-2xl font-black text-gray-900">{p.name || 'MEP Project'}</h1>
-            <p className="text-gray-500 text-sm mt-1">{p.client} • {p.location || 'Location not specified'}</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{p.name || 'MEP Project'}</h1>
+            <p className="text-slate-600 text-sm mt-1">{p.client} · {p.location || 'Location not specified'}</p>
 
             {p.description && (
-              <p className="text-xs text-gray-600 mt-2 max-w-3xl">{p.description}</p>
+              <p className="text-sm text-slate-500 mt-2 max-w-3xl line-clamp-2">{p.description}</p>
             )}
           </div>
 
-          <div className="lg:w-72 flex-shrink-0 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-              <span className="text-gray-600">Overall Progress</span>
-              <span className="text-blue-600 text-sm">{prog}%</span>
+          <div className="lg:w-72 flex-shrink-0">
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-xs font-medium text-slate-600">Overall progress</span>
+              <span className="text-lg font-bold text-slate-900">{prog}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
               <div
-                className={cn('h-3 rounded-full transition-all duration-500', prog >= 100 ? 'bg-emerald-500' : prog >= 50 ? 'bg-blue-600' : 'bg-amber-500')}
+                className={cn('h-2 rounded-full transition-all duration-500', prog >= 100 ? 'bg-emerald-500' : prog >= 50 ? 'bg-blue-600' : 'bg-amber-500')}
                 style={{ width: `${Math.min(prog, 100)}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100">
-              <span>Budget: <strong className="text-gray-700">{p.budget ? `${Number(p.budget).toLocaleString()}` : '—'}</strong></span>
-              <span>Tasks: <strong className="text-gray-700">{tasks.length}</strong></span>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3">
+              <span>Budget <strong className="text-slate-800 font-semibold">{p.budget ? `${Number(p.budget).toLocaleString()}` : '—'}</strong></span>
+              <span>Tasks <strong className="text-slate-800 font-semibold">{tasks.length}</strong></span>
             </div>
           </div>
         </div>
       </Card>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 space-x-6 overflow-x-auto">
+      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto no-scrollbar">
         {[
-          { id: 'master', label: 'Project Master & Hierarchy', icon: Layers },
-          { id: 'overview', label: 'Overview & KPIs', icon: Briefcase },
-          { id: 'documents', label: 'Documents & Contract', icon: Folder },
-          { id: 'feed', label: `Live Feed & Updates (${feed.length})`, icon: TrendingUp },
-          { id: 'tasks', label: `Tasks & Programme (${tasks.length})`, icon: CheckSquare },
-          { id: 'actions', label: 'Project Actions', icon: AlertCircle },
-          { id: 'decisions', label: 'Project Decisions', icon: Shield },
-          { id: 'team', label: 'Team & Directory', icon: Users },
+          { id: 'master', label: 'Hierarchy', icon: Layers },
+          { id: 'overview', label: 'Overview', icon: Briefcase },
+          { id: 'tasks', label: 'Tasks', count: tasks.length, icon: CheckSquare },
+          { id: 'feed', label: 'Live feed', count: feed.length, icon: TrendingUp },
+          { id: 'documents', label: 'Documents', icon: Folder },
+          { id: 'actions', label: 'Actions', icon: AlertCircle },
+          { id: 'decisions', label: 'Decisions', icon: Shield },
+          { id: 'team', label: 'Team', icon: Users },
         ].map(tab => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -3673,11 +3709,18 @@ function ProjectDetailPage({ projectId, navigate }: { projectId?: string; naviga
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={cn('flex items-center gap-2 py-3 border-b-2 font-semibold text-sm transition-colors whitespace-nowrap',
-                active ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              aria-current={active ? 'page' : undefined}
+              className={cn('flex items-center gap-1.5 px-3 py-2.5 -mb-px border-b-2 text-sm font-medium transition-colors whitespace-nowrap',
+                active ? 'border-blue-600 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-800'
               )}
             >
-              <Icon size={16} /> {tab.label}
+              <Icon size={15} className={active ? 'text-blue-600' : ''} />
+              {tab.label}
+              {typeof tab.count === 'number' && (
+                <span className={cn('ml-0.5 px-1.5 rounded-full text-[11px] font-semibold', active ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')}>
+                  {tab.count}
+                </span>
+              )}
             </button>
           );
         })}

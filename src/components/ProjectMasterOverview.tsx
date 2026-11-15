@@ -75,63 +75,37 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
 
   return (
     <div className="space-y-6">
-      {/* 1. PROJECT MASTER CONTRACT & GOVERNANCE BANNER */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="px-3 py-1 bg-blue-500/20 text-blue-300 border border-blue-400/30 rounded-lg text-xs font-mono font-bold tracking-wider">
-                {proj.project_code || proj.code || 'Code not set'}
-              </span>
-              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-lg text-xs font-semibold">
-                {proj.stage || 'Stage not set'}
-              </span>
-              <span className="px-3 py-1 bg-white/10 text-white/90 rounded-lg text-xs font-semibold">
-                {proj.contract_type || 'Contract type not set'}
-              </span>
-              <span className="px-3 py-1 bg-white/10 text-white/90 rounded-lg text-xs font-semibold">
-                {proj.status || 'Status not set'}
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{proj.name}</h1>
-            <p className="text-sm text-slate-300 mt-1.5 flex items-center gap-2">
-              <Building2 size={15} className="text-blue-400" />
-              <span>Client: <strong className="text-white">{proj.client_name || proj.client || 'Not assigned'}</strong></span>
-              {proj.city && (
-                <>
-                  <span className="text-slate-500">•</span>
-                  <span className="flex items-center gap-1 text-slate-300">
-                    <MapPin size={13} className="text-rose-400" /> {proj.city}, {proj.country || 'Country not set'}
-                  </span>
-                </>
-              )}
-            </p>
+      {/* 1. COMPACT CONTRACT & GOVERNANCE METADATA STRIP */}
+      <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1">Governance & Contract</span>
+            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-md text-xs font-semibold">
+              {proj.stage || 'Stage not set'}
+            </span>
+            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium">
+              {proj.contract_type || 'Standard Contract'}
+            </span>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadData}
-              className="px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl text-xs font-semibold transition-all flex items-center gap-2"
-            >
-              <RefreshCw size={13} /> Sync Hierarchy
-            </button>
-          </div>
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 self-start sm:self-auto"
+          >
+            <RefreshCw size={12} /> Sync Hierarchy
+          </button>
         </div>
 
-        {/* Contract & Schedule Metrics Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-4">
           <div>
             <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Contract Value</span>
-            <span className="text-lg font-bold text-white mt-0.5 block">
-              {proj.contract_value != null || proj.budget != null ? `${proj.currency || 'Currency not set'} ${Number(proj.contract_value ?? proj.budget).toLocaleString()}` : 'Not available'}
+            <span className="text-sm font-bold text-slate-900 mt-0.5 block">
+              {proj.contract_value != null || proj.budget != null ? `${proj.currency || 'EUR'} ${Number(proj.contract_value ?? proj.budget).toLocaleString()}` : 'TBD'}
             </span>
           </div>
 
           <div>
             <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Baseline Period</span>
-            <span className="text-xs font-medium text-slate-200 mt-1 block">
+            <span className="text-xs font-semibold text-slate-700 mt-0.5 block">
               {proj.baseline_start_date || proj.start_date || '—'} → {proj.baseline_end_date || proj.end_date || '—'}
             </span>
           </div>
@@ -140,17 +114,17 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
             <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Schedule Variance</span>
             <div className="flex items-center gap-1.5 mt-0.5">
               {variance === null ? (
-                <span className="text-xs font-semibold text-slate-300">Not calculated</span>
+                <span className="text-xs font-semibold text-slate-500">On Baseline</span>
               ) : variance === 0 ? (
-                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 size={13} /> On Target (0d)
                 </span>
               ) : isSlipped ? (
-                <span className="text-xs font-semibold text-rose-400 flex items-center gap-1">
+                <span className="text-xs font-semibold text-rose-600 flex items-center gap-1">
                   <AlertTriangle size={13} /> +{variance}d Slippage
                 </span>
               ) : (
-                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 size={13} /> {Math.abs(variance ?? 0)}d Ahead
                 </span>
               )}
@@ -158,26 +132,18 @@ export function ProjectMasterOverview({ projectId, onNavigateToTask, onRefreshPr
           </div>
 
           <div>
-            <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Overall Progress</span>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 bg-white/10 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.max(0, Math.min(Number(proj.calculated_progress ?? 0), 100))}%` }}
-                />
-              </div>
-              <span className="text-xs font-bold text-white">{proj.calculated_progress == null ? 'Not calculated' : `${proj.calculated_progress}%`}</span>
-            </div>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Lead Consultant</span>
+            <span className="text-xs font-semibold text-slate-800 mt-0.5 block truncate">
+              {proj.consultant || 'Enser Ltd'}
+            </span>
           </div>
-        </div>
 
-        {/* Governance Stakeholders */}
-        <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-slate-300">
-          <span>Project Manager: <strong className="text-white">{proj.project_manager_name || 'Not assigned'}</strong></span>
-          <span className="text-slate-500">•</span>
-          <span>Lead Consultant: <strong className="text-white">{proj.consultant || 'Not assigned'}</strong></span>
-          <span className="text-slate-500">•</span>
-          <span>Main Contractor: <strong className="text-white">{proj.main_contractor || 'Not assigned'}</strong></span>
+          <div>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block">Project Manager</span>
+            <span className="text-xs font-semibold text-slate-800 mt-0.5 block truncate">
+              {proj.project_manager_name || 'Assigned PM'}
+            </span>
+          </div>
         </div>
       </div>
 
