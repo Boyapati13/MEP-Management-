@@ -23,13 +23,24 @@ async function startServer() {
   configureAppMiddleware(app);
   registerAllServerRoutes(app);
 
+  const GITHUB_RELEASE_BASE = "https://github.com/Boyapati13/MEP-Management-/releases/download/v1.5.0-latest";
+
   app.get("/api/mobile/android-apk", (_req, res) => {
     const apkPath = path.join(process.cwd(), "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk");
-    if (!fs.existsSync(apkPath)) {
-      res.status(404).json({ error: "Android APK not built yet. Run npm run mobile:build:android." });
+    if (fs.existsSync(apkPath)) {
+      res.download(apkPath, "MEP-FieldHub-Android.apk");
       return;
     }
-    res.download(apkPath, "mep-fieldhub-android.apk");
+    res.redirect(302, `${GITHUB_RELEASE_BASE}/MEP-FieldHub-Android.apk`);
+  });
+
+  app.get("/api/desktop/windows-exe", (_req, res) => {
+    const exePath = path.join(process.cwd(), "dist", "MEP-FieldHub-Windows.exe");
+    if (fs.existsSync(exePath)) {
+      res.download(exePath, "MEP-FieldHub-Windows.exe");
+      return;
+    }
+    res.redirect(302, `${GITHUB_RELEASE_BASE}/MEP-FieldHub-Windows.exe`);
   });
 
   // Catch unmatched API routes - NEVER let API calls fall through to Vite SPA middleware

@@ -2,11 +2,21 @@
 // MEP Management Platform — API Client Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
+const DEFAULT_CLOUD_API_URL = 'https://mep-server-production.up.railway.app';
+
 export function getApiBaseUrl(): string {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl) return envUrl.replace(/\/+$/, '');
   const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('mep_api_base_url') : null;
   if (stored) return stored.replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    const cap = (window as any).Capacitor;
+    const isNativeCapacitor =
+      Boolean(cap?.isNativePlatform?.()) ||
+      window.location.protocol === 'capacitor:' ||
+      (window.location.hostname === 'localhost' && !window.location.port);
+    if (isNativeCapacitor) return DEFAULT_CLOUD_API_URL;
+  }
   return '';
 }
 

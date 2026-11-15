@@ -331,6 +331,22 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
             <div id="about" className="mt-10 rounded-2xl border border-white/15 bg-[#081523]/75 p-5 backdrop-blur-sm">
               <p className="text-xs font-bold uppercase tracking-[.15em] text-sky-300">One workspace for the full project lifecycle</p>
               <p className="mt-2 text-sm leading-6 text-slate-200">Engineering coordination · Work packages · Site reporting · Procurement · Quality · Commercial management</p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <a
+                  href="/api/mobile/android-apk"
+                  download="MEP-FieldHub-Android.apk"
+                  className="inline-flex items-center gap-2 rounded-xl bg-sky-500 hover:bg-sky-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow-lg transition-colors"
+                >
+                  <Smartphone size={15} /> Download Android App (.apk)
+                </a>
+                <a
+                  href="/api/desktop/windows-exe"
+                  download="MEP-FieldHub-Windows.exe"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 hover:bg-white/20 px-4 py-2.5 text-xs font-bold text-white shadow-lg transition-colors"
+                >
+                  <Download size={15} /> Download Windows Desktop (.exe)
+                </a>
+              </div>
             </div>
           </div>
 
@@ -1284,13 +1300,20 @@ function PunchClockPage() {
       <div className="text-center space-y-2">
         <h1 className="text-2xl font-bold text-gray-900">Punch Clock</h1>
         <p className="text-gray-500 text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-        <div className="flex justify-center">
+        <div className="flex flex-wrap justify-center gap-2">
           <a
             href="/api/mobile/android-apk"
-            download="mep-fieldhub-android.apk"
+            download="MEP-FieldHub-Android.apk"
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
           >
-            <Smartphone size={13} /> Download Android App (.apk)
+            <Smartphone size={13} /> Download Android (.apk)
+          </a>
+          <a
+            href="/api/desktop/windows-exe"
+            download="MEP-FieldHub-Windows.exe"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+          >
+            <Download size={13} /> Download Windows (.exe)
           </a>
         </div>
       </div>
