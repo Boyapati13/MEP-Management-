@@ -127,9 +127,9 @@ html.dark .bg-gray-50\/70,
 html.dark .bg-gray-50\/50,
 html.dark .bg-slate-50,
 html.dark [class*="bg-slate-50"],
-html.dark [class*="bg-slate-50"] {
+html.dark [class*="bg-gray-50"] {
   background-color: #0b1120 !important;
-  border-color: #1e293b !important;
+  border-color: #334155 !important;
   color: #f1f5f9 !important;
 }
 .workspace-surface[data-workspace-theme="dark"] .bg-gray-100,
@@ -196,7 +196,7 @@ html.dark .border-slate-100,
 html.dark .border-slate-200,
 html.dark .border-slate-300,
 html.dark .border-slate-700 {
-  border-color: #1f2937 !important;
+  border-color: #334155 !important;
 }
 
 /* Refined dark mode alert / status background overrides */
@@ -235,20 +235,20 @@ html.dark .bg-indigo-50 {
 }
 
 /* Alert subtitle text contrast inside status cards */
-.workspace-surface[data-workspace-theme="dark"] .bg-amber-50 p,
-html.dark .bg-amber-50 p {
+.workspace-surface[data-workspace-theme="dark"] .bg-amber-50 :is(p, span, div, h3, h4, strong),
+html.dark .bg-amber-50 :is(p, span, div, h3, h4, strong) {
   color: #fde68a !important;
 }
-.workspace-surface[data-workspace-theme="dark"] .bg-rose-50 p,
-html.dark .bg-rose-50 p {
+.workspace-surface[data-workspace-theme="dark"] .bg-rose-50 :is(p, span, div, h3, h4, strong),
+html.dark .bg-rose-50 :is(p, span, div, h3, h4, strong) {
   color: #fecdd3 !important;
 }
-.workspace-surface[data-workspace-theme="dark"] .bg-emerald-50 p,
-html.dark .bg-emerald-50 p {
+.workspace-surface[data-workspace-theme="dark"] .bg-emerald-50 :is(p, span, div, h3, h4, strong),
+html.dark .bg-emerald-50 :is(p, span, div, h3, h4, strong) {
   color: #a7f3d0 !important;
 }
-.workspace-surface[data-workspace-theme="dark"] .bg-blue-50 p,
-html.dark .bg-blue-50 p {
+.workspace-surface[data-workspace-theme="dark"] .bg-blue-50 :is(p, span, div, h3, h4, strong),
+html.dark .bg-blue-50 :is(p, span, div, h3, h4, strong) {
   color: #bfdbfe !important;
 }
 
@@ -291,14 +291,20 @@ html.dark .bg-blue-200 {
 }
 
 /* Button contrast inside dark mode cards */
-.workspace-surface[data-workspace-theme="dark"] .bg-slate-900:not(header):not(aside):not([class*="bg-gradient"]),
-html.dark .bg-slate-900:not(header):not(aside):not([class*="bg-gradient"]) {
+.workspace-surface[data-workspace-theme="dark"] :is(button, a).bg-slate-900:not([class*="bg-gradient"]),
+html.dark :is(button, a).bg-slate-900:not([class*="bg-gradient"]) {
   background-color: #1d4ed8 !important;
   color: #ffffff !important;
 }
-.workspace-surface[data-workspace-theme="dark"] .bg-slate-900:not(header):not(aside):not([class*="bg-gradient"]):hover,
-html.dark .bg-slate-900:not(header):not(aside):not([class*="bg-gradient"]):hover {
+.workspace-surface[data-workspace-theme="dark"] :is(button, a).bg-slate-900:not([class*="bg-gradient"]):hover,
+html.dark :is(button, a).bg-slate-900:not([class*="bg-gradient"]):hover {
   background-color: #1e40af !important;
+}
+
+/* Accessible light-mode placeholder contrast */
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
 }
 
 /* Universal Form Controls Dark Theme */

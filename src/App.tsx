@@ -33,10 +33,12 @@ import { ProjectDecisionsRegister } from './components/ProjectDecisionsRegister'
 import { RiskMatrixHeatMapModal } from './components/RiskMatrixHeatMapModal';
 import { InternalLayout } from './layouts/InternalLayout';
 import { SubcontractorLayout } from './layouts/SubcontractorLayout';
+import { exportFormalDocumentPdf } from './utils/printDocument';
 import { ClientPortalLayout } from './layouts/ClientPortalLayout';
 import { NavigationDomain } from './app/routes';
 import { ProcurementProgrammeRiskView } from './components/ProcurementProgrammeRiskView';
 import { AdminSetupChecklist } from './components/AdminSetupChecklist';
+import { FieldNotesAndSnagCreatorView } from './components/FieldNotesAndSnagCreatorView';
 import { ClientPortalContent } from './components/ClientPortalContent';
 import { MepAssistantDrawer } from './components/MepAssistantDrawer';
 import { ContractorDocUploadModal } from './components/ContractorDocUploadModal';
@@ -294,7 +296,7 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
   const featureCards = [
     { title: 'MEP Engineering', detail: 'Drawings, RFIs, Submittals', image: 'https://images.unsplash.com/photo-1581092335878-2d9ff86ca2bf?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
     { title: 'Site Execution', detail: 'Tasks, Progress, Daily Reports', image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
-    { title: 'Quality & Commissioning', detail: 'Inspections, Testing, Snags', image: 'https://images.unsplash.com/photo-1581093458791-9d15482442f5?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
+    { title: 'Quality & Commissioning', detail: 'Inspections, Testing, Snags', image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
     { title: 'Commercial Control', detail: 'BOQ, Procurement, Costs, Variations', image: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80', href: '#solutions' },
   ];
 
@@ -309,7 +311,7 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
             <span><span className="block text-2xl font-extrabold tracking-tight sm:text-3xl"><span className="text-sky-400">MEP</span> FieldHub</span><span className="block text-[10px] font-semibold uppercase tracking-[.22em] text-slate-200">Plan · Build · Track · Deliver</span></span>
           </a>
           <button type="button" className="rounded-lg border border-white/30 p-2 lg:hidden" aria-label="Toggle navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(!mobileMenuOpen)}><Menu size={22}/></button>
-          <nav aria-label="Homepage navigation" className={`${mobileMenuOpen ? 'flex' : 'hidden'} w-full flex-col gap-4 text-sm font-semibold lg:flex lg:w-auto lg:flex-row lg:items-center lg:gap-8`}>
+          <nav aria-label="Homepage navigation" className={`${mobileMenuOpen ? 'flex bg-[#081523]/95 backdrop-blur-md p-4 rounded-xl border border-white/15 shadow-2xl mt-2' : 'hidden'} w-full flex-col gap-3.5 text-sm font-semibold lg:flex lg:w-auto lg:flex-row lg:items-center lg:gap-8 lg:bg-transparent lg:backdrop-blur-none lg:p-0 lg:rounded-none lg:border-0 lg:shadow-none lg:mt-0`}>
             {[['Home','#home'],['Solutions','#solutions'],['Features','#features'],['Industries','#industries'],['About us','#about'],['Contact','#contact']].map(([label,href]) => <a key={label} href={href} onClick={() => setMobileMenuOpen(false)} className="text-slate-100 hover:text-sky-300 focus-visible:underline">{label}</a>)}
           </nav>
         </header>
@@ -337,11 +339,19 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
             <p className="mt-2 text-sm text-slate-600">Sign in to access your MEP project workspace</p>
             <form onSubmit={signIn} aria-busy={loading} className="mt-7 space-y-4">
               {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-              <div><label htmlFor="home-login-username" className="mb-1.5 block text-sm font-semibold">Username</label><input id="home-login-username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required disabled={loading} placeholder="Email or username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/></div>
-              <div><label htmlFor="home-login-password" className="mb-1.5 block text-sm font-semibold">Password</label><div className="relative"><input id="home-login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={loading} placeholder="Password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 pr-12 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 text-xs font-semibold text-blue-700">{showPassword ? 'Hide' : 'Show'}</button></div></div>
+              <div><label htmlFor="home-login-username" className="mb-1.5 block text-sm font-semibold text-slate-800">Username</label><input id="home-login-username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required disabled={loading} placeholder="Email or username" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/></div>
+              <div><label htmlFor="home-login-password" className="mb-1.5 block text-sm font-semibold text-slate-800">Password</label><div className="relative"><input id="home-login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={loading} placeholder="Password" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 pr-14 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"/><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 text-xs font-semibold text-blue-700 hover:text-blue-800">{showPassword ? 'Hide' : 'Show'}</button></div></div>
               <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-4 py-3.5 font-bold text-white shadow-md hover:bg-blue-700 disabled:opacity-60">{loading ? 'Signing in…' : 'Sign In'} <ChevronRight size={18}/></button>
             </form>
-            <p className="mt-5 text-center text-xs leading-6 text-slate-500">Access is provided by your project administrator. Contact your administrator if you need an account or password assistance.</p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <button type="button" onClick={onSignIn} className="font-semibold text-blue-700 hover:underline">
+                Create Organization (Free Trial)
+              </button>
+              <button type="button" onClick={onSignIn} className="font-semibold text-slate-600 hover:text-slate-900 hover:underline">
+                Forgot password?
+              </button>
+            </div>
+            <p className="mt-4 text-center text-xs leading-6 text-slate-600">Access is provided by your project administrator. Contact your administrator if you need an account or password assistance.</p>
           </section>
         </div>
       </section>
@@ -357,7 +367,7 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
         </div>
       </section>
       <section id="industries" className="mx-auto max-w-[1600px] px-5 pb-12 sm:px-9 lg:px-12"><h2 className="text-2xl font-bold">Built for MEP project delivery</h2><p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">Mechanical, electrical, plumbing, fire protection and commissioning teams can coordinate work within their assigned projects and workspaces.</p></section>
-      <footer id="contact" className="border-t border-white/10 bg-[#08111d] px-5 py-7 text-center text-xs text-slate-400">MEP FieldHub · Plan · Build · Track · Deliver</footer>
+      <footer id="contact" className="border-t border-white/10 bg-[#08111d] px-5 py-7 text-center text-xs text-slate-300">MEP FieldHub · Plan · Build · Track · Deliver · support@mepfieldhub.com</footer>
     </main>
   );
 }
@@ -365,10 +375,23 @@ function PublicLandingPage({ onSignIn }: { onSignIn: () => void }) {
 function LoginPage() {
   const { setUser } = useAuth();
   const { addToast } = useToast();
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [resetNotice, setResetNotice] = useState('');
+  const [resetIdentifier, setResetIdentifier] = useState('');
+  const [orgForm, setOrgForm] = useState({
+    organization_name: '',
+    country: 'Global',
+    currency: 'USD',
+    plan: 'Professional',
+    admin_name: '',
+    username: '',
+    email: '',
+    password: '',
+  });
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
@@ -382,6 +405,41 @@ function LoginPage() {
       addToast('success', `Welcome back, ${user.name}!`);
     } catch (err: any) {
       setLoginError('Unable to sign in. Check your credentials and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleOrgSignup(e: FormEvent) {
+    e.preventDefault();
+    if (loading) return;
+    setLoginError('');
+    setLoading(true);
+    try {
+      const res: any = await api.post('/api/auth/register-organization', orgForm);
+      if (res?.token && res?.user) {
+        setToken(res.token);
+        setUser(res.user);
+        addToast('success', `Organization "${orgForm.organization_name}" created!`);
+      }
+    } catch (err: any) {
+      setLoginError(err?.message || 'Unable to register organization.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword(e: FormEvent) {
+    e.preventDefault();
+    if (loading) return;
+    setLoginError('');
+    setResetNotice('');
+    setLoading(true);
+    try {
+      const res: any = await api.post('/api/auth/forgot-password', { identifier: resetIdentifier });
+      setResetNotice(res?.message || 'If a matching account exists, password reset instructions have been issued.');
+    } catch (err: any) {
+      setLoginError(err?.message || 'Unable to process reset request.');
     } finally {
       setLoading(false);
     }
@@ -480,8 +538,10 @@ function LoginPage() {
             </p>
           </div>
 
+          {loginError && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loginError}</div>}
+
+          {authMode === 'signin' && (
           <form onSubmit={handleLogin} aria-busy={loading} className="space-y-4 sm:space-y-5">
-            {loginError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loginError}</div>}
             <div>
               <label htmlFor="mep-login-username" className="mb-1.5 block text-xs sm:text-sm font-semibold text-slate-700">
                 Username
@@ -524,6 +584,76 @@ function LoginPage() {
               )}
             </button>
           </form>
+          )}
+
+          {authMode === 'signin' && (
+            <div className="mt-4 flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => { setAuthMode('forgot'); setLoginError(''); setResetNotice(''); }}
+                className="font-semibold text-blue-700 hover:underline"
+              >
+                Forgot password?
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('signup'); setLoginError(''); }}
+                className="font-semibold text-slate-700 hover:text-blue-700"
+              >
+                Create Organization (Free Trial) →
+              </button>
+            </div>
+          )}
+
+          {authMode === 'signup' && (
+            <form onSubmit={handleOrgSignup} className="space-y-3 mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase text-slate-500">New SaaS Organization</span>
+                <button type="button" onClick={() => setAuthMode('signin')} className="text-xs font-semibold text-blue-700 hover:underline">
+                  Back to Sign In
+                </button>
+              </div>
+              <input required placeholder="Company / Organization Name *" value={orgForm.organization_name} onChange={e => setOrgForm(s => ({ ...s, organization_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+              <div className="grid grid-cols-3 gap-2">
+                <input placeholder="Country" value={orgForm.country} onChange={e => setOrgForm(s => ({ ...s, country: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900" />
+                <select value={orgForm.currency} onChange={e => setOrgForm(s => ({ ...s, currency: e.target.value }))} className="rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 bg-white">
+                  <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="AED">AED</option><option value="SAR">SAR</option><option value="SGD">SGD</option>
+                </select>
+                <select value={orgForm.plan} onChange={e => setOrgForm(s => ({ ...s, plan: e.target.value }))} className="rounded-xl border border-slate-300 px-2 py-2 text-xs text-slate-900 bg-white">
+                  <option value="Starter">Starter</option><option value="Professional">Professional</option><option value="Enterprise">Enterprise</option>
+                </select>
+              </div>
+              <input required placeholder="Admin Full Name *" value={orgForm.admin_name} onChange={e => setOrgForm(s => ({ ...s, admin_name: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+              <div className="grid grid-cols-2 gap-2">
+                <input required placeholder="Admin Username *" value={orgForm.username} onChange={e => setOrgForm(s => ({ ...s, username: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
+                <input type="email" placeholder="Work Email" value={orgForm.email} onChange={e => setOrgForm(s => ({ ...s, email: e.target.value }))} className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900" />
+              </div>
+              <input required type="password" minLength={8} placeholder="Password (min 8 chars) *" value={orgForm.password} onChange={e => setOrgForm(s => ({ ...s, password: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+              <button type="submit" disabled={loading} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-bold text-white shadow-md">
+                {loading ? 'Provisioning Workspace...' : 'Start Free Trial Workspace'}
+              </button>
+            </form>
+          )}
+
+          {authMode === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-3 mt-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold uppercase text-slate-500">Reset Password</span>
+                <button type="button" onClick={() => setAuthMode('signin')} className="text-xs font-semibold text-blue-700 hover:underline">
+                  Back to Sign In
+                </button>
+              </div>
+              {resetNotice && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-800">
+                  {resetNotice}
+                </div>
+              )}
+              <input required placeholder="Enter your username or work email" value={resetIdentifier} onChange={e => setResetIdentifier(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900" />
+              <button type="submit" disabled={loading} className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 py-3 text-sm font-bold text-white">
+                {loading ? 'Submitting...' : 'Request Password Reset'}
+              </button>
+            </form>
+          )}
 
           <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/80 p-3 sm:p-4 text-xs leading-relaxed text-slate-600">
             <Shield size={15} className="mr-1.5 inline text-blue-700 flex-shrink-0" />
@@ -585,7 +715,7 @@ type Page =
   | 'payroll' | 'payroll-detail'
   | 'punch-clock'
   // V1.4.1 Domains & Consolidations
-  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist';
+  | 'work-packages' | 'procurement-risk' | 'site-quality' | 'setup-checklist' | 'field-notes';
 
 function AppShell() {
   const { user, logout } = useAuth();
@@ -661,6 +791,7 @@ function AppShell() {
       case 'payroll-detail': return <PayrollPeriodDetailPage periodId={pageParam} navigate={navigate} />;
       case 'punch-clock': return <PunchClockPage />;
       case 'setup-checklist': return <div className="space-y-6"><AdminSetupChecklist projectId={selectedProject} onNavigate={(r) => navigate(r as Page)} /></div>;
+      case 'field-notes': return <FieldNotesAndSnagCreatorView projectId={selectedProject} projects={projects} user={user} addToast={addToast} onNavigate={(r) => navigate(r as Page)} />;
       case 'site-quality': return <EnterpriseModulesView page="inspections" selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
       default: return <EnterpriseModulesView page={page} selectedProject={selectedProject} projects={projects} user={user} onProjectUpdated={reload} />;
     }
@@ -1431,7 +1562,7 @@ function WorkerProfilePage({ workerId, navigate }: { workerId: string; navigate:
   if (!profile) return <EmptyState icon={Users} title="Worker not found" />;
 
   const w = profile.worker;
-  const tabs = ['overview', 'tasks', 'instructions', 'attendance', 'leave', 'payroll'];
+  const tabs = ['overview', 'tasks', 'instructions', 'attendance', 'leave', 'payroll', 'certifications', 'allocations'];
 
   return (
     <div className="space-y-6">
@@ -1573,6 +1704,94 @@ function WorkerProfilePage({ workerId, navigate }: { workerId: string; navigate:
                   <div className="text-right">
                     <p className="font-bold text-gray-900">{pe.currency} {pe.net_pay?.toLocaleString()}</p>
                     <p className="text-xs text-gray-400">{fmtHours(pe.regular_hours)} reg + {fmtHours(pe.overtime_hours)} OT</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {activeTab === 'certifications' && (
+        <Card className="overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-800">Trade Licenses &amp; HSE Certifications</h3>
+              <p className="text-xs text-gray-500">Mandatory site compliance gate (Electrical, Brazing/F-Gas, Working at Heights, LOTO, Medical)</p>
+            </div>
+            <button
+              onClick={async () => {
+                const certType = prompt('Certification / License Type (e.g. Electrical Wireman License, Working at Heights, HSE Induction):');
+                if (!certType) return;
+                const expiryDate = prompt('Expiry Date (YYYY-MM-DD, optional):') || '';
+                const certNum = prompt('Certificate / License Number (optional):') || '';
+                try {
+                  await api.post('/api/worker_certifications', {
+                    worker_id: w.id,
+                    project_id: w.project_id || undefined,
+                    cert_type: certType,
+                    cert_number: certNum || undefined,
+                    expiry_date: expiryDate || undefined,
+                  });
+                  const refreshed = await workersApi.profile(w.id);
+                  setProfile(refreshed);
+                } catch {}
+              }}
+              className={btnPrimary}
+            >
+              <Plus size={14} /> Add Certification
+            </button>
+          </div>
+          {(!profile.certifications?.length) ? (
+            <EmptyState icon={Award} title="No certifications recorded" subtitle="Add trade licenses, HSE inductions, or medical fitness records" />
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {(profile.certifications as any[]).map((cert: any) => {
+                const today = new Date().toISOString().slice(0, 10);
+                const expired = Boolean(cert.expiry_date && cert.expiry_date < today);
+                return (
+                  <div key={cert.id} className="px-5 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{cert.cert_type}</p>
+                      <p className="text-xs text-gray-500">
+                        {cert.cert_number ? `#${cert.cert_number}` : 'No Ref'} {cert.issuer ? `· ${cert.issuer}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500">{cert.expiry_date ? `Exp: ${fmtDate(cert.expiry_date)}` : 'No expiry'}</span>
+                      <Badge label={expired ? 'Expired' : cert.status || 'Valid'} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {activeTab === 'allocations' && (
+        <Card className="overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-800">Task &amp; BOQ Cost-Code Man-Hour Allocations</h3>
+            <p className="text-xs text-gray-500">Tracks productive labor hours charged against Work Packages, Tasks, and BOQ items</p>
+          </div>
+          {(!profile.time_allocations?.length) ? (
+            <EmptyState icon={Clock} title="No cost-code allocations" subtitle="Allocated man-hours appear here once logged against tasks or BOQ items" />
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {(profile.time_allocations as any[]).map((al: any) => (
+                <div key={al.id} className="px-5 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {al.task_name || al.work_package_name || al.cost_code || 'General Site Allocation'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {fmtDate(al.work_date)} {al.boq_item_number ? `· BOQ ${al.boq_item_number}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-900">{Number(al.hours || 0).toFixed(1)} hrs</span>
+                    <Badge label={al.status || 'Pending'} />
                   </div>
                 </div>
               ))}
@@ -2271,6 +2490,17 @@ function PayrollPeriodsPage({ navigate }: { navigate: (p: Page, param?: string) 
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const onRealtime = (ev: any) => {
+      const tbl = ev?.detail?.module || ev?.detail?.table;
+      if (!tbl || tbl === 'payroll_periods' || tbl === 'payroll_entries' || tbl === 'payroll_adjustments' || tbl === '*') {
+        load();
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
+  }, [load]);
+
   async function createPeriod(e: FormEvent) {
     e.preventDefault();
     try {
@@ -2342,6 +2572,17 @@ function PayrollPeriodDetailPage({ periodId, navigate }: { periodId: string; nav
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const onRealtime = (ev: any) => {
+      const tbl = ev?.detail?.module || ev?.detail?.table;
+      if (!tbl || tbl === 'payroll_periods' || tbl === 'payroll_entries' || tbl === 'payroll_adjustments' || tbl === '*') {
+        load();
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
+  }, [load]);
+
   async function compute() {
     setComputing(true);
     try { await payrollApi.compute(periodId); addToast('success', 'Payroll computed'); await load(); }
@@ -2370,6 +2611,43 @@ function PayrollPeriodDetailPage({ periodId, navigate }: { periodId: string; nav
         </div>
         <div className="flex items-center gap-3">
           <Badge label={period.status} />
+          <button
+            onClick={() =>
+              exportFormalDocumentPdf({
+                documentType: 'PAYROLL REGISTER',
+                referenceCode: `PAY-${period.period_name || period.id}`,
+                title: `Payroll Summary — ${period.period_name}`,
+                subtitle: `${fmtDate(period.period_start)} to ${fmtDate(period.period_end)}`,
+                projectCode: period.project_id,
+                status: period.status,
+                columns: [
+                  { key: 'worker', label: 'Worker' },
+                  { key: 'trade', label: 'Trade' },
+                  { key: 'days', label: 'Days', align: 'right' },
+                  { key: 'reg', label: 'Reg Hrs', align: 'right' },
+                  { key: 'ot', label: 'OT Hrs', align: 'right' },
+                  { key: 'gross', label: 'Gross Pay', align: 'right' },
+                  { key: 'net', label: 'Net Pay', align: 'right' },
+                ],
+                rows: (period.entries || []).map((e: any) => ({
+                  worker: e.worker_name,
+                  trade: e.trade || '—',
+                  days: Number(e.regular_days || 0).toFixed(1),
+                  reg: Number(e.regular_hours || 0).toFixed(1),
+                  ot: Number(e.overtime_hours || 0).toFixed(1),
+                  gross: `${e.currency || 'USD'} ${Number(e.gross_pay || 0).toLocaleString()}`,
+                  net: `${e.currency || 'USD'} ${Number(e.net_pay || 0).toLocaleString()}`,
+                })),
+                summaryTotals: [
+                  { label: 'Total Gross Payroll (Posted to Job Costing)', value: `${period.entries?.[0]?.currency || 'USD'} ${Number(period.total_gross || 0).toLocaleString()}` },
+                  { label: 'Total Net Payable', value: `${period.entries?.[0]?.currency || 'USD'} ${Number(period.total_net || 0).toLocaleString()}`, highlight: true },
+                ],
+              })
+            }
+            className={btnSecondary}
+          >
+            <Download size={14} /> Payroll PDF
+          </button>
           {period.status !== 'Locked' && <>
             <button onClick={compute} disabled={computing} className={btnSecondary}>{computing ? <Spinner size={14} /> : <RefreshCw size={14} />}Compute</button>
             <button onClick={lock} disabled={locking} className={btnPrimary}>{locking ? <Spinner size={14} /> : <Lock size={14} />}Lock</button>
@@ -2493,42 +2771,36 @@ function ProjectDashboardPage({ navigate }: { navigate: (page: Page, param?: str
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Project Management & Updates</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Real-time MEP project portfolio, live site progress feed, and task execution</p>
+      {/* View Switcher: Control Tower vs Portfolio */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-slate-700 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setDashboardView('control_tower')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
+              dashboardView === 'control_tower'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            <Zap size={14} /> Control Tower & Lookahead
+          </button>
+          <button
+            onClick={() => setDashboardView('portfolio')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
+              dashboardView === 'portfolio'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+            }`}
+          >
+            <Briefcase size={14} /> Portfolio Overview ({portfolio.length})
+          </button>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className={btnSecondary}><RefreshCw size={14} />Refresh</button>
           <button onClick={() => navigate('updates')} className={btnSecondary}><TrendingUp size={14} />Site Updates</button>
           {['Admin', 'ProjectManager'].includes(user?.role) && (
             <button onClick={() => setShowNewProjectModal(true)} className={btnPrimary}><Plus size={14} />New Project</button>
           )}
         </div>
-      </div>
-
-      {/* View Switcher: Control Tower vs Portfolio */}
-      <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
-        <button
-          onClick={() => setDashboardView('control_tower')}
-          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
-            dashboardView === 'control_tower'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-          }`}
-        >
-          <Zap size={14} /> Control Tower & Lookahead
-        </button>
-        <button
-          onClick={() => setDashboardView('portfolio')}
-          className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
-            dashboardView === 'portfolio'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-          }`}
-        >
-          <Briefcase size={14} /> Portfolio Overview ({portfolio.length})
-        </button>
       </div>
 
       {dashboardView === 'control_tower' ? (

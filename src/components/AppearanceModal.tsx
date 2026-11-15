@@ -206,7 +206,7 @@ export function AppearanceModal({
                       <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
                         {theme.name}
                       </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight mt-1 line-clamp-2">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug mt-1 line-clamp-2">
                         {theme.desc}
                       </p>
                     </div>

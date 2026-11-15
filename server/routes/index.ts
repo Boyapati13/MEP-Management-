@@ -11,6 +11,7 @@ import { registerSelectionsController } from "../controllers/selectionsControlle
 import { registerMessagesController } from "../controllers/messagesController";
 import { registerProgressRoutes } from "./progressRoutes";
 import { registerOctoRoutes } from "./octoRoutes";
+import { registerFieldNotesRoutes } from "./fieldNotesRoutes";
 import { db } from "../db/connection";
 import { authRequired, hasProjectAccess } from "../middleware/auth";
 import { writeAudit } from "../services/auditService";
@@ -28,5 +29,6 @@ export function registerAllServerRoutes(app: Express): void {
   registerCrudController(app);
   registerProgressRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
   registerOctoRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
+  registerFieldNotesRoutes(app, db, authRequired, hasProjectAccess, writeAudit);
 }
 

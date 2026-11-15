@@ -266,7 +266,25 @@ export function registerWorkforceController(app: Express): void {
     const payrollEntries = canAccessPayroll(req.user!)
       ? db.prepare('SELECT pe.*, pp.period_name, pp.period_start, pp.period_end FROM payroll_entries pe JOIN payroll_periods pp ON pp.id=pe.payroll_period_id WHERE pe.worker_id=? ORDER BY pp.period_start DESC LIMIT 12').all(req.params.id)
       : [];
-    res.json({ worker: rowToDict(worker), attendance: recentAttendance, tasks, instructions, leave_requests: leaveRequests, payroll_entries: payrollEntries });
+    const certifications = db.prepare('SELECT * FROM worker_certifications WHERE worker_id=? ORDER BY expiry_date ASC').all(req.params.id);
+    const timeAllocations = db.prepare(
+      `SELECT wta.*, wp.name as work_package_name, t.name as task_name, b.item_number as boq_item_number
+       FROM worker_time_allocations wta
+       LEFT JOIN work_packages wp ON wp.id = wta.work_package_id
+       LEFT JOIN tasks t ON t.id = wta.task_id
+       LEFT JOIN boq_items b ON b.id = wta.boq_item_id
+       WHERE wta.worker_id=? ORDER BY wta.work_date DESC LIMIT 30`
+    ).all(req.params.id);
+    res.json({
+      worker: rowToDict(worker),
+      attendance: recentAttendance,
+      tasks,
+      instructions,
+      leave_requests: leaveRequests,
+      payroll_entries: payrollEntries,
+      certifications,
+      time_allocations: timeAllocations,
+    });
   });
 
   // --- WORKER ASSIGNMENTS ---
@@ -1225,7 +1243,20 @@ export function registerWorkforceController(app: Express): void {
     if (period.status === 'Locked') { res.status(400).json({ error: 'Already locked' }); return; }
     const now = new Date().toISOString();
     db.prepare('UPDATE payroll_periods SET status=?,locked_by=?,locked_at=? WHERE id=?').run('Locked', req.user!.user_id, now, req.params.id);
-    writeAudit(req.user!.user_id, 'payroll_periods', req.params.id, period.project_id, 'lock', period, { locked_at: now });
+
+    // Bridge verified payroll gross total into Project Job Costing (`costs` table)
+    const costId = `payroll-cost-${period.id}`;
+    const costDesc = `Payroll Run: ${period.period_name} (${period.period_start} to ${period.period_end})`;
+    const costAmount = Number(period.total_gross || 0);
+    const costDate = period.period_end || now.slice(0, 10);
+    db.prepare(
+      `INSERT INTO costs (id, project_id, category, description, planned, actual, date_logged)
+       VALUES (?, ?, 'Labor', ?, 0, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET actual=excluded.actual, description=excluded.description, date_logged=excluded.date_logged`
+    ).run(costId, period.project_id, costDesc, costAmount, costDate);
+    writeAudit(req.user!.user_id, 'costs', costId, period.project_id, 'create', null, { category: 'Labor', actual: costAmount, source: 'payroll_lock' });
+
+    writeAudit(req.user!.user_id, 'payroll_periods', req.params.id, period.project_id, 'lock', period, { locked_at: now, cost_posted: costAmount });
     res.json(db.prepare('SELECT * FROM payroll_periods WHERE id=?').get(req.params.id));
   });
 
@@ -1397,6 +1428,189 @@ export function registerWorkforceController(app: Express): void {
     if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
     const rows = db.prepare(`SELECT w.id as worker_id, w.name as worker_name, w.trade, w.employee_id, SUM(a.regular_hours) as total_regular_hours, SUM(a.overtime_hours) as total_overtime_hours, COUNT(a.id) as days_worked FROM attendance a JOIN workers w ON (w.id=a.worker_id OR w.user_id=a.user_id) WHERE a.project_id=? AND a.work_date>=? AND a.work_date<=? AND a.punch_out IS NOT NULL GROUP BY w.id ORDER BY w.name`).all(project_id, effStart, effEnd);
     res.json({ project_id, period_start: effStart, period_end: effEnd, workers: rows });
+  });
+
+  // --- WORKER CERTIFICATIONS & COMPLIANCE GATE ---
+  app.get('/api/worker_certifications', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workers')) { res.status(403).json({ error: 'No access' }); return; }
+    const { worker_id, project_id } = req.query as any;
+    let sql = `SELECT wc.*, w.name as worker_name, w.employee_id, w.trade, c.name as company_name
+               FROM worker_certifications wc
+               JOIN workers w ON w.id = wc.worker_id
+               LEFT JOIN companies c ON c.id = w.company_id
+               WHERE 1=1`;
+    const params: any[] = [];
+    if (worker_id) { sql += ' AND wc.worker_id=?'; params.push(worker_id); }
+    if (project_id) {
+      if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+      sql += ' AND (wc.project_id=? OR w.project_id=?)';
+      params.push(project_id, project_id);
+    }
+    sql += ' ORDER BY wc.expiry_date ASC, w.name ASC';
+    const today = new Date().toISOString().slice(0, 10);
+    const soonDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const rows = (db.prepare(sql).all(...params) as any[]).map(r => ({
+      ...r,
+      is_expired: Boolean(r.expiry_date && r.expiry_date < today),
+      expiring_soon: Boolean(r.expiry_date && r.expiry_date >= today && r.expiry_date <= soonDate),
+    }));
+    res.json(rows);
+  });
+
+  app.post('/api/worker_certifications', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'workers')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const { worker_id, project_id, cert_type, cert_number, issuer, issue_date, expiry_date, status, notes } = req.body;
+    if (!worker_id || !cert_type) { res.status(400).json({ error: 'worker_id and cert_type required' }); return; }
+    const worker = db.prepare('SELECT * FROM workers WHERE id=?').get(worker_id) as any;
+    if (!worker) { res.status(404).json({ error: 'Worker not found' }); return; }
+    const effProjectId = project_id || worker.project_id || null;
+    if (effProjectId && !hasProjectAccess(req.user!, effProjectId)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const today = now.slice(0, 10);
+    const derivedStatus = status || (expiry_date && expiry_date < today ? 'Expired' : 'Valid');
+    db.prepare(
+      `INSERT INTO worker_certifications (id, worker_id, project_id, cert_type, cert_number, issuer, issue_date, expiry_date, status, verified_by, verified_at, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, worker_id, effProjectId, cert_type, cert_number || null, issuer || null, issue_date || null, expiry_date || null, derivedStatus, req.user!.user_id, now, notes || null, now);
+    writeAudit(req.user!.user_id, 'worker_certifications', id, effProjectId || 'GLOBAL', 'create', null, { worker_id, cert_type, expiry_date });
+    res.status(201).json(db.prepare('SELECT * FROM worker_certifications WHERE id=?').get(id));
+  });
+
+  app.put('/api/worker_certifications/:id', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'workers')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const existing = db.prepare('SELECT * FROM worker_certifications WHERE id=?').get(req.params.id) as any;
+    if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+    const { cert_type, cert_number, issuer, issue_date, expiry_date, status, notes } = req.body;
+    const now = new Date().toISOString();
+    db.prepare(
+      `UPDATE worker_certifications
+       SET cert_type=COALESCE(?,cert_type), cert_number=COALESCE(?,cert_number), issuer=COALESCE(?,issuer),
+           issue_date=COALESCE(?,issue_date), expiry_date=COALESCE(?,expiry_date), status=COALESCE(?,status),
+           notes=COALESCE(?,notes), verified_by=?, verified_at=?
+       WHERE id=?`
+    ).run(cert_type || null, cert_number || null, issuer || null, issue_date || null, expiry_date || null, status || null, notes || null, req.user!.user_id, now, req.params.id);
+    writeAudit(req.user!.user_id, 'worker_certifications', req.params.id, existing.project_id || 'GLOBAL', 'update', existing, req.body);
+    res.json(db.prepare('SELECT * FROM worker_certifications WHERE id=?').get(req.params.id));
+  });
+
+  app.delete('/api/worker_certifications/:id', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'workers')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const existing = db.prepare('SELECT * FROM worker_certifications WHERE id=?').get(req.params.id) as any;
+    if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+    db.prepare('DELETE FROM worker_certifications WHERE id=?').run(req.params.id);
+    writeAudit(req.user!.user_id, 'worker_certifications', req.params.id, existing.project_id || 'GLOBAL', 'delete', existing, null);
+    res.json({ ok: true });
+  });
+
+  // --- TASK / WORK PACKAGE / BOQ COST-CODE TIME ALLOCATIONS ---
+  app.get('/api/worker_time_allocations', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, worker_id, work_date, work_package_id, task_id } = req.query as any;
+    let sql = `SELECT wta.*, w.name as worker_name, w.trade, w.employee_id, w.employment_type,
+                      c.name as company_name, wp.name as work_package_name, t.name as task_name,
+                      b.item_number as boq_item_number, b.description as boq_description
+               FROM worker_time_allocations wta
+               JOIN workers w ON w.id = wta.worker_id
+               LEFT JOIN companies c ON c.id = w.company_id
+               LEFT JOIN work_packages wp ON wp.id = wta.work_package_id
+               LEFT JOIN tasks t ON t.id = wta.task_id
+               LEFT JOIN boq_items b ON b.id = wta.boq_item_id
+               WHERE 1=1`;
+    const params: any[] = [];
+    if (project_id) {
+      if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+      sql += ' AND wta.project_id=?';
+      params.push(project_id);
+    }
+    if (worker_id) { sql += ' AND wta.worker_id=?'; params.push(worker_id); }
+    if (work_date) { sql += ' AND wta.work_date=?'; params.push(work_date); }
+    if (work_package_id) { sql += ' AND wta.work_package_id=?'; params.push(work_package_id); }
+    if (task_id) { sql += ' AND wta.task_id=?'; params.push(task_id); }
+    sql += ' ORDER BY wta.work_date DESC, w.name ASC LIMIT 500';
+    res.json(db.prepare(sql).all(...params));
+  });
+
+  app.post('/api/worker_time_allocations', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, attendance_id, worker_id, work_date, work_package_id, task_id, boq_item_id, hours, cost_code, notes } = req.body;
+    const numHours = Number(hours);
+    if (!project_id || !worker_id || !Number.isFinite(numHours) || numHours <= 0) {
+      res.status(400).json({ error: 'project_id, worker_id, and positive hours required' });
+      return;
+    }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const effDate = work_date || now.slice(0, 10);
+    db.prepare(
+      `INSERT INTO worker_time_allocations (id, project_id, attendance_id, worker_id, work_date, work_package_id, task_id, boq_item_id, hours, cost_code, notes, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)`
+    ).run(id, project_id, attendance_id || null, worker_id, effDate, work_package_id || null, task_id || null, boq_item_id || null, numHours, cost_code || null, notes || null, now);
+    writeAudit(req.user!.user_id, 'worker_time_allocations', id, project_id, 'create', null, { worker_id, hours: numHours, work_package_id, task_id, boq_item_id });
+    res.status(201).json(db.prepare('SELECT * FROM worker_time_allocations WHERE id=?').get(id));
+  });
+
+  app.post('/api/worker_time_allocations/:id/approve', authRequired, (req, res) => {
+    if (!canEdit(req.user!, 'workforce')) { res.status(403).json({ error: 'No edit access' }); return; }
+    const existing = db.prepare('SELECT * FROM worker_time_allocations WHERE id=?').get(req.params.id) as any;
+    if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!hasProjectAccess(req.user!, existing.project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE worker_time_allocations SET status='Approved', approved_by=?, approved_at=? WHERE id=?`)
+      .run(req.user!.user_id, now, req.params.id);
+    writeAudit(req.user!.user_id, 'worker_time_allocations', req.params.id, existing.project_id, 'approve', existing, { status: 'Approved' });
+    res.json(db.prepare('SELECT * FROM worker_time_allocations WHERE id=?').get(req.params.id));
+  });
+
+  // --- EMPLOYER / SUBCONTRACTOR MAN-HOUR VALUATION & DAILY HEADCOUNT ROLLUP ---
+  app.get('/api/reports/workforce/subcontractor-hours', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, period_start, period_end } = req.query as any;
+    if (!project_id) { res.status(400).json({ error: 'project_id required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    let where = 'a.project_id=? AND a.punch_out IS NOT NULL';
+    const params: any[] = [project_id];
+    if (period_start) { where += ' AND a.work_date>=?'; params.push(period_start); }
+    if (period_end) { where += ' AND a.work_date<=?'; params.push(period_end); }
+    const rows = db.prepare(
+      `SELECT COALESCE(c.id, 'direct') as company_id,
+              COALESCE(c.name, 'Direct In-House Workforce') as company_name,
+              COALESCE(c.company_type, 'MainContractor') as company_type,
+              w.trade,
+              COUNT(DISTINCT w.id) as worker_count,
+              COUNT(a.id) as shifts_worked,
+              ROUND(SUM(COALESCE(a.regular_hours, 0)), 2) as regular_hours,
+              ROUND(SUM(CASE WHEN a.ot_status='Approved' THEN COALESCE(a.overtime_hours, 0) ELSE 0 END), 2) as approved_overtime_hours
+       FROM attendance a
+       JOIN workers w ON (w.id=a.worker_id OR w.user_id=a.user_id)
+       LEFT JOIN companies c ON c.id = w.company_id
+       WHERE ${where}
+       GROUP BY COALESCE(c.id, 'direct'), w.trade
+       ORDER BY company_name ASC, w.trade ASC`
+    ).all(...params);
+    res.json({ project_id, groups: rows });
+  });
+
+  app.get('/api/reports/workforce/daily-headcount', authRequired, (req, res) => {
+    if (!canView(req.user!, 'workforce')) { res.status(403).json({ error: 'No access' }); return; }
+    const { project_id, date } = req.query as any;
+    if (!project_id) { res.status(400).json({ error: 'project_id required' }); return; }
+    if (!hasProjectAccess(req.user!, project_id)) { res.status(403).json({ error: 'No project access' }); return; }
+    const reportDate = date || new Date().toISOString().slice(0, 10);
+    const byTrade = db.prepare(
+      `SELECT COALESCE(w.trade, 'General') as trade,
+              COALESCE(c.name, 'Direct In-House') as company_name,
+              COUNT(DISTINCT a.worker_id) as headcount,
+              ROUND(SUM(COALESCE(a.regular_hours, 0) + COALESCE(a.overtime_hours, 0)), 2) as total_hours
+       FROM attendance a
+       LEFT JOIN workers w ON w.id = a.worker_id
+       LEFT JOIN companies c ON c.id = w.company_id
+       WHERE a.project_id=? AND a.work_date=? AND a.punch_in IS NOT NULL
+       GROUP BY COALESCE(w.trade, 'General'), COALESCE(c.name, 'Direct In-House')
+       ORDER BY headcount DESC`
+    ).all(project_id, reportDate);
+    res.json({ project_id, date: reportDate, by_trade: byTrade });
   });
 
 }

@@ -52,15 +52,34 @@ interface EnterpriseModuleProps {
 }
 
 const WORKFLOW_COLORS: Record<string, string> = {
-  Draft: 'bg-stone-100 text-stone-700 border-stone-200',
+  Draft: 'bg-slate-100 text-slate-700 border-slate-200',
+  'Potential Variation': 'bg-slate-100 text-slate-700 border-slate-300',
+  'Under Preparation': 'bg-slate-100 text-slate-700 border-slate-300',
   Submitted: 'bg-blue-50 text-blue-700 border-blue-200',
   UnderReview: 'bg-amber-50 text-amber-800 border-amber-200',
+  'Under Review': 'bg-amber-50 text-amber-800 border-amber-200',
+  'Technical Review': 'bg-amber-50 text-amber-800 border-amber-200',
+  'Commercial Review': 'bg-amber-50 text-amber-800 border-amber-200',
+  'Under Investigation': 'bg-amber-50 text-amber-800 border-amber-200',
+  'Corrective Action': 'bg-blue-50 text-blue-700 border-blue-200',
+  Verification: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  Answered: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'Approved with Comments': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'Revise & Resubmit': 'bg-amber-50 text-amber-800 border-amber-300',
+  Rectified: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  Verified: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Certified: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'PO Issued': 'bg-blue-50 text-blue-700 border-blue-200',
+  Scheduled: 'bg-slate-100 text-slate-700 border-slate-200',
   Rejected: 'bg-red-50 text-red-700 border-red-200',
   Closed: 'bg-slate-100 text-slate-700 border-slate-300',
   Open: 'bg-amber-50 text-amber-800 border-amber-200',
+  'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
   Pass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Passed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Fail: 'bg-red-50 text-red-700 border-red-200',
+  Failed: 'bg-red-50 text-red-700 border-red-200',
 };
 
 export const EnterpriseModulesView: React.FC<EnterpriseModuleProps> = ({
@@ -83,6 +102,8 @@ export const EnterpriseModulesView: React.FC<EnterpriseModuleProps> = ({
       );
     case 'procurement':
       return <ProcurementWorkspace selectedProject={selectedProject} />;
+    case 'inventory':
+      return <InventoryWarehouseWorkspace selectedProject={selectedProject} />;
     case 'documents':
     case 'drawings':
       return (
@@ -104,6 +125,15 @@ export const EnterpriseModulesView: React.FC<EnterpriseModuleProps> = ({
       return <UsersAndRbacWorkspace projects={projects} />;
     case 'audit':
       return <AuditTrailWorkspace selectedProject={selectedProject} />;
+    case 'commissioning':
+    case 'handover':
+      return (
+        <CommissioningAndHandoverWorkspace
+          initialTab={page === 'handover' ? 'handover' : 'commissioning'}
+          selectedProject={selectedProject}
+          user={user}
+        />
+      );
     case 'rfis':
     case 'submittals':
     case 'change_orders':
@@ -457,7 +487,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
@@ -519,7 +549,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
           </button>
           <button
             onClick={exportCsv}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 text-xs font-semibold border border-stone-200 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200 transition-colors cursor-pointer"
           >
             <Download size={14} /> Export CSV
           </button>
@@ -585,7 +615,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
               window.location.hash = '#/tasks';
               window.dispatchEvent(new HashChangeEvent('hashchange'));
             }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-stone-100 text-slate-800 text-xs font-bold border border-stone-300 shadow-sm transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold border border-slate-300 shadow-sm transition-colors cursor-pointer"
           >
             <CalendarCheck size={14} className="text-blue-600" />
             View Gantt &amp; Tasks →
@@ -598,32 +628,32 @@ const BoqAndJobCostingWorkspace: React.FC<{
         const curr = activeProject?.currency === 'EUR' ? '€' : '$';
         return (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">1. Original Budget</p>
               <p className="text-lg font-bold font-mono text-slate-900 mt-1">{curr}{originalBudget.toLocaleString()}</p>
               <p className="text-[11px] text-slate-500 mt-0.5">{items.length} Tender Line Items</p>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">2. Approved Variations</p>
               <p className="text-lg font-bold font-mono text-amber-700 mt-1">+{curr}{approvedVariations.toLocaleString()}</p>
               <p className="text-[11px] text-slate-500 mt-0.5">{changeOrders.length} Change Orders</p>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">3. Revised Contract Sum</p>
               <p className="text-lg font-bold font-mono text-slate-900 mt-1">{curr}{revisedBudget.toLocaleString()}</p>
               <p className="text-[11px] text-slate-500 mt-0.5">Current Ceiling</p>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">4. Committed POs</p>
               <p className="text-lg font-bold font-mono text-blue-700 mt-1">{curr}{committedPos.toLocaleString()}</p>
               <p className="text-[11px] text-slate-500 mt-0.5">{purchaseOrders.length} Active POs</p>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">5. Earned / Certified</p>
               <p className="text-lg font-bold font-mono text-emerald-700 mt-1">{curr}{actualEarned.toLocaleString()}</p>
               <p className="text-[11px] text-slate-500 mt-0.5">Measured Installed Value</p>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">6. Cost Variance</p>
               <p className={`text-lg font-bold font-mono mt-1 ${variance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                 {variance >= 0 ? '+' : ''}{curr}{variance.toLocaleString()}
@@ -635,7 +665,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
       })()}
 
       {/* Filter & Search Bar */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -643,7 +673,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search BOQ item code, description, or MEP trade..."
-            className="w-full pl-9 pr-4 py-2 text-xs border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -654,7 +684,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                 disciplineFilter === d
                   ? 'bg-slate-900 text-white'
-                  : 'bg-stone-100 text-slate-600 hover:bg-stone-200'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {d || 'All Trades'}
@@ -664,23 +694,23 @@ const BoqAndJobCostingWorkspace: React.FC<{
       </div>
 
       {/* BOQ Table */}
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="py-3.5 px-4">Item Code</th>
                 <th className="py-3.5 px-4">BOQ Material &amp; Technical Specification</th>
                 <th className="py-3.5 px-4">Discipline</th>
                 <th className="py-3.5 px-4">Unit</th>
                 <th className="py-3.5 px-4 text-right">Tender Qty</th>
-                <th className="py-3.5 px-4 text-right">Rate ($)</th>
+                <th className="py-3.5 px-4 text-right">Unit Rate</th>
                 <th className="py-3.5 px-4 text-right">Tender Amount ($)</th>
                 <th className="py-3.5 px-4 text-right">Installed Qty</th>
                 <th className="py-3.5 px-4 text-right">Earned ($)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-400">Loading BOQ &amp; Job Costing ledger...</td>
@@ -776,9 +806,9 @@ const BoqAndJobCostingWorkspace: React.FC<{
       {/* Buildertrend Unified Item Master Inspector Slide-Over */}
       {inspectorItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/40 backdrop-blur-xs p-0 sm:p-4">
-          <div className="bg-white h-full sm:h-auto sm:max-h-[92vh] w-full max-w-2xl rounded-none sm:rounded-3xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+          <div className="bg-white h-full sm:h-auto sm:max-h-[92vh] w-full max-w-2xl rounded-none sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
             {/* Modal Header */}
-            <div className="p-5 border-b border-stone-200 bg-stone-50 flex items-center justify-between">
+            <div className="p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
@@ -792,7 +822,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
               </div>
               <button
                 onClick={() => setInspectorItem(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-stone-200/60 transition-colors"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
               >
                 <X size={20} />
               </button>
@@ -801,7 +831,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
               {/* Technical Specifications */}
-              <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
                 <p className="font-bold text-[11px] uppercase tracking-wider text-slate-500 mb-1">
                   Technical Specification
                 </p>
@@ -812,19 +842,19 @@ const BoqAndJobCostingWorkspace: React.FC<{
 
               {/* Quantities & Financial Anatomy */}
               <div className="grid grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                   <p className="text-[10px] text-slate-400 uppercase font-bold">Tender Qty</p>
                   <p className="text-base font-bold font-mono text-slate-900 mt-0.5">
                     {inspectorItem.quantity ?? inspectorItem.tender_quantity} {inspectorItem.unit}
                   </p>
                 </div>
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                   <p className="text-[10px] text-slate-400 uppercase font-bold">Unit Rate</p>
                   <p className="text-base font-bold font-mono text-slate-900 mt-0.5">
                     ${Number(inspectorItem.unit_rate ?? inspectorItem.tender_rate ?? 0).toLocaleString()}
                   </p>
                 </div>
-                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                   <p className="text-[10px] text-slate-400 uppercase font-bold">Total Tender</p>
                   <p className="text-base font-bold font-mono text-slate-900 mt-0.5">
                     ${Number(inspectorItem.total_amount ?? inspectorItem.tender_amount ?? 0).toLocaleString()}
@@ -847,7 +877,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 {inspectorLoading ? (
                   <p className="text-slate-400 italic">Querying linked commitments...</p>
                 ) : !inspectorDetails?.material_requests?.length ? (
-                  <p className="text-slate-500 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                  <p className="text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     No Material Requests raised for this line yet.
                   </p>
                 ) : (
@@ -878,7 +908,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 {inspectorLoading ? (
                   <p className="text-slate-400 italic">Querying purchase orders...</p>
                 ) : !inspectorDetails?.purchase_orders?.length ? (
-                  <p className="text-slate-500 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                  <p className="text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     No active PO issued against this line yet.
                   </p>
                 ) : (
@@ -909,7 +939,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 {inspectorLoading ? (
                   <p className="text-slate-400 italic">Checking quality records...</p>
                 ) : !inspectorDetails?.inspections?.length ? (
-                  <p className="text-slate-500 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                  <p className="text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     No inspection walk recorded yet.
                   </p>
                 ) : (
@@ -933,7 +963,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-stone-200 bg-stone-50 flex items-center justify-end">
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
               <button
                 onClick={() => setInspectorItem(null)}
                 className="px-4 py-2 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors"
@@ -948,7 +978,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
       {/* Add BOQ Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md p-6 space-y-4">
+          <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base">Add BOQ Schedule Line</h3>
               <button type="button" onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700">
@@ -963,7 +993,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                   value={form.item_code}
                   onChange={e => setForm(s => ({ ...s, item_code: e.target.value }))}
                   placeholder="e.g. M-HVAC-01"
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -971,7 +1001,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 <select
                   value={form.discipline}
                   onChange={e => setForm(s => ({ ...s, discipline: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option>HVAC</option>
                   <option>Electrical</option>
@@ -988,7 +1018,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 value={form.description}
                 onChange={e => setForm(s => ({ ...s, description: e.target.value }))}
                 placeholder="Supply & installation of Chilled Water Air Handling Unit"
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               />
             </div>
             <div>
@@ -997,7 +1027,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 value={form.specification}
                 onChange={e => setForm(s => ({ ...s, specification: e.target.value }))}
                 placeholder="Eurovent certified double-skin AHU, 50mm rockwool panel, IE4 fan motor"
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               />
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -1006,7 +1036,7 @@ const BoqAndJobCostingWorkspace: React.FC<{
                 <input
                   value={form.unit}
                   onChange={e => setForm(s => ({ ...s, unit: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -1016,17 +1046,17 @@ const BoqAndJobCostingWorkspace: React.FC<{
                   step="any"
                   value={form.quantity}
                   onChange={e => setForm(s => ({ ...s, quantity: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Unit Rate ($)</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 dark:text-slate-300 mb-1">Unit Rate</label>
                 <input
                   type="number"
                   step="any"
                   value={form.unit_rate}
                   onChange={e => setForm(s => ({ ...s, unit_rate: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
             </div>
@@ -1065,6 +1095,17 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
   const [boqItems, setBoqItems] = useState<any[]>([]);
   const [showAddPo, setShowAddPo] = useState(false);
   const [showAddMr, setShowAddMr] = useState(false);
+  const [mrFilter, setMrFilter] = useState<'all' | 'missing' | 'received' | 'ordered'>('all');
+  const [receiptTarget, setReceiptTarget] = useState<{ kind: 'mr' | 'po'; item: any } | null>(null);
+  const [receiptForm, setReceiptForm] = useState({
+    received_quantity: 0,
+    missing_quantity: 0,
+    storage_location: 'Site Store',
+    delivery_note_ref: '',
+    discrepancy_reason: '',
+    received_date: new Date().toISOString().slice(0, 10),
+  });
+  const [receiptNotice, setReceiptNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [poForm, setPoForm] = useState({
     po_number: '',
     vendor: '',
@@ -1101,6 +1142,12 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
 
   useEffect(() => {
     loadProcurement();
+  }, [loadProcurement]);
+
+  useEffect(() => {
+    const onRealtime = () => loadProcurement();
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
   }, [loadProcurement]);
 
   const handleCreatePo = async (e: React.FormEvent) => {
@@ -1163,9 +1210,59 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
     } catch {}
   };
 
+  const openReceiveModal = (kind: 'mr' | 'po', item: any) => {
+    const orderedQty = Number(item.quantity ?? 1);
+    const alreadyRec = Number(item.received_quantity ?? 0);
+    const defaultRec = alreadyRec > 0 ? alreadyRec : orderedQty;
+    setReceiptTarget({ kind, item });
+    setReceiptForm({
+      received_quantity: defaultRec,
+      missing_quantity: Math.max(0, orderedQty - defaultRec),
+      storage_location: item.storage_location || 'Site Store',
+      delivery_note_ref: item.delivery_note_ref || '',
+      discrepancy_reason: item.discrepancy_reason || '',
+      received_date: new Date().toISOString().slice(0, 10),
+    });
+  };
+
+  const handleSubmitReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!receiptTarget) return;
+    try {
+      const endpoint =
+        receiptTarget.kind === 'mr'
+          ? `/api/material_requests/${receiptTarget.item.id}/receive`
+          : `/api/purchase_orders/${receiptTarget.item.id}/receive`;
+      const res: any = await api.post(endpoint, {
+        ...receiptForm,
+        ordered_quantity: Number(receiptTarget.item.quantity ?? 1),
+      });
+      setReceiptTarget(null);
+      setReceiptNotice({
+        type: 'success',
+        text: `Site receipt saved (${res?.status || 'Recorded'}): ${receiptForm.received_quantity} received, ${receiptForm.missing_quantity} missing.`,
+      });
+      loadProcurement();
+    } catch (err: any) {
+      setReceiptNotice({ type: 'error', text: err?.message || 'Failed to record site receipt.' });
+    }
+  };
+
+  const missingRequestsCount = requests.filter(
+    (r: any) => Number(r.missing_quantity || 0) > 0 || r.status === 'Partial / Missing' || r.status === 'Missing / Discrepancy'
+  ).length;
+  const receivedRequestsCount = requests.filter((r: any) => r.status === 'Received').length;
+  const orderedRequestsCount = requests.filter((r: any) => r.status === 'Ordered').length;
+  const filteredRequests = requests.filter((r: any) => {
+    if (mrFilter === 'missing') return Number(r.missing_quantity || 0) > 0 || r.status === 'Partial / Missing' || r.status === 'Missing / Discrepancy';
+    if (mrFilter === 'received') return r.status === 'Received';
+    if (mrFilter === 'ordered') return r.status === 'Ordered';
+    return true;
+  });
+
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
             Supply Chain &amp; Lead-Time Control
@@ -1194,26 +1291,123 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
       {/* Programme Impact Analysis Component */}
       <ProcurementProgrammeRiskView projectId={selectedProject} />
 
+      {receiptNotice && (
+        <div
+          className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+            receiptNotice.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          <span>{receiptNotice.text}</span>
+          <button onClick={() => setReceiptNotice(null)} className="text-[11px] font-bold opacity-70 hover:opacity-100 ml-4">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Site Material Receipt & Shortage KPI Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <button
+          type="button"
+          onClick={() => setMrFilter('all')}
+          className={`text-left bg-white rounded-2xl border p-4 shadow-sm transition-all ${mrFilter === 'all' ? 'border-slate-900 ring-1 ring-slate-900/10' : 'border-slate-200'}`}
+        >
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Total Site Requisitions</div>
+          <div className="text-2xl font-bold text-slate-900 tabular-nums mt-1">{requests.length}</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMrFilter('ordered')}
+          className={`text-left bg-white rounded-2xl border p-4 shadow-sm transition-all ${mrFilter === 'ordered' ? 'border-blue-600 ring-1 ring-blue-600/20' : 'border-slate-200'}`}
+        >
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Ordered / In Transit</div>
+          <div className="text-2xl font-bold text-blue-600 tabular-nums mt-1">{orderedRequestsCount}</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMrFilter('received')}
+          className={`text-left bg-white rounded-2xl border p-4 shadow-sm transition-all ${mrFilter === 'received' ? 'border-emerald-600 ring-1 ring-emerald-600/20' : 'border-slate-200'}`}
+        >
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Received on Site</div>
+          <div className="text-2xl font-bold text-emerald-600 tabular-nums mt-1">{receivedRequestsCount}</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMrFilter('missing')}
+          className={`text-left bg-white rounded-2xl border p-4 shadow-sm transition-all ${mrFilter === 'missing' ? 'border-red-600 ring-1 ring-red-600/20' : 'border-slate-200'}`}
+        >
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Missing / Shortages</div>
+          <div className="text-2xl font-bold text-red-600 tabular-nums mt-1">{missingRequestsCount}</div>
+        </button>
+      </div>
+
       {/* Purchase Orders & Material Requests Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-2">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <Layers size={16} className="text-blue-600" /> BOQ Material Requests &amp; Specifications ({requests.length})
+              <Layers size={16} className="text-blue-600" /> BOQ Material Requests &amp; Site Receipts ({filteredRequests.length})
             </h3>
+            <button
+              type="button"
+              onClick={() =>
+                exportFormalDocumentPdf({
+                  documentType: 'SITE RECEIPT & SHORTAGE LOG',
+                  referenceCode: `GRN-${selectedProject || 'MEP'}-${new Date().toISOString().slice(0, 10)}`,
+                  title: 'Site Material Receipt & Missing Items Register',
+                  subtitle: `Project: ${selectedProject || 'All Projects'} — Shortages Highlighted`,
+                  projectCode: selectedProject || 'MEP',
+                  status: `${missingRequestsCount} MISSING`,
+                  columns: [
+                    { key: 'material', label: 'Material' },
+                    { key: 'boq', label: 'BOQ Ref' },
+                    { key: 'ordered', label: 'Requested', align: 'right' },
+                    { key: 'received', label: 'Received', align: 'right' },
+                    { key: 'missing', label: 'Missing', align: 'right' },
+                    { key: 'store', label: 'Location / DN' },
+                    { key: 'status', label: 'Status' },
+                  ],
+                  rows: requests.map((r: any) => ({
+                    material: r.material || r.description || r.id,
+                    boq: r.boq_reference || '—',
+                    ordered: `${Number(r.quantity ?? 1)} ${r.unit || ''}`,
+                    received: `${Number(r.received_quantity ?? 0)} ${r.unit || ''}`,
+                    missing: `${Number(r.missing_quantity ?? 0)} ${r.unit || ''}`,
+                    store: `${r.storage_location || '—'}${r.delivery_note_ref ? ` (DN: ${r.delivery_note_ref})` : ''}`,
+                    status: r.status || 'Draft',
+                  })),
+                })
+              }
+              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1"
+            >
+              <Download size={12} /> Receipt / Missing PDF
+            </button>
           </div>
-          <div className="divide-y divide-stone-100 max-h-[480px] overflow-y-auto">
-            {requests.length === 0 ? (
+          <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+            {filteredRequests.length === 0 ? (
               <p className="p-6 text-xs text-slate-500 text-center">
-                No Material Requisitions yet. Import a BOQ or click <strong>Request Material from BOQ</strong>.
+                No Material Requisitions matching this filter. Import a BOQ or click <strong>Request Material from BOQ</strong>.
               </p>
             ) : (
-              requests.map((mr: any) => {
+              filteredRequests.map((mr: any) => {
                 const matName = mr.material || mr.item || mr.title || mr.description || mr.id.slice(0, 8);
                 const specText = mr.specification || mr.spec || mr.description || 'Standard MEP Technical Specification';
                 const boqRef = mr.boq_reference || mr.wbs_code;
+                const recQty = Number(mr.received_quantity ?? 0);
+                const missQty = Number(mr.missing_quantity ?? 0);
+                const statusCls =
+                  mr.status === 'Received'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : mr.status === 'Partial / Missing'
+                    ? 'bg-orange-50 text-orange-700 border-orange-200'
+                    : mr.status === 'Missing / Discrepancy'
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : mr.status === 'Ordered'
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : 'bg-blue-50 text-blue-700 border-blue-200';
                 return (
-                  <div key={mr.id} className="p-4 flex items-start justify-between gap-3 text-xs hover:bg-stone-50">
+                  <div key={mr.id} className="p-4 flex items-start justify-between gap-3 text-xs hover:bg-slate-50">
                     <div className="space-y-1 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {boqRef && (
@@ -1228,26 +1422,48 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                         )}
                         <span className="font-bold text-slate-900 text-sm">{matName}</span>
                       </div>
-                      <p className="text-[11px] text-slate-600 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 font-mono">
+                      <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-mono">
                         <strong className="text-slate-800">BOQ Specification:</strong> {specText}
                       </p>
                       <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-0.5">
                         <span>
-                          Qty: <strong className="font-mono text-slate-800">{Number(mr.quantity ?? 1).toLocaleString()} {mr.unit || 'Item'}</strong>
+                          Req: <strong className="font-mono text-slate-800">{Number(mr.quantity ?? 1).toLocaleString()} {mr.unit || 'Item'}</strong>
                         </span>
+                        {(recQty > 0 || missQty > 0) && (
+                          <>
+                            <span className="text-emerald-700 font-semibold">
+                              Received: <strong className="font-mono">{recQty.toLocaleString()}</strong>
+                            </span>
+                            {missQty > 0 && (
+                              <span className="text-red-600 font-bold">
+                                Missing: <strong className="font-mono">{missQty.toLocaleString()}</strong>
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {mr.storage_location && <span>• Store: <strong>{mr.storage_location}</strong></span>}
+                        {mr.delivery_note_ref && <span>• DN: <strong>{mr.delivery_note_ref}</strong></span>}
                         <span>• Required: <strong>{mr.required_date || mr.date_required || 'ASAP'}</strong></span>
                         {mr.supplier && <span>• Vendor: <strong>{mr.supplier}</strong></span>}
                       </div>
+                      {mr.discrepancy_reason && (
+                        <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1">
+                          <strong>Missing / Discrepancy Note:</strong> {mr.discrepancy_reason}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                        mr.status === 'Ordered'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusCls}`}>
                         {mr.status || 'Draft'}
                       </span>
-                      {mr.status !== 'Ordered' && (
+                      <button
+                        type="button"
+                        onClick={() => openReceiveModal('mr', mr)}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-sm transition-colors"
+                      >
+                        Receive / Missing
+                      </button>
+                      {mr.status !== 'Ordered' && mr.status !== 'Received' && (
                         <button
                           type="button"
                           onClick={() => handleConvertMrToPo(mr.id)}
@@ -1264,29 +1480,37 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <Truck size={16} className="text-amber-600" /> Purchase Orders ({orders.length})
             </h3>
           </div>
-          <div className="divide-y divide-stone-100 max-h-[480px] overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
             {orders.length === 0 ? (
               <p className="p-6 text-xs text-slate-500 text-center">No Purchase Orders recorded for this project.</p>
             ) : (
               orders.map((po: any) => (
-                <div key={po.id} className="p-4 flex items-center justify-between gap-3 text-xs hover:bg-stone-50">
+                <div key={po.id} className="p-4 flex items-center justify-between gap-3 text-xs hover:bg-slate-50">
                   <div>
                     <p className="font-bold text-slate-900">{po.po_number || po.title || po.id.slice(0, 8)} — {po.vendor || po.supplier}</p>
                     <p className="text-slate-500 mt-0.5">{po.description || po.items_summary || 'MEP Equipment Supply'}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="text-right">
                       <p className="font-mono font-bold text-slate-900">€{Number(po.amount || po.total_amount || 0).toLocaleString()}</p>
                       <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                         {po.status || 'Ordered'}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => openReceiveModal('po', po)}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold transition-colors"
+                      title="Record Site Delivery Receipt / Missing Items"
+                    >
+                      Site Receipt
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -1352,7 +1576,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
 
       {showAddMr && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreateMr} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-lg p-6 space-y-4">
+          <form onSubmit={handleCreateMr} className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base">New Material Request (with BOQ Specification)</h3>
               <button type="button" onClick={() => setShowAddMr(false)} className="text-slate-400 hover:text-slate-700">
@@ -1364,7 +1588,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
               <select
                 value={mrForm.boq_item_id}
                 onChange={e => handleSelectBoqForMr(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               >
                 <option value="">-- Select a BOQ Item or Enter Custom Material --</option>
                 {boqItems.map((b: any) => (
@@ -1382,7 +1606,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   value={mrForm.material}
                   onChange={e => setMrForm(s => ({ ...s, material: e.target.value }))}
                   placeholder="Chilled Water Air Handling Unit"
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -1392,13 +1616,13 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                     value={mrForm.boq_reference}
                     onChange={e => setMrForm(s => ({ ...s, boq_reference: e.target.value }))}
                     placeholder="1.01"
-                    className="w-1/2 px-3 py-2 text-xs border border-stone-300 rounded-xl font-mono"
+                    className="w-1/2 px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
                   />
                   <input
                     value={mrForm.discipline}
                     onChange={e => setMrForm(s => ({ ...s, discipline: e.target.value }))}
                     placeholder="HVAC"
-                    className="w-1/2 px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                    className="w-1/2 px-3 py-2 text-xs border border-slate-300 rounded-xl"
                   />
                 </div>
               </div>
@@ -1411,7 +1635,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                 value={mrForm.specification}
                 onChange={e => setMrForm(s => ({ ...s, specification: e.target.value }))}
                 placeholder="Full technical specification from BOQ / Contract schedule..."
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl font-mono"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
               />
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -1422,7 +1646,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   step="any"
                   value={mrForm.quantity}
                   onChange={e => setMrForm(s => ({ ...s, quantity: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -1430,7 +1654,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                 <input
                   value={mrForm.unit}
                   onChange={e => setMrForm(s => ({ ...s, unit: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -1439,7 +1663,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   type="date"
                   value={mrForm.required_date}
                   onChange={e => setMrForm(s => ({ ...s, required_date: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
             </div>
@@ -1455,9 +1679,99 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
         </div>
       )}
 
+      {receiptTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleSubmitReceipt} className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Site Material Receipt &amp; Missing Report</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {receiptTarget.item.material || receiptTarget.item.description || receiptTarget.item.po_number} (Ordered:{' '}
+                  <strong>{Number(receiptTarget.item.quantity ?? 1)} {receiptTarget.item.unit || 'Item'}</strong>)
+                </p>
+              </div>
+              <button type="button" onClick={() => setReceiptTarget(null)} className="text-slate-400 hover:text-slate-700">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Received Qty on Site *</label>
+                <input
+                  type="number"
+                  step="any"
+                  min={0}
+                  required
+                  value={receiptForm.received_quantity}
+                  onChange={e => {
+                    const recVal = Number(e.target.value || 0);
+                    const ordVal = Number(receiptTarget.item.quantity ?? 1);
+                    setReceiptForm(s => ({
+                      ...s,
+                      received_quantity: recVal,
+                      missing_quantity: Math.max(0, ordVal - recVal),
+                    }));
+                  }}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-red-600 mb-1">Missing / Short Qty</label>
+                <input
+                  type="number"
+                  step="any"
+                  min={0}
+                  value={receiptForm.missing_quantity}
+                  onChange={e => setReceiptForm(s => ({ ...s, missing_quantity: Math.max(0, Number(e.target.value || 0)) }))}
+                  className="w-full px-3 py-2 text-xs border border-red-300 bg-red-50/40 rounded-xl font-mono text-red-700 font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Site Store / Laydown Location</label>
+                <input
+                  value={receiptForm.storage_location}
+                  onChange={e => setReceiptForm(s => ({ ...s, storage_location: e.target.value }))}
+                  placeholder="e.g. Level 2 MEP Store / Container B"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Delivery Note (DN) Ref</label>
+                <input
+                  value={receiptForm.delivery_note_ref}
+                  onChange={e => setReceiptForm(s => ({ ...s, delivery_note_ref: e.target.value }))}
+                  placeholder="e.g. DN-88412"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                Missing / Damaged / Discrepancy Notes {receiptForm.missing_quantity > 0 ? '(Recommended)' : '(Optional)'}
+              </label>
+              <textarea
+                rows={2}
+                value={receiptForm.discrepancy_reason}
+                onChange={e => setReceiptForm(s => ({ ...s, discrepancy_reason: e.target.value }))}
+                placeholder="e.g. 2 valves missing from pallet / damaged flange reported to supplier..."
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setReceiptTarget(null)} className="px-4 py-2 text-xs font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
+                Save Site Receipt
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {showAddPo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreatePo} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md p-6 space-y-4">
+          <form onSubmit={handleCreatePo} className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-base">Issue Purchase Order</h3>
               <button type="button" onClick={() => setShowAddPo(false)} className="text-slate-400 hover:text-slate-700">
@@ -1472,7 +1786,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   value={poForm.po_number}
                   onChange={e => setPoForm(s => ({ ...s, po_number: e.target.value }))}
                   placeholder="PO-2026-041"
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -1482,7 +1796,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   value={poForm.vendor}
                   onChange={e => setPoForm(s => ({ ...s, vendor: e.target.value }))}
                   placeholder="Daikin Applied / Schneider"
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
             </div>
@@ -1493,7 +1807,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                 value={poForm.description}
                 onChange={e => setFormDescription(poForm, setPoForm, e.target.value)}
                 placeholder="Chillers, Main LV Switchgear, Fire Pumps"
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1503,7 +1817,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   type="number"
                   value={poForm.amount}
                   onChange={e => setPoForm(s => ({ ...s, amount: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -1512,7 +1826,7 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
                   type="date"
                   value={poForm.delivery_date}
                   onChange={e => setPoForm(s => ({ ...s, delivery_date: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
             </div>
@@ -1534,6 +1848,346 @@ const ProcurementWorkspace: React.FC<{ selectedProject: string }> = ({ selectedP
 function setFormDescription(state: any, setter: any, description: string) {
   setter({ ...state, description });
 }
+
+/* ============================================================================
+ * 2B. SITE INVENTORY & WAREHOUSE MANAGEMENT WORKSPACE
+ * ========================================================================== */
+const InventoryWarehouseWorkspace: React.FC<{ selectedProject: string }> = ({ selectedProject }) => {
+  const [items, setItems] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [txTarget, setTxTarget] = useState<{ mode: 'issue' | 'return'; item: any } | null>(null);
+  const [txForm, setTxForm] = useState({ quantity: 1, issued_to: '', reference_no: '', notes: '' });
+  const [addForm, setAddForm] = useState({
+    sku: '',
+    material: '',
+    category: 'MEP Material',
+    unit: 'Unit',
+    storage_location: 'Site Store',
+    current_stock: 0,
+    min_stock_level: 5,
+    unit_cost: 0,
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = selectedProject && selectedProject !== 'ALL' ? `?project_id=${selectedProject}` : '';
+      const [invRes, mvRes] = await Promise.all([
+        api.get<any[]>(`/api/inventory${qs}`).catch(() => []),
+        api.get<any[]>(`/api/inventory/movements${qs}`).catch(() => []),
+      ]);
+      setItems(Array.isArray(invRes) ? invRes : []);
+      setMovements(Array.isArray(mvRes) ? mvRes : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const onRealtime = (ev: any) => {
+      const tbl = ev?.detail?.module || ev?.detail?.table;
+      if (!tbl || tbl === 'inventory_items' || tbl === 'stock_movements' || tbl === 'material_requests' || tbl === '*') {
+        load();
+      }
+    };
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
+  }, [load]);
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetProject = selectedProject && selectedProject !== 'ALL' ? selectedProject : 'bov-st-venera-2618';
+    try {
+      await api.post('/api/inventory', { ...addForm, project_id: targetProject });
+      setShowAdd(false);
+      setAddForm({ sku: '', material: '', category: 'MEP Material', unit: 'Unit', storage_location: 'Site Store', current_stock: 0, min_stock_level: 5, unit_cost: 0 });
+      setNotice({ type: 'success', text: 'Store item added to inventory ledger.' });
+      load();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: err?.message || 'Failed to add inventory item.' });
+    }
+  };
+
+  const handleStockTx = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!txTarget) return;
+    try {
+      const endpoint = `/api/inventory/${txTarget.item.id}/${txTarget.mode}`;
+      await api.post(endpoint, txForm);
+      setNotice({
+        type: 'success',
+        text: `${txTarget.mode === 'issue' ? 'Issued' : 'Returned'} ${txForm.quantity} ${txTarget.item.unit} of ${txTarget.item.material}.`,
+      });
+      setTxTarget(null);
+      setTxForm({ quantity: 1, issued_to: '', reference_no: '', notes: '' });
+      load();
+    } catch (err: any) {
+      setNotice({ type: 'error', text: err?.message || 'Stock movement failed.' });
+    }
+  };
+
+  const totalUnits = items.reduce((s, r) => s + Number(r.current_stock || 0), 0);
+  const lowStockCount = items.filter(r => r.low_stock || Number(r.current_stock || 0) <= Number(r.min_stock_level || 0)).length;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+            Site Stores &amp; Warehouse Control
+          </span>
+          <h2 className="text-xl font-bold text-slate-900 mt-1">Site Inventory &amp; Stock Movements</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Auto-stocked from Site Material Receipts (GRN), Material Issue Notes (MIN) to crews, returns, and low-stock alerts
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              exportFormalDocumentPdf({
+                documentType: 'SITE INVENTORY LEDGER',
+                referenceCode: `INV-${selectedProject && selectedProject !== 'ALL' ? selectedProject : 'MEP'}-${new Date().toISOString().slice(0, 10)}`,
+                title: 'Site Warehouse & Stock Balance Register',
+                subtitle: `Project: ${selectedProject && selectedProject !== 'ALL' ? selectedProject : 'All Projects'}`,
+                projectCode: selectedProject && selectedProject !== 'ALL' ? selectedProject : 'MEP',
+                status: `${lowStockCount} LOW STOCK`,
+                columns: [
+                  { key: 'sku', label: 'SKU' },
+                  { key: 'material', label: 'Material' },
+                  { key: 'location', label: 'Store Location' },
+                  { key: 'stock', label: 'On Hand', align: 'right' },
+                  { key: 'min', label: 'Min Level', align: 'right' },
+                  { key: 'status', label: 'Status' },
+                ],
+                rows: items.map(i => ({
+                  sku: i.sku || '—',
+                  material: i.material,
+                  location: i.storage_location || 'Site Store',
+                  stock: `${Number(i.current_stock || 0)} ${i.unit || ''}`,
+                  min: `${Number(i.min_stock_level || 0)} ${i.unit || ''}`,
+                  status: Number(i.current_stock || 0) <= Number(i.min_stock_level || 0) ? 'LOW STOCK' : 'OK',
+                })),
+              })
+            }
+            className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5" /> Stock Ledger PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> Add Store Item
+          </button>
+        </div>
+      </div>
+
+      {notice && (
+        <div
+          className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+            notice.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} className="text-[11px] font-bold opacity-70 hover:opacity-100 ml-4">Dismiss</button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Catalog SKUs</div>
+          <div className="text-2xl font-bold text-slate-900 tabular-nums mt-1">{items.length}</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Total Units On Hand</div>
+          <div className="text-2xl font-bold text-blue-600 tabular-nums mt-1">{totalUnits.toLocaleString()}</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Low-Stock Alerts</div>
+          <div className="text-2xl font-bold text-red-600 tabular-nums mt-1">{lowStockCount}</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+          <div className="text-[11px] font-bold text-slate-500 uppercase">Stock Movements</div>
+          <div className="text-2xl font-bold text-emerald-600 tabular-nums mt-1">{movements.length}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div className="px-5 py-4 border-b border-slate-200 font-bold text-slate-900 text-sm">
+            Site Store Stock Register
+          </div>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase">
+                <th className="py-3 px-4">SKU / Material</th>
+                <th className="py-3 px-4">Location</th>
+                <th className="py-3 px-4 text-right">On Hand</th>
+                <th className="py-3 px-4 text-right">Min</th>
+                <th className="py-3 px-4 text-right">Store Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {loading && items.length === 0 ? (
+                <tr><td colSpan={5} className="py-10 text-center text-slate-400">Loading site inventory...</td></tr>
+              ) : items.length === 0 ? (
+                <tr><td colSpan={5} className="py-10 text-center text-slate-400">No inventory items yet. Receive materials on site or click Add Store Item.</td></tr>
+              ) : (
+                items.map(item => {
+                  const isLow = Number(item.current_stock || 0) <= Number(item.min_stock_level || 0);
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/70">
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-slate-900">{item.material}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">{item.sku} · {item.category}</div>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600">{item.storage_location || 'Site Store'}</td>
+                      <td className="py-3.5 px-4 text-right font-mono font-bold">
+                        <span className={isLow ? 'text-red-600' : 'text-slate-900'}>
+                          {Number(item.current_stock || 0).toLocaleString()} {item.unit}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono text-slate-500">{Number(item.min_stock_level || 0)}</td>
+                      <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => { setTxTarget({ mode: 'issue', item }); setTxForm({ quantity: 1, issued_to: '', reference_no: '', notes: '' }); }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-[11px]"
+                        >
+                          Issue to Site
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setTxTarget({ mode: 'return', item }); setTxForm({ quantity: 1, issued_to: '', reference_no: '', notes: '' }); }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                        >
+                          Return
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 font-bold text-slate-900 text-sm">
+            Recent Stock Movements ({movements.length})
+          </div>
+          <div className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto">
+            {movements.length === 0 ? (
+              <p className="p-6 text-xs text-slate-400 text-center">No stock movements recorded yet.</p>
+            ) : (
+              movements.map((mv: any) => (
+                <div key={mv.id} className="p-3.5 text-xs flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-slate-900">{mv.material}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {mv.issued_to ? `To: ${mv.issued_to}` : mv.notes || mv.reference_no || mv.created_by}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      mv.movement_type === 'OUT_ISSUE'
+                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    }`}>
+                      {mv.movement_type === 'OUT_ISSUE' ? `-${mv.quantity}` : `+${mv.quantity}`} {mv.unit}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleAddItem} className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <h3 className="font-bold text-slate-900 text-base">Add Store Inventory Item</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Material Name *</label>
+                <input required value={addForm.material} onChange={e => setAddForm(s => ({ ...s, material: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">SKU / Code</label>
+                <input value={addForm.sku} onChange={e => setAddForm(s => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if blank" className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Initial Stock</label>
+                <input type="number" min={0} step="any" value={addForm.current_stock} onChange={e => setAddForm(s => ({ ...s, current_stock: Number(e.target.value || 0) }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Min Reorder Level</label>
+                <input type="number" min={0} step="any" value={addForm.min_stock_level} onChange={e => setAddForm(s => ({ ...s, min_stock_level: Number(e.target.value || 0) }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Unit</label>
+                <input value={addForm.unit} onChange={e => setAddForm(s => ({ ...s, unit: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Store Location</label>
+                <input value={addForm.storage_location} onChange={e => setAddForm(s => ({ ...s, storage_location: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Save Store Item</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {txTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <form onSubmit={handleStockTx} className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="font-bold text-slate-900 text-base">
+              {txTarget.mode === 'issue' ? 'Issue Material to Site Crew' : 'Return Unused Material to Store'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {txTarget.item.material} (Available: <strong>{txTarget.item.current_stock} {txTarget.item.unit}</strong>)
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Quantity *</label>
+                <input type="number" min={0.01} step="any" required value={txForm.quantity} onChange={e => setTxForm(s => ({ ...s, quantity: Number(e.target.value || 0) }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono" />
+              </div>
+              {txTarget.mode === 'issue' && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Issued To (Crew / Subcontractor / Zone)</label>
+                  <input value={txForm.issued_to} onChange={e => setTxForm(s => ({ ...s, issued_to: e.target.value }))} placeholder="e.g. HVAC Crew B / Level 3" className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+                </div>
+              )}
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">Reference / Notes</label>
+                <input value={txForm.notes} onChange={e => setTxForm(s => ({ ...s, notes: e.target.value }))} placeholder="MIN ref or work package" className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setTxTarget(null)} className="px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
+                {txTarget.mode === 'issue' ? 'Confirm Issue' : 'Confirm Return'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ============================================================================
  * 3. CONTROLLED DOCUMENTS & SETUP EXTRACTION (REVIEW-BEFORE-APPLY) WORKSPACE
@@ -1597,6 +2251,12 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
 
   useEffect(() => {
     loadDocs();
+  }, [loadDocs]);
+
+  useEffect(() => {
+    const onRealtime = () => loadDocs();
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
   }, [loadDocs]);
 
   // Review-only extraction from stored project documents (Action 1 requirement)
@@ -1841,7 +2501,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
             CDE &amp; Plans &amp; Drawing Studio
@@ -1857,7 +2517,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               <button
                 onClick={handleRunReviewOnlyExtraction}
                 disabled={extracting}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-800 text-xs font-bold border border-stone-300 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 transition-colors cursor-pointer"
               >
                 <Eye size={14} className="text-amber-600" />
                 {extracting ? 'Scanning Stored Docs...' : 'Review Setup Suggestions'}
@@ -1884,7 +2544,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
       </div>
 
       {/* Drawing Category Quick Filter Tabs & Search */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -1892,7 +2552,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
               activeCategoryFilter === 'All'
                 ? 'bg-slate-900 text-white'
-                : 'bg-stone-100 text-slate-700 hover:bg-stone-200'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             All Controlled Documents ({docs.length})
@@ -1929,7 +2589,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
             value={docSearch}
             onChange={e => setDocSearch(e.target.value)}
             placeholder="Search drawings or docs..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-stone-200 rounded-xl bg-stone-50"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50"
           />
         </div>
       </div>
@@ -1964,7 +2624,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   <input
                     value={selectedSuggestions[s.field] ?? ''}
                     onChange={e => setSelectedSuggestions(prev => ({ ...prev, [s.field]: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 text-xs font-semibold border border-stone-200 rounded-lg"
+                    className="w-full px-2.5 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg"
                   />
                   <p className="text-[10px] text-slate-400 mt-1 truncate" title={s.source_excerpt}>
                     Source: {s.source_document_name} ({s.source_excerpt})
@@ -1991,8 +2651,8 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
       )}
 
       {/* Original Enser Ltd CAD Drawing Sheets Visual Grid + Original PDFs */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3.5">
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -2033,9 +2693,9 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               <div
                 key={sheet.id}
                 onClick={() => openDrawingViewer(sheet)}
-                className="group rounded-xl border border-stone-200 hover:border-blue-500 bg-stone-50/60 hover:bg-white shadow-2xs hover:shadow-md transition-all overflow-hidden flex flex-col cursor-pointer"
+                className="group rounded-xl border border-slate-200 hover:border-blue-500 bg-slate-50/60 hover:bg-white shadow-2xs hover:shadow-md transition-all overflow-hidden flex flex-col cursor-pointer"
               >
-                <div className="relative h-44 bg-white border-b border-stone-200 overflow-hidden flex items-center justify-center p-1.5">
+                <div className="relative h-44 bg-white border-b border-slate-200 overflow-hidden flex items-center justify-center p-1.5">
                   {sheet.attachment_data ? (
                     <img
                       src={sheet.attachment_data}
@@ -2064,7 +2724,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                       {sheet.discipline} • {meta?.scale || '1:100 (A1)'} • Enser Ltd
                     </p>
                   </div>
-                  <div className="flex items-center justify-between pt-1.5 border-t border-stone-200/70">
+                  <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/70">
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 group-hover:text-blue-700">
                       <Eye size={12} /> Inspect CAD Sheet
                     </span>
@@ -2088,10 +2748,10 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
       </div>
 
       {/* Documents & Drawings Table */}
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <th className="py-3.5 px-4">Document / Drawing Sheet</th>
               <th className="py-3.5 px-4">Category</th>
               <th className="py-3.5 px-4">Discipline</th>
@@ -2101,7 +2761,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
               <th className="py-3.5 px-4">Client Portal</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100 text-xs">
+          <tbody className="divide-y divide-slate-100 text-xs">
             {loading ? (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-slate-400">Loading document register...</td>
@@ -2130,7 +2790,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                   >
                     <td className="py-3.5 px-4 font-semibold text-slate-900 flex items-center gap-2.5">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        isDrawing ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-stone-100 text-stone-600'
+                        isDrawing ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-600'
                       }`}>
                         {isDrawing ? <Eye size={16} /> : <FileText size={16} />}
                       </div>
@@ -2149,7 +2809,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600">
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-stone-100 text-slate-700 border border-stone-200">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                         {doc.category || 'Technical'}
                       </span>
                     </td>
@@ -2173,7 +2833,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                         <a
                           href={doc.attachment_data}
                           download={doc.attachment_name || `${doc.name}.pdf`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-slate-700 text-[11px] font-semibold transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold transition-colors"
                         >
                           <Download size={12} /> Download
                         </a>
@@ -2188,7 +2848,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
                             isClientVisible
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-stone-100 text-slate-600 border-stone-200 hover:bg-stone-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                           }`}
                         >
                           {isClientVisible ? <Globe size={12} /> : <Lock size={12} />}
@@ -2443,7 +3103,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
       {/* Upload Separate Engineering Drawings or Controlled Documents Modal */}
       {showUploadDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreateDoc} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-lg p-6 space-y-4">
+          <form onSubmit={handleCreateDoc} className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">Upload Separate Engineering Drawings / Documents</h3>
@@ -2489,7 +3149,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     value={docForm.document_number}
                     onChange={e => setDocForm(s => ({ ...s, document_number: e.target.value }))}
                     placeholder="2618-L-LTG-01"
-                    className="w-full px-3 py-2 text-xs font-mono border border-stone-300 rounded-xl"
+                    className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-xl"
                   />
                 </div>
                 <div className="col-span-2">
@@ -2499,7 +3159,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                     value={docForm.name}
                     onChange={e => setDocForm(s => ({ ...s, name: e.target.value }))}
                     placeholder="e.g. Lighting Layout Level 2 Area K"
-                    className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                   />
                 </div>
               </div>
@@ -2511,7 +3171,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                 <select
                   value={docForm.category}
                   onChange={e => setDocForm(s => ({ ...s, category: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option value="Drawing">Drawing / Layout</option>
                   <option value="Schematic">Schematic</option>
@@ -2527,7 +3187,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                 <select
                   value={docForm.discipline}
                   onChange={e => setDocForm(s => ({ ...s, discipline: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option value="Electrical">Electrical</option>
                   <option value="HVAC">HVAC</option>
@@ -2542,7 +3202,7 @@ const DocumentsAndSetupExtractionWorkspace: React.FC<{
                 <select
                   value={docForm.status}
                   onChange={e => setDocForm(s => ({ ...s, status: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option value="Approved">Approved (AFC)</option>
                   <option value="Submitted">Submitted</option>
@@ -2616,6 +3276,12 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
     loadRisks();
   }, [loadRisks]);
 
+  useEffect(() => {
+    const onRealtime = () => loadRisks();
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
+  }, [loadRisks]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProject) return;
@@ -2634,7 +3300,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex items-center justify-between">
         <div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
             5x5 Risk Governance
@@ -2650,10 +3316,10 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <th className="py-3.5 px-4">Risk Title</th>
               <th className="py-3.5 px-4">Category</th>
               <th className="py-3.5 px-4 text-center">Prob (1-5)</th>
@@ -2663,7 +3329,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
               <th className="py-3.5 px-4">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100 text-xs">
+          <tbody className="divide-y divide-slate-100 text-xs">
             {risks.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-12 text-center text-slate-500">No project risks logged yet.</td>
@@ -2674,7 +3340,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
                 const imp = Number(r.impact || 3);
                 const score = Number(r.risk_score || prob * imp);
                 return (
-                  <tr key={r.id} className="hover:bg-stone-50">
+                  <tr key={r.id} className="hover:bg-slate-50">
                     <td className="py-3.5 px-4 font-bold text-slate-900">{r.title || r.description}</td>
                     <td className="py-3.5 px-4 text-slate-600">{r.category || 'Technical'}</td>
                     <td className="py-3.5 px-4 text-center font-mono">{prob}</td>
@@ -2688,7 +3354,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
                     </td>
                     <td className="py-3.5 px-4 text-slate-600">{r.mitigation_plan || r.mitigation || '—'}</td>
                     <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-slate-700 border border-stone-200">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                         {r.status || 'Open'}
                       </span>
                     </td>
@@ -2702,7 +3368,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md p-6 space-y-4">
+          <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-md p-6 space-y-4">
             <h3 className="font-bold text-slate-900 text-base">Log New Project Risk</h3>
             <div>
               <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Risk Title</label>
@@ -2710,7 +3376,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
                 required
                 value={form.title}
                 onChange={e => setForm(s => ({ ...s, title: e.target.value }))}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -2722,7 +3388,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
                   max={5}
                   value={form.probability}
                   onChange={e => setForm(s => ({ ...s, probability: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
               <div>
@@ -2733,7 +3399,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
                   max={5}
                   value={form.impact}
                   onChange={e => setForm(s => ({ ...s, impact: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 />
               </div>
             </div>
@@ -2743,7 +3409,7 @@ const RisksAndMatrixWorkspace: React.FC<{ selectedProject: string }> = ({ select
                 rows={3}
                 value={form.mitigation_plan}
                 onChange={e => setForm(s => ({ ...s, mitigation_plan: e.target.value }))}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -2768,7 +3434,7 @@ const InspectionsAndNcrsWorkspace: React.FC<{ selectedProject: string }> = ({ se
         <button
           onClick={() => setTab('inspections')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-            tab === 'inspections' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-stone-200'
+            tab === 'inspections' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
           }`}
         >
           WIR / Quality Inspections
@@ -2776,7 +3442,7 @@ const InspectionsAndNcrsWorkspace: React.FC<{ selectedProject: string }> = ({ se
         <button
           onClick={() => setTab('ncrs')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-            tab === 'ncrs' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-stone-200'
+            tab === 'ncrs' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
           }`}
         >
           Non-Conformance Reports (NCRs)
@@ -2863,6 +3529,9 @@ const WorkflowRegisterWorkspace: React.FC<{
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [answerModalRec, setAnswerModalRec] = useState<any | null>(null);
+  const [answerText, setAnswerText] = useState('');
   const [form, setForm] = useState<Record<string, any>>({
     title: '',
     question: '',
@@ -2871,7 +3540,7 @@ const WorkflowRegisterWorkspace: React.FC<{
     priority: 'High',
     amount: 0,
     location: 'Main Building',
-    status: 'Draft',
+    status: moduleKey === 'rfis' ? 'Open' : moduleKey === 'change_orders' ? 'Potential Variation' : 'Draft',
   });
 
   const loadRecords = useCallback(async () => {
@@ -2889,32 +3558,62 @@ const WorkflowRegisterWorkspace: React.FC<{
     loadRecords();
   }, [loadRecords]);
 
+  useEffect(() => {
+    const onRealtime = () => loadRecords();
+    window.addEventListener('mep-realtime-event', onRealtime);
+    return () => window.removeEventListener('mep-realtime-event', onRealtime);
+  }, [loadRecords]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetProject = (selectedProject && selectedProject !== 'ALL') ? selectedProject : 'bov-st-venera-2618';
-    await api.post(`/api/${moduleKey}`, {
-      project_id: targetProject,
-      ...form,
-      item: form.title,
-      name: form.title,
-      equipment: form.title,
-      system: form.discipline,
-      trade: form.discipline,
-      cost_impact: Number(form.amount || 0),
-      amount: Number(form.amount || 0),
-    });
-    setShowAdd(false);
-    setForm({ title: '', question: '', description: '', discipline: 'Electrical', priority: 'High', amount: 0, location: 'Main Building', status: 'Draft' });
-    loadRecords();
-  };
-
-  const handleTransition = async (rec: any, nextStatus: string) => {
     try {
-      await api.put(`/api/${moduleKey}/${rec.id}`, { status: nextStatus });
+      await api.post(`/api/${moduleKey}`, {
+        project_id: targetProject,
+        ...form,
+        item: form.title,
+        name: form.title,
+        equipment: form.title,
+        system: form.discipline,
+        trade: form.discipline,
+        cost_impact: Number(form.amount || 0),
+        amount: Number(form.amount || 0),
+      });
+      setShowAdd(false);
+      setForm({
+        title: '',
+        question: '',
+        description: '',
+        discipline: 'Electrical',
+        priority: 'High',
+        amount: 0,
+        location: 'Main Building',
+        status: moduleKey === 'rfis' ? 'Open' : moduleKey === 'change_orders' ? 'Potential Variation' : 'Draft',
+      });
+      setActionNotice({ type: 'success', text: 'Record created and synced in real time.' });
       loadRecords();
     } catch (err: any) {
-      console.error(err.message || 'Status transition not permitted');
+      setActionNotice({ type: 'error', text: err?.message || 'Failed to create record' });
     }
+  };
+
+  const handleTransition = async (rec: any, payload: Record<string, any>) => {
+    setActionNotice(null);
+    try {
+      await api.put(`/api/${moduleKey}/${rec.id}`, payload);
+      setActionNotice({ type: 'success', text: `Updated ${rec.number || rec.code || rec.id?.slice(0, 8)} → ${payload.status}` });
+      loadRecords();
+    } catch (err: any) {
+      setActionNotice({ type: 'error', text: err?.message || 'Status transition not permitted for your role' });
+    }
+  };
+
+  const handleAnswerRfiSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!answerModalRec) return;
+    await handleTransition(answerModalRec, { status: 'Answered', answer: answerText });
+    setAnswerModalRec(null);
+    setAnswerText('');
   };
 
   const filtered = records.filter(r => {
@@ -2925,7 +3624,7 @@ const WorkflowRegisterWorkspace: React.FC<{
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
             {meta.badge}
@@ -2974,23 +3673,41 @@ const WorkflowRegisterWorkspace: React.FC<{
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm flex items-center justify-between gap-3">
+      {actionNotice && (
+        <div
+          className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+            actionNotice.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          <span>{actionNotice.text}</span>
+          <button
+            onClick={() => setActionNotice(null)}
+            className="text-[11px] font-bold opacity-70 hover:opacity-100 ml-4"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${meta.title}...`}
-            className="w-full pl-9 pr-4 py-2 text-xs border border-stone-200 rounded-xl"
+            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl"
           />
         </div>
         <span className="text-xs font-mono text-slate-500">{filtered.length} records</span>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-stone-50 border-b border-stone-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <th className="py-3.5 px-4">Ref / ID</th>
               <th className="py-3.5 px-4">Title / Subject</th>
               <th className="py-3.5 px-4">Discipline</th>
@@ -2999,7 +3716,7 @@ const WorkflowRegisterWorkspace: React.FC<{
               <th className="py-3.5 px-4 text-right">Workflow Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-100 text-xs">
+          <tbody className="divide-y divide-slate-100 text-xs">
             {loading ? (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-slate-400">Loading register...</td>
@@ -3010,7 +3727,7 @@ const WorkflowRegisterWorkspace: React.FC<{
               </tr>
             ) : (
               filtered.map((rec: any) => (
-                <tr key={rec.id} className="hover:bg-stone-50/80">
+                <tr key={rec.id} className="hover:bg-slate-50/80">
                   <td className="py-3.5 px-4 font-mono font-semibold text-slate-600">{rec.number || rec.code || rec.id?.slice(0, 8)}</td>
                   <td className="py-3.5 px-4 font-semibold text-slate-900">
                     {rec.title || rec.question || rec.description || 'Untitled Record'}
@@ -3026,46 +3743,223 @@ const WorkflowRegisterWorkspace: React.FC<{
                       {rec.status || 'Draft'}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 text-right space-x-1.5">
-                    {rec.status === 'Draft' && (
+                  <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                    {moduleKey === 'rfis' && rec.status === 'Open' && (
                       <button
-                        onClick={() => handleTransition(rec, 'Submitted')}
+                        onClick={() => {
+                          setAnswerModalRec(rec);
+                          setAnswerText(rec.answer || '');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px]"
+                      >
+                        Answer RFI
+                      </button>
+                    )}
+                    {moduleKey === 'rfis' && (rec.status === 'Open' || rec.status === 'Answered') && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Closed' })}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
+                      >
+                        Close
+                      </button>
+                    )}
+
+                    {moduleKey === 'submittals' && (rec.status === 'Draft' || rec.status === 'Under Preparation') && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Submitted', submitted_date: new Date().toISOString().slice(0, 10) })}
                         className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px]"
                       >
                         Submit
                       </button>
                     )}
-                    {rec.status === 'Submitted' && (
+                    {moduleKey === 'submittals' && rec.status === 'Submitted' && (
                       <button
-                        onClick={() => handleTransition(rec, 'UnderReview')}
+                        onClick={() => handleTransition(rec, { status: 'Under Review' })}
                         className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-[11px]"
                       >
                         Start Review
                       </button>
                     )}
-                    {rec.status === 'UnderReview' && (
+                    {moduleKey === 'submittals' && (rec.status === 'Under Review' || rec.status === 'UnderReview') && (
                       <>
                         <button
-                          onClick={() => handleTransition(rec, 'Approved')}
+                          onClick={() => handleTransition(rec, { status: 'Approved', approval_status: 'Approved' })}
                           className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={() => handleTransition(rec, 'Rejected')}
+                          onClick={() => handleTransition(rec, { status: 'Approved with Comments', approval_status: 'Approved with Comments' })}
+                          className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold text-[11px]"
+                        >
+                          Approve w/ Comments
+                        </button>
+                        <button
+                          onClick={() => handleTransition(rec, { status: 'Revise & Resubmit', approval_status: 'Revise & Resubmit' })}
+                          className="px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 font-semibold text-[11px]"
+                        >
+                          Revise &amp; Resubmit
+                        </button>
+                        <button
+                          onClick={() => handleTransition(rec, { status: 'Rejected', approval_status: 'Rejected' })}
                           className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-[11px]"
                         >
                           Reject
                         </button>
                       </>
                     )}
-                    {rec.status === 'Approved' && (
+                    {moduleKey === 'submittals' && (rec.status === 'Approved' || rec.status === 'Approved with Comments') && (
                       <button
-                        onClick={() => handleTransition(rec, 'Closed')}
+                        onClick={() => handleTransition(rec, { status: 'Closed' })}
                         className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
                       >
                         Close
                       </button>
+                    )}
+
+                    {moduleKey === 'change_orders' && (rec.status === 'Potential Variation' || rec.status === 'Draft') && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Submitted' })}
+                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px]"
+                      >
+                        Submit
+                      </button>
+                    )}
+                    {moduleKey === 'change_orders' && (rec.status === 'Submitted' || rec.status === 'Technical Review' || rec.status === 'Commercial Review') && (
+                      <>
+                        <button
+                          onClick={() => handleTransition(rec, { status: 'Approved', approved_amount: rec.approved_amount ?? rec.estimated_amount ?? rec.amount ?? 0 })}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                        >
+                          Approve Variation
+                        </button>
+                        <button
+                          onClick={() => handleTransition(rec, { status: 'Rejected' })}
+                          className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-[11px]"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {moduleKey === 'change_orders' && rec.status === 'Approved' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'PO Issued' })}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-[11px]"
+                      >
+                        Issue PO
+                      </button>
+                    )}
+                    {moduleKey === 'change_orders' && rec.status === 'PO Issued' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Certified' })}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                      >
+                        Certify
+                      </button>
+                    )}
+                    {moduleKey === 'change_orders' && rec.status === 'Certified' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Closed' })}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
+                      >
+                        Close
+                      </button>
+                    )}
+
+                    {moduleKey === 'inspections' && (rec.status === 'Scheduled' || rec.status === 'In Progress' || rec.status === 'Open') && (
+                      <>
+                        <button
+                          onClick={() => handleTransition(rec, { status: 'Passed', result: 'Pass' })}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                        >
+                          Pass
+                        </button>
+                        <button
+                          onClick={() => handleTransition(rec, { status: 'Failed', result: 'Fail' })}
+                          className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-[11px]"
+                        >
+                          Fail
+                        </button>
+                      </>
+                    )}
+                    {moduleKey === 'inspections' && rec.status === 'Passed' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Closed' })}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
+                      >
+                        Close
+                      </button>
+                    )}
+
+                    {moduleKey === 'ncrs' && (rec.status === 'Open' || rec.status === 'Under Investigation') && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Corrective Action' })}
+                        className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-[11px]"
+                      >
+                        Corrective Action
+                      </button>
+                    )}
+                    {moduleKey === 'ncrs' && rec.status === 'Corrective Action' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Verification' })}
+                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px]"
+                      >
+                        Verify
+                      </button>
+                    )}
+                    {moduleKey === 'ncrs' && rec.status === 'Verification' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Closed' })}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                      >
+                        Close
+                      </button>
+                    )}
+
+                    {moduleKey === 'punchlist' && (rec.status === 'Open' || rec.status === 'In Progress') && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Rectified' })}
+                        className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-[11px]"
+                      >
+                        Rectify
+                      </button>
+                    )}
+                    {moduleKey === 'punchlist' && rec.status === 'Rectified' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Verified' })}
+                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px]"
+                      >
+                        Verify
+                      </button>
+                    )}
+                    {moduleKey === 'punchlist' && rec.status === 'Verified' && (
+                      <button
+                        onClick={() => handleTransition(rec, { status: 'Closed' })}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                      >
+                        Close
+                      </button>
+                    )}
+
+                    {!['rfis', 'submittals', 'change_orders', 'inspections', 'ncrs', 'punchlist'].includes(moduleKey) && (
+                      <>
+                        {rec.status !== 'Approved' && rec.status !== 'Closed' && (
+                          <button
+                            onClick={() => handleTransition(rec, { status: 'Approved' })}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {rec.status === 'Approved' && (
+                          <button
+                            onClick={() => handleTransition(rec, { status: 'Closed' })}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
+                          >
+                            Close
+                          </button>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
@@ -3077,7 +3971,7 @@ const WorkflowRegisterWorkspace: React.FC<{
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md p-6 space-y-4">
+          <form onSubmit={handleCreate} className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-md p-6 space-y-4">
             <h3 className="font-bold text-slate-900 text-base">New {meta.title} Entry</h3>
             <div>
               <label className="block text-[11px] font-bold uppercase text-slate-500 mb-1">Subject / Question</label>
@@ -3085,7 +3979,7 @@ const WorkflowRegisterWorkspace: React.FC<{
                 required
                 value={form.title}
                 onChange={e => setForm(s => ({ ...s, title: e.target.value, question: e.target.value, description: e.target.value }))}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -3094,7 +3988,7 @@ const WorkflowRegisterWorkspace: React.FC<{
                 <select
                   value={form.discipline}
                   onChange={e => setForm(s => ({ ...s, discipline: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                 >
                   <option>HVAC</option>
                   <option>Electrical</option>
@@ -3110,7 +4004,7 @@ const WorkflowRegisterWorkspace: React.FC<{
                     type="number"
                     value={form.amount}
                     onChange={e => setForm(s => ({ ...s, amount: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
                   />
                 </div>
               )}
@@ -3118,6 +4012,646 @@ const WorkflowRegisterWorkspace: React.FC<{
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold">Save Record</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {answerModalRec && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleAnswerRfiSubmit} className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900">Answer RFI</h3>
+            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <span className="font-bold text-slate-800">{answerModalRec.rfi_number || `RFI-${answerModalRec.id}`}:</span>{' '}
+              {answerModalRec.subject || answerModalRec.question || answerModalRec.title}
+            </p>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Official Engineering Response *</label>
+              <textarea
+                required
+                rows={4}
+                value={answerText}
+                onChange={e => setAnswerText(e.target.value)}
+                placeholder="Enter consultant / engineering response..."
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => { setAnswerModalRec(null); setAnswerText(''); }} className="px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">Submit Answer</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================================
+ * 6B. COMMISSIONING & HANDOVER WORKSPACE (T&C PREREQUISITES + O&M DOSSIERS)
+ * ========================================================================== */
+const CommissioningAndHandoverWorkspace: React.FC<{
+  initialTab?: 'commissioning' | 'handover';
+  selectedProject: string;
+  user?: any;
+}> = ({ initialTab = 'commissioning', selectedProject, user }) => {
+  const [activeTab, setActiveTab] = useState<'commissioning' | 'handover'>(initialTab);
+  const [tests, setTests] = useState<any[]>([]);
+  const [handoverItems, setHandoverItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [showAddTest, setShowAddTest] = useState(false);
+  const [showAddHandover, setShowAddHandover] = useState(false);
+  const [testForm, setTestForm] = useState({
+    system: 'HVAC',
+    subsystem: 'Chilled Water',
+    equipment: '',
+    test_type: 'Functional Performance Test (FPT)',
+    test_date: new Date().toISOString().slice(0, 10),
+    test_engineer: user?.name || '',
+    witness: '',
+  });
+  const [handoverForm, setHandoverForm] = useState({
+    contractor: '',
+    system: 'HVAC',
+    item_type: 'O&M Manual',
+    description: '',
+    due_date: new Date().toISOString().slice(0, 10),
+    notes: '',
+  });
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = selectedProject && selectedProject !== 'ALL' ? `?project_id=${selectedProject}` : '';
+      const [tRes, hRes] = await Promise.all([
+        api.get<any[]>(`/api/commissioning_tests${q}`).catch(() => []),
+        api.get<any[]>(`/api/handover_items${q}`).catch(() => []),
+      ]);
+      setTests(Array.isArray(tRes) ? tRes : []);
+      setHandoverItems(Array.isArray(hRes) ? hRes : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const handler = (ev: any) => {
+      const tbl = ev?.detail?.module || ev?.detail?.table;
+      if (!tbl || tbl === 'commissioning_tests' || tbl === 'handover_items' || tbl === '*') {
+        load();
+      }
+    };
+    window.addEventListener('mep-realtime-event', handler);
+    return () => window.removeEventListener('mep-realtime-event', handler);
+  }, [load]);
+
+  const togglePrereq = async (rec: any, field: 'power_available' | 'installation_complete' | 'controls_complete' | 'interface_complete' | 'drawings_approved') => {
+    try {
+      const nextVal = rec[field] ? 0 : 1;
+      await api.put(`/api/commissioning_tests/${rec.id}`, { [field]: nextVal });
+      setNotice({ type: 'ok', text: `Updated ${field.replace('_', ' ')} for ${rec.equipment || rec.system}.` });
+      load();
+    } catch (e: any) {
+      setNotice({ type: 'err', text: e?.message || 'Failed to update prerequisite.' });
+    }
+  };
+
+  const updateTestStatus = async (rec: any, payload: Record<string, any>) => {
+    try {
+      await api.put(`/api/commissioning_tests/${rec.id}`, payload);
+      setNotice({ type: 'ok', text: `Test #${rec.id} transitioned to ${payload.status}.` });
+      load();
+    } catch (e: any) {
+      setNotice({ type: 'err', text: e?.message || 'Failed to update commissioning test.' });
+    }
+  };
+
+  const updateHandoverStatus = async (rec: any, payload: Record<string, any>) => {
+    try {
+      await api.put(`/api/handover_items/${rec.id}`, payload);
+      setNotice({ type: 'ok', text: `Handover item #${rec.id} transitioned to ${payload.status}.` });
+      load();
+    } catch (e: any) {
+      setNotice({ type: 'err', text: e?.message || 'Failed to update handover dossier.' });
+    }
+  };
+
+  const handleCreateTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetProject = selectedProject && selectedProject !== 'ALL' ? selectedProject : 'bov-st-venera-2618';
+    try {
+      await api.post('/api/commissioning_tests', {
+        ...testForm,
+        project_id: targetProject,
+        power_available: 0,
+        installation_complete: 0,
+        controls_complete: 0,
+        interface_complete: 0,
+        drawings_approved: 0,
+        status: 'Scheduled',
+      });
+      setShowAddTest(false);
+      setTestForm({
+        system: 'HVAC',
+        subsystem: 'Chilled Water',
+        equipment: '',
+        test_type: 'Functional Performance Test (FPT)',
+        test_date: new Date().toISOString().slice(0, 10),
+        test_engineer: user?.name || '',
+        witness: '',
+      });
+      setNotice({ type: 'ok', text: 'Commissioning test scheduled.' });
+      load();
+    } catch (err: any) {
+      setNotice({ type: 'err', text: err?.message || 'Failed to create commissioning test.' });
+    }
+  };
+
+  const handleCreateHandover = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetProject = selectedProject && selectedProject !== 'ALL' ? selectedProject : 'bov-st-venera-2618';
+    try {
+      await api.post('/api/handover_items', {
+        ...handoverForm,
+        project_id: targetProject,
+        required: 1,
+        submitted: 0,
+        approved: 0,
+        status: 'Pending',
+      });
+      setShowAddHandover(false);
+      setHandoverForm({
+        contractor: '',
+        system: 'HVAC',
+        item_type: 'O&M Manual',
+        description: '',
+        due_date: new Date().toISOString().slice(0, 10),
+        notes: '',
+      });
+      setNotice({ type: 'ok', text: 'Handover dossier requirement added.' });
+      load();
+    } catch (err: any) {
+      setNotice({ type: 'err', text: err?.message || 'Failed to create handover item.' });
+    }
+  };
+
+  const prereqCount = (r: any) =>
+    [r.power_available, r.installation_complete, r.controls_complete, r.interface_complete, r.drawings_approved].filter(Boolean).length;
+
+  const readyTests = tests.filter(t => prereqCount(t) === 5).length;
+  const passedTests = tests.filter(t => t.status === 'Passed' || t.status === 'Closed' || t.result === 'Pass').length;
+  const failedTests = tests.filter(t => t.status === 'Failed' || t.result === 'Fail').length;
+
+  const requiredCount = handoverItems.filter(h => h.required !== 0).length;
+  const submittedCount = handoverItems.filter(h => h.submitted === 1 || h.status === 'Submitted' || h.status === 'Approved' || h.status === 'Closed').length;
+  const approvedCount = handoverItems.filter(h => h.approved === 1 || h.status === 'Approved' || h.status === 'Closed').length;
+  const readinessPct = requiredCount > 0 ? Math.round((approvedCount / requiredCount) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Commissioning &amp; Project Handover</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            T&amp;C prerequisite gates, witness sign-offs, O&amp;M manuals, As-Built dossiers, and formal closeout certificates
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setActiveTab('commissioning')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                activeTab === 'commissioning' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Testing &amp; Commissioning ({tests.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('handover')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                activeTab === 'handover' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Handover &amp; O&amp;M Dossiers ({handoverItems.length})
+            </button>
+          </div>
+          {activeTab === 'commissioning' ? (
+            <>
+              <button
+                onClick={() =>
+                  exportFormalDocumentPdf({
+                    documentType: 'T&C CERTIFICATE',
+                    referenceCode: `TC-${selectedProject && selectedProject !== 'ALL' ? selectedProject : 'MEP'}-${new Date().toISOString().slice(0, 10)}`,
+                    title: 'Testing & Commissioning Register',
+                    subtitle: `${selectedProject && selectedProject !== 'ALL' ? selectedProject : 'All Projects'} — Witnessed MEP T&C Status`,
+                    projectCode: selectedProject && selectedProject !== 'ALL' ? selectedProject : 'MEP',
+                    status: `${passedTests}/${tests.length} PASSED`,
+                    columns: [
+                      { key: 'id', label: 'ID' },
+                      { key: 'system', label: 'System' },
+                      { key: 'equipment', label: 'Equipment' },
+                      { key: 'test_type', label: 'Test Type' },
+                      { key: 'prereqs', label: 'Prereqs', align: 'center' },
+                      { key: 'witness', label: 'Witness' },
+                      { key: 'status', label: 'Status' },
+                    ],
+                    rows: tests.map(t => ({
+                      id: `TC-${t.id}`,
+                      system: `${t.system}${t.subsystem ? ` / ${t.subsystem}` : ''}`,
+                      equipment: t.equipment || '—',
+                      test_type: t.test_type || 'FPT',
+                      prereqs: `${prereqCount(t)}/5`,
+                      witness: t.witness || t.test_engineer || '—',
+                      status: t.status || 'Scheduled',
+                    })),
+                  })
+                }
+                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" /> T&amp;C Certificate PDF
+              </button>
+              <button
+                onClick={() => setShowAddTest(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Schedule T&amp;C Test
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() =>
+                  exportFormalDocumentPdf({
+                    documentType: 'HANDOVER DOSSIER',
+                    referenceCode: `HO-${selectedProject && selectedProject !== 'ALL' ? selectedProject : 'MEP'}-${new Date().toISOString().slice(0, 10)}`,
+                    title: 'Project Handover & O&M Closeout Dossier',
+                    subtitle: `${selectedProject && selectedProject !== 'ALL' ? selectedProject : 'All Projects'} — Readiness ${readinessPct}%`,
+                    projectCode: selectedProject && selectedProject !== 'ALL' ? selectedProject : 'MEP',
+                    status: `${approvedCount}/${requiredCount} APPROVED`,
+                    columns: [
+                      { key: 'id', label: 'ID' },
+                      { key: 'contractor', label: 'Contractor' },
+                      { key: 'system', label: 'System' },
+                      { key: 'deliverable', label: 'Deliverable' },
+                      { key: 'due_date', label: 'Due Date' },
+                      { key: 'status', label: 'Status' },
+                    ],
+                    rows: handoverItems.map(h => ({
+                      id: `HO-${h.id}`,
+                      contractor: h.contractor || '—',
+                      system: h.system || '—',
+                      deliverable: `${h.item_type || 'Dossier'}: ${h.description || ''}`,
+                      due_date: h.due_date || '—',
+                      status: h.status || 'Pending',
+                    })),
+                  })
+                }
+                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" /> Handover Closeout PDF
+              </button>
+              <button
+                onClick={() => setShowAddHandover(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Add Handover Item
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {notice && (
+        <div
+          className={`px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+            notice.type === 'ok'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} className="text-[11px] font-bold opacity-70 hover:opacity-100 ml-4">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'commissioning' ? (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-[11px] font-bold text-slate-500 uppercase">Total T&amp;C Tests</div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums mt-1">{tests.length}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-[11px] font-bold text-slate-500 uppercase">5/5 Prereqs Ready</div>
+              <div className="text-2xl font-bold text-blue-600 tabular-nums mt-1">{readyTests}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-[11px] font-bold text-slate-500 uppercase">Passed / Witnessed</div>
+              <div className="text-2xl font-bold text-emerald-600 tabular-nums mt-1">{passedTests}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+              <div className="text-[11px] font-bold text-slate-500 uppercase">Failed / Retest</div>
+              <div className="text-2xl font-bold text-red-600 tabular-nums mt-1">{failedTests}</div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase">
+                  <th className="py-3 px-4">Test / Equipment</th>
+                  <th className="py-3 px-4">System</th>
+                  <th className="py-3 px-4">5-Gate Pre-Commissioning Readiness</th>
+                  <th className="py-3 px-4">Engineer / Witness</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Witness Sign-Off</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {loading && tests.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-400">Loading commissioning register...</td>
+                  </tr>
+                ) : tests.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-400">No commissioning tests scheduled for this project.</td>
+                  </tr>
+                ) : (
+                  tests.map(rec => (
+                    <tr key={rec.id} className="hover:bg-slate-50/70">
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-slate-900">{rec.equipment || `Test #${rec.id}`}</div>
+                        <div className="text-[11px] text-slate-500">{rec.test_type || 'Functional Performance Test'}</div>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-700">
+                        {rec.system}{rec.subsystem ? ` / ${rec.subsystem}` : ''}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-wrap gap-1">
+                          {(
+                            [
+                              ['power_available', 'Power'],
+                              ['installation_complete', 'Install'],
+                              ['controls_complete', 'Controls'],
+                              ['interface_complete', 'Interface'],
+                              ['drawings_approved', 'Drawings'],
+                            ] as const
+                          ).map(([field, label]) => {
+                            const active = Boolean(rec[field]);
+                            return (
+                              <button
+                                key={field}
+                                type="button"
+                                onClick={() => togglePrereq(rec, field)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                                  active
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                                }`}
+                              >
+                                {active ? '✓ ' : ''}{label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600">
+                        <div>{rec.test_engineer || '—'}</div>
+                        <div className="text-[11px] text-slate-400">{rec.witness ? `Witness: ${rec.witness}` : rec.test_date || '—'}</div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${WORKFLOW_COLORS[rec.status] || WORKFLOW_COLORS.Draft}`}>
+                          {rec.status || 'Scheduled'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        {rec.status !== 'Passed' && rec.status !== 'Closed' && (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateTestStatus(rec, {
+                                  status: 'Passed',
+                                  result: 'Pass',
+                                  witness: rec.witness || user?.name || 'QA/QC Witness',
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                            >
+                              Pass &amp; Witness
+                            </button>
+                            <button
+                              onClick={() => updateTestStatus(rec, { status: 'Failed', result: 'Fail' })}
+                              className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-semibold text-[11px]"
+                            >
+                              Fail / Retest
+                            </button>
+                          </>
+                        )}
+                        {rec.status === 'Passed' && (
+                          <button
+                            onClick={() => updateTestStatus(rec, { status: 'Closed' })}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
+                          >
+                            Close
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase">Required Dossiers</div>
+                <div className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{requiredCount}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase">Submitted</div>
+                <div className="text-2xl font-bold text-blue-600 tabular-nums mt-0.5">{submittedCount}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase">Approved / Signed Off</div>
+                <div className="text-2xl font-bold text-emerald-600 tabular-nums mt-0.5">{approvedCount}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-500 uppercase">Handover Readiness</div>
+                <div className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">{readinessPct}%</div>
+              </div>
+            </div>
+            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.max(0, readinessPct))}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase">
+                  <th className="py-3 px-4">Deliverable / Item</th>
+                  <th className="py-3 px-4">Contractor</th>
+                  <th className="py-3 px-4">System</th>
+                  <th className="py-3 px-4">Due Date</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Dossier Approvals</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {loading && handoverItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-400">Loading handover dossiers...</td>
+                  </tr>
+                ) : handoverItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-400">No handover items recorded for this project.</td>
+                  </tr>
+                ) : (
+                  handoverItems.map(rec => (
+                    <tr key={rec.id} className="hover:bg-slate-50/70">
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-slate-900">{rec.item_type || 'Handover Dossier'}</div>
+                        <div className="text-[11px] text-slate-500">{rec.description || rec.notes || '—'}</div>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-700">{rec.contractor || '—'}</td>
+                      <td className="py-3.5 px-4 text-slate-600">{rec.system || '—'}</td>
+                      <td className="py-3.5 px-4 text-slate-600 tabular-nums">{rec.due_date || '—'}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${WORKFLOW_COLORS[rec.status] || WORKFLOW_COLORS.Draft}`}>
+                          {rec.status || 'Pending'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        {rec.status !== 'Submitted' && rec.status !== 'Approved' && rec.status !== 'Closed' && (
+                          <button
+                            onClick={() => updateHandoverStatus(rec, { submitted: 1, status: 'Submitted' })}
+                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px]"
+                          >
+                            Mark Submitted
+                          </button>
+                        )}
+                        {rec.status !== 'Approved' && rec.status !== 'Closed' && (
+                          <button
+                            onClick={() => updateHandoverStatus(rec, { submitted: 1, approved: 1, status: 'Approved' })}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[11px]"
+                          >
+                            Approve Handover Dossier
+                          </button>
+                        )}
+                        {rec.status === 'Approved' && (
+                          <button
+                            onClick={() => updateHandoverStatus(rec, { status: 'Closed' })}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px]"
+                          >
+                            Close
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {showAddTest && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleCreateTest} className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900">Schedule Commissioning Test</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">MEP System</label>
+                <input value={testForm.system} onChange={e => setTestForm(s => ({ ...s, system: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" required />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Subsystem</label>
+                <input value={testForm.subsystem} onChange={e => setTestForm(s => ({ ...s, subsystem: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Equipment / Tag *</label>
+                <input value={testForm.equipment} onChange={e => setTestForm(s => ({ ...s, equipment: e.target.value }))} placeholder="e.g. CH-01 / AHU-L02" className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" required />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Test Type</label>
+                <input value={testForm.test_type} onChange={e => setTestForm(s => ({ ...s, test_type: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Test Date</label>
+                <input type="date" value={testForm.test_date} onChange={e => setTestForm(s => ({ ...s, test_date: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">T&amp;C Engineer</label>
+                <input value={testForm.test_engineer} onChange={e => setTestForm(s => ({ ...s, test_engineer: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Witness</label>
+                <input value={testForm.witness} onChange={e => setTestForm(s => ({ ...s, witness: e.target.value }))} placeholder="Consultant / Client" className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowAddTest(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Schedule Test</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showAddHandover && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleCreateHandover} className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900">Add Handover Dossier Requirement</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Contractor *</label>
+                <input value={handoverForm.contractor} onChange={e => setHandoverForm(s => ({ ...s, contractor: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" required />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">System</label>
+                <input value={handoverForm.system} onChange={e => setHandoverForm(s => ({ ...s, system: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Deliverable Type</label>
+                <select value={handoverForm.item_type} onChange={e => setHandoverForm(s => ({ ...s, item_type: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white">
+                  <option>O&amp;M Manual</option>
+                  <option>As-Built Drawings</option>
+                  <option>Warranty Certificate</option>
+                  <option>T&amp;C Report</option>
+                  <option>Training Record</option>
+                  <option>Spare Parts List</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Due Date</label>
+                <input type="date" value={handoverForm.due_date} onChange={e => setHandoverForm(s => ({ ...s, due_date: e.target.value }))} className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Description *</label>
+                <input value={handoverForm.description} onChange={e => setHandoverForm(s => ({ ...s, description: e.target.value }))} placeholder="e.g. Chilled Water Plant O&M Manual Vol 1" className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl" required />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowAddHandover(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Add Dossier</button>
             </div>
           </form>
         </div>
@@ -3153,7 +4687,7 @@ const CompaniesDirectoryWorkspace: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex items-center justify-between">
         <div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
             Partner Ecosystem
@@ -3166,9 +4700,9 @@ const CompaniesDirectoryWorkspace: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {companies.map(c => (
-          <div key={c.id} className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+          <div key={c.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-slate-700">{c.type || c.company_type || 'Subcontractor'}</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">{c.type || c.company_type || 'Subcontractor'}</span>
               <span className="text-xs font-semibold text-amber-700">{c.trade || 'MEP'}</span>
             </div>
             <h3 className="font-bold text-slate-900 text-base mt-2">{c.name}</h3>
@@ -3185,13 +4719,13 @@ const CompaniesDirectoryWorkspace: React.FC = () => {
               placeholder="Company Name"
               value={form.name}
               onChange={e => setForm(s => ({ ...s, name: e.target.value }))}
-              className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
             />
             <input
               placeholder="Trade (e.g. HVAC, Electrical)"
               value={form.trade}
               onChange={e => setForm(s => ({ ...s, trade: e.target.value }))}
-              className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl"
             />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-xs">Cancel</button>

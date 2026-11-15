@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Building2, LogOut, Sparkles, ChevronRight, ChevronDown, Calendar, DollarSign, ShieldCheck,
   Menu, X, LayoutDashboard, Truck, HardHat, Receipt, Layers, Palette, Check,
-  RotateCcw, Sliders, MessageSquare, Search, Command, ArrowUpRight
+  RotateCcw, Sliders, MessageSquare, Search, Command, ArrowUpRight, Bell, WifiOff
 } from 'lucide-react';
 import {
   DOMAINS, ROUTE_ITEMS, NavigationDomain
 } from '../app/routes';
 import { AppearanceModal, AppearanceSettings } from '../components/AppearanceModal';
-import { subscribeRealtimeEvents } from '../api';
+import { api, subscribeRealtimeEvents } from '../api';
+import { AppLocale, applyLocale, getSavedLocale, formatMoney, tLabel, tDomain } from '../utils/i18n';
 
 interface InternalLayoutProps {
   user: any;
@@ -38,6 +39,37 @@ export function InternalLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [appearanceModalOpen, setAppearanceModalOpen] = useState(false);
+  const [locale, setLocale] = useState<AppLocale>(() => getSavedLocale());
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [liveToast, setLiveToast] = useState<{ title: string; message: string } | null>(null);
+
+  useEffect(() => {
+    applyLocale(locale);
+  }, [locale]);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  const loadNotifications = React.useCallback(async () => {
+    try {
+      const list = await api.get<any[]>('/api/notifications');
+      if (Array.isArray(list)) setNotifications(list);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const [sseConnected, setSseConnected] = useState(false);
@@ -52,6 +84,14 @@ export function InternalLayout({
             action: evt.action || evt.title,
             timestamp: evt.timestamp,
           });
+          if (evt.type === 'notification' && (!evt.targetUserId || evt.targetUserId === user?.user_id)) {
+            loadNotifications();
+            setLiveToast({
+              title: evt.title || 'Live Update',
+              message: evt.message || `${evt.module || 'Project'} updated`,
+            });
+            setTimeout(() => setLiveToast(null), 4500);
+          }
         }
       },
       (connected) => setSseConnected(connected)
@@ -206,6 +246,13 @@ export function InternalLayout({
     } catch {}
   };
 
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [activeDomain, activeRoute]);
+
   const role = user?.role || 'Worker';
   const visibleDomains = DOMAINS.filter(
     (d) => !d.allowedRoles || d.allowedRoles.includes(role)
@@ -264,8 +311,8 @@ export function InternalLayout({
 
       {/* Enterprise Left Navigation Rail */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] bg-[#0b1120] border-r border-slate-800/90 flex flex-col text-slate-300 transition-transform duration-200 ease-out lg:static lg:w-64 lg:translate-x-0 ${
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] bg-[#0b1120] border-r border-slate-800/90 flex-col text-slate-300 transition-transform duration-200 ease-out lg:static lg:flex lg:w-64 lg:translate-x-0 ${
+          mobileMenuOpen ? 'flex translate-x-0' : 'hidden -translate-x-full'
         }`}
       >
         {/* Brand Identity Header */}
@@ -531,7 +578,7 @@ export function InternalLayout({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               {/* Left: Hamburger + Breadcrumb + Active Project Pill */}
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0 overflow-hidden">
                 <button
                   onClick={() => setMobileMenuOpen(true)}
                   className="lg:hidden p-1.5 rounded text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 flex-shrink-0"
@@ -540,9 +587,9 @@ export function InternalLayout({
                   <Menu size={18} />
                 </button>
 
-                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs min-w-0">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
-                    {activeDomainObj?.label || 'Operations'}
+                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs min-w-0 overflow-hidden">
+                  <span className="text-slate-600 dark:text-slate-300 font-medium hidden sm:inline whitespace-nowrap flex-shrink-0">
+                    {activeDomainObj ? tDomain(locale, activeDomainObj.id, activeDomainObj.label) : 'Operations'}
                   </span>
                   <ChevronRight size={13} className="text-slate-400 hidden sm:inline flex-shrink-0" />
                   <span className="font-semibold text-slate-900 dark:text-white text-sm truncate">
@@ -551,22 +598,34 @@ export function InternalLayout({
                 </nav>
 
                 {activeProject && (
-                  <div className="hidden md:flex items-center gap-2 ml-2 pl-2.5 border-l border-slate-200 dark:border-slate-700 text-xs">
-                    <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 truncate max-w-[260px]">
+                  <div className="hidden 2xl:flex items-center gap-2 ml-2 pl-2.5 border-l border-slate-200 dark:border-slate-700 text-xs flex-shrink-0">
+                    <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 truncate max-w-[160px] 2xl:max-w-[220px]">
                       <ShieldCheck size={12} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
                       <span className="truncate">{activeProject.name}</span>
                     </span>
                     {activeProject.budget !== undefined && Number(activeProject.budget) > 0 && (
-                      <span className="hidden xl:inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5">
-                        €{Number(activeProject.budget).toLocaleString()}
+                      <span className="hidden 2xl:inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 flex-shrink-0">
+                        {formatMoney(activeProject.budget, activeProject.currency)}
                       </span>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Right: Live Sync Status, Quick Module Jump (Ctrl+K), Correspondence, Display, Copilot */}
+              {/* Right: Live Sync Status, Language/RTL, Quick Module Jump (Ctrl+K), Correspondence, Display, Copilot */}
               <div className="flex items-center gap-2 flex-shrink-0">
+                <select
+                  aria-label="Language"
+                  value={locale}
+                  onChange={e => setLocale(e.target.value as AppLocale)}
+                  className="h-8 px-2 rounded text-[11px] font-semibold bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
+                  title="Global Language & RTL"
+                >
+                  <option value="en">EN</option>
+                  <option value="ar">AR (RTL)</option>
+                  <option value="es">ES</option>
+                  <option value="fr">FR</option>
+                </select>
                 <div
                   className={`hidden lg:inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-[11px] font-mono font-semibold border ${
                     sseConnected
@@ -584,7 +643,7 @@ export function InternalLayout({
                       sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
                     }`}
                   />
-                  <span>{sseConnected ? 'LIVE SYNC' : 'SYNCING'}</span>
+                  <span>{sseConnected ? tLabel(locale, 'liveSync') : tLabel(locale, 'syncing')}</span>
                 </div>
 
                 <button
@@ -600,6 +659,68 @@ export function InternalLayout({
                   </kbd>
                 </button>
 
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setNotifOpen(o => !o)}
+                    className="relative inline-flex items-center justify-center h-8 w-8 rounded bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors"
+                    title="Live Notifications"
+                    aria-label="Live Notifications"
+                  >
+                    <Bell size={14} />
+                    {notifications.some(n => !n.is_read) && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold flex items-center justify-center">
+                        {notifications.filter(n => !n.is_read).length}
+                      </span>
+                    )}
+                  </button>
+                  {notifOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl z-50 overflow-hidden">
+                      <div className="px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">Live Site Notifications</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await api.put('/api/notifications/read-all', {});
+                              setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+                            } catch {}
+                          }}
+                          className="text-[11px] font-semibold text-blue-600 hover:underline"
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                        {notifications.length === 0 ? (
+                          <p className="p-4 text-xs text-slate-500 text-center">No notifications yet.</p>
+                        ) : (
+                          notifications.slice(0, 15).map(n => (
+                            <button
+                              key={n.id}
+                              type="button"
+                              onClick={async () => {
+                                if (!n.is_read) {
+                                  try {
+                                    await api.put(`/api/notifications/${n.id}/read`, {});
+                                    setNotifications(prev => prev.map(x => (x.id === n.id ? { ...x, is_read: 1 } : x)));
+                                  } catch {}
+                                }
+                              }}
+                              className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                                !n.is_read ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''
+                              }`}
+                            >
+                              <div className="font-semibold text-slate-900 dark:text-white">{n.title}</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">{n.message}</div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   onClick={() => onNavigate('delivery', 'messages')}
@@ -612,7 +733,7 @@ export function InternalLayout({
                   aria-label="Project Messages & Correspondence"
                 >
                   <MessageSquare size={13} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                  <span className="hidden md:inline">Correspondence</span>
+                  <span className="hidden xl:inline">Correspondence</span>
                 </button>
 
                 <button
@@ -623,7 +744,7 @@ export function InternalLayout({
                   aria-label="Display & Theme Preferences"
                 >
                   <Palette size={13} className="text-slate-500 flex-shrink-0" />
-                  <span className="hidden md:inline">Display</span>
+                  <span className="hidden xl:inline">Display</span>
                 </button>
 
                 {onOpenAssistant && (
@@ -664,7 +785,13 @@ export function InternalLayout({
         </header>
 
         {/* Main Workspace Container */}
-        <main className="flex-1 p-3 sm:p-5 pb-20 sm:pb-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-3 sm:p-5 pb-20 sm:pb-6 overflow-y-auto">
+          {!isOnline && (
+            <div className="mb-3 px-3.5 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs font-medium flex items-center gap-2">
+              <WifiOff size={14} className="flex-shrink-0" />
+              <span>Offline — Working locally; live sync will resume automatically when connection returns.</span>
+            </div>
+          )}
           {children}
         </main>
       </div>
@@ -783,6 +910,29 @@ export function InternalLayout({
         onApply={handleModalApply}
         onReset={handleSidebarReset}
       />
+
+      {/* Live Real-Time Site Notification Toast */}
+      {liveToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-16 sm:bottom-5 right-4 z-50 max-w-sm bg-slate-900 dark:bg-slate-800 text-white rounded-xl border border-slate-700 shadow-2xl px-4 py-3 flex items-start gap-3"
+        >
+          <Bell size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold truncate">{liveToast.title}</p>
+            <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-2">{liveToast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLiveToast(null)}
+            className="text-slate-400 hover:text-white text-xs font-semibold px-1"
+            aria-label="Dismiss notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

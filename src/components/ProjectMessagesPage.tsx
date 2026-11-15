@@ -311,9 +311,9 @@ export function ProjectMessagesPage({ projectId: rawProjectId, navigate, addToas
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(300px,380px)_1fr] border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 overflow-hidden min-h-[640px] lg:h-[calc(100vh-230px)]">
+      <div className="flex flex-col lg:flex-row border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 overflow-hidden min-h-[640px] lg:h-[calc(100vh-230px)]">
         {/* Channels */}
-        <nav aria-label="Channels" className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 p-2 bg-slate-50/60 dark:bg-slate-950/40">
+        <nav aria-label="Channels" className="w-full lg:w-48 xl:w-56 lg:flex-shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 p-2.5 bg-slate-50/60 dark:bg-slate-950/40 overflow-y-auto">
           <p className="px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Channels</p>
           {[{ id: 'all' as const, label: 'All messages', icon: Inbox, total: stats.total, unread: stats.unread },
             ...channels.map(c => {
@@ -350,7 +350,7 @@ export function ProjectMessagesPage({ projectId: rawProjectId, navigate, addToas
         </nav>
 
         {/* Thread list */}
-        <section aria-label="Conversations" className="flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 min-h-0">
+        <section aria-label="Conversations" className="w-full lg:w-64 xl:w-72 lg:flex-shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 min-h-0">
           <div className="p-2 border-b border-slate-200 dark:border-slate-800">
             <label className="relative block">
               <span className="sr-only">Search messages</span>
@@ -414,7 +414,7 @@ export function ProjectMessagesPage({ projectId: rawProjectId, navigate, addToas
         </section>
 
         {/* Conversation */}
-        <section aria-label="Conversation" className="flex flex-col min-h-0">
+        <section aria-label="Conversation" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
           {showMembers ? (
             <div className="flex-1 overflow-y-auto">
               <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">

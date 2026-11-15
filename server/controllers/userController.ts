@@ -379,7 +379,7 @@ export function registerUserController(app: Express): void {
       LEFT JOIN users u ON u.id = a.user_id
       LEFT JOIN projects p ON p.id = a.project_id
       WHERE ${where}
-      ORDER BY a.timestamp DESC
+      ORDER BY a.created_at DESC
       LIMIT 250
     `).all(...params);
     res.json(rows.map(rowToDict));

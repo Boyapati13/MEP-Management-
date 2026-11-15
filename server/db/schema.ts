@@ -735,7 +735,175 @@ export function initDb() {
       next_val INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (project_id, entity_type)
     );
+
+    CREATE TABLE IF NOT EXISTS worker_certifications (
+      id TEXT PRIMARY KEY,
+      worker_id TEXT NOT NULL,
+      project_id TEXT,
+      cert_type TEXT NOT NULL,
+      cert_number TEXT,
+      issuer TEXT,
+      issue_date TEXT,
+      expiry_date TEXT,
+      status TEXT DEFAULT 'Valid',
+      verified_by TEXT,
+      verified_at TEXT,
+      notes TEXT,
+      created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_worker_certs_worker ON worker_certifications(worker_id);
+
+    CREATE TABLE IF NOT EXISTS worker_time_allocations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      attendance_id TEXT,
+      worker_id TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      work_package_id TEXT,
+      task_id TEXT,
+      boq_item_id TEXT,
+      hours REAL NOT NULL DEFAULT 0,
+      cost_code TEXT,
+      notes TEXT,
+      approved_by TEXT,
+      approved_at TEXT,
+      status TEXT DEFAULT 'Pending',
+      created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_worker_time_alloc_proj ON worker_time_allocations(project_id, work_date);
+    CREATE INDEX IF NOT EXISTS idx_worker_time_alloc_worker ON worker_time_allocations(worker_id, work_date);
+
+    CREATE TABLE IF NOT EXISTS field_notes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Site Walk',
+      discipline TEXT NOT NULL DEFAULT 'General',
+      zone_location TEXT,
+      priority TEXT NOT NULL DEFAULT 'Medium',
+      status TEXT NOT NULL DEFAULT 'Draft',
+      linked_punch_id TEXT,
+      tags TEXT,
+      created_by TEXT,
+      created_by_name TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_field_notes_proj ON field_notes(project_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS site_material_receipts (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      material_request_id TEXT,
+      po_id TEXT,
+      po_number TEXT,
+      material TEXT,
+      boq_reference TEXT,
+      ordered_quantity REAL DEFAULT 0,
+      received_quantity REAL DEFAULT 0,
+      missing_quantity REAL DEFAULT 0,
+      unit TEXT,
+      storage_location TEXT,
+      delivery_note_ref TEXT,
+      discrepancy_reason TEXT,
+      status TEXT DEFAULT 'Received',
+      received_by TEXT,
+      received_at TEXT,
+      created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_site_material_receipts_proj ON site_material_receipts(project_id);
+
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      sku TEXT,
+      material TEXT NOT NULL,
+      category TEXT DEFAULT 'MEP Material',
+      unit TEXT DEFAULT 'Unit',
+      storage_location TEXT DEFAULT 'Site Store',
+      current_stock REAL NOT NULL DEFAULT 0,
+      min_stock_level REAL NOT NULL DEFAULT 5,
+      unit_cost REAL NOT NULL DEFAULT 0,
+      boq_reference TEXT,
+      last_updated TEXT,
+      created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_inventory_items_proj ON inventory_items(project_id);
+
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      inventory_item_id TEXT NOT NULL,
+      movement_type TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      unit_cost REAL DEFAULT 0,
+      work_package_id TEXT,
+      task_id TEXT,
+      issued_to TEXT,
+      reference_no TEXT,
+      notes TEXT,
+      created_by TEXT,
+      created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_proj ON stock_movements(project_id);
+
+    CREATE TABLE IF NOT EXISTS organizations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT,
+      plan TEXT DEFAULT 'Enterprise',
+      subscription_status TEXT DEFAULT 'Active',
+      max_users INTEGER DEFAULT 500,
+      max_projects INTEGER DEFAULT 100,
+      country TEXT DEFAULT 'Global',
+      default_currency TEXT DEFAULT 'USD',
+      tax_label TEXT DEFAULT 'VAT',
+      default_tax_rate REAL DEFAULT 0,
+      created_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT
+    );
   `);
+
+  try { db.exec("ALTER TABLE users ADD COLUMN organization_id TEXT DEFAULT 'org-default';"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN organization_id TEXT DEFAULT 'org-default';"); } catch {}
+  try {
+    db.prepare(
+      `INSERT OR IGNORE INTO organizations (id, name, slug, plan, subscription_status, max_users, max_projects, country, default_currency, tax_label, default_tax_rate, created_at)
+       VALUES ('org-default', 'MEP FieldHub Enterprise', 'mep-enterprise', 'Enterprise', 'Active', 500, 100, 'Global', 'USD', 'VAT', 0, ?)`
+    ).run(new Date().toISOString());
+  } catch {}
+
+  try { db.exec("ALTER TABLE projects ADD COLUMN tax_rate REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN tax_label TEXT DEFAULT 'VAT';"); } catch {}
+  try { db.exec("ALTER TABLE projects ADD COLUMN retention_pct REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN currency TEXT DEFAULT 'USD';"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN tax_rate REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN tax_amount REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN gross_total REAL DEFAULT 0;"); } catch {}
+
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN received_quantity REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN missing_quantity REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN storage_location TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN delivery_note_ref TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN discrepancy_reason TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN received_by TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN received_at TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN po_id TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE material_requests ADD COLUMN po_number TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN received_quantity REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN missing_quantity REAL DEFAULT 0;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN storage_location TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN delivery_note_ref TEXT;"); } catch {}
+  try { db.exec("ALTER TABLE purchase_orders ADD COLUMN discrepancy_reason TEXT;"); } catch {}
 
   try { db.exec("ALTER TABLE projects ADD COLUMN code TEXT;"); } catch {}
   try { db.exec("ALTER TABLE projects ADD COLUMN location TEXT;"); } catch {}

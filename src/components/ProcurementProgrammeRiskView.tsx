@@ -127,27 +127,27 @@ export const ProcurementProgrammeRiskView: React.FC<ProcurementProgrammeRiskView
       {/* KPI Highlights */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <span className="text-xs font-medium text-gray-500">Tracked POs</span>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{summary.total_orders}</p>
-          <span className="text-xs text-gray-400">active material orders</span>
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Tracked POs</span>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{summary.total_orders ?? 0}</p>
+          <span className="text-xs text-slate-600 dark:text-slate-300">active material orders</span>
         </div>
 
         <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <span className="text-xs font-medium text-gray-500">Critical Path Items</span>
-          <p className="text-2xl font-bold text-amber-600 mt-1">{summary.critical_path_orders}</p>
-          <span className="text-xs text-gray-400">linked to milestone dates</span>
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Critical Path Items</span>
+          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{summary.critical_path_orders ?? 0}</p>
+          <span className="text-xs text-slate-600 dark:text-slate-300">linked to milestone dates</span>
         </div>
 
         <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <span className="text-xs font-medium text-gray-500">Negative Buffer Deficit</span>
-          <p className="text-2xl font-bold text-red-600 mt-1">{summary.negative_buffer_count}</p>
-          <span className="text-xs text-red-500 font-medium">delivery after start date</span>
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Negative Buffer Deficit</span>
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">{summary.negative_buffer_count ?? 0}</p>
+          <span className="text-xs text-red-600 dark:text-red-400 font-medium">delivery after start date</span>
         </div>
 
         <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <span className="text-xs font-medium text-gray-500">Automated Task Blockers</span>
-          <p className="text-2xl font-bold text-indigo-600 mt-1">{summary.blocked_tasks_count}</p>
-          <span className="text-xs text-gray-400">synchronized system blockers</span>
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Automated Task Blockers</span>
+          <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{summary.blocked_tasks_count ?? 0}</p>
+          <span className="text-xs text-slate-600 dark:text-slate-300">synchronized system blockers</span>
         </div>
       </div>
 

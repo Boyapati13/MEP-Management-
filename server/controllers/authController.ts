@@ -405,4 +405,112 @@ export function registerAuthController(app: Express): void {
     res.json({ ok: true });
   });
 
+  // Self-service SaaS Organization Signup
+  app.post("/api/auth/register-organization", (req, res) => {
+    const { organization_name, country, currency, plan, admin_name, username, email, password } = req.body || {};
+    if (!organization_name || !admin_name || !username || !password) {
+      res.status(400).json({ error: "organization_name, admin_name, username, and password are required" });
+      return;
+    }
+    if (String(password).length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters." });
+      return;
+    }
+    const cleanUser = String(username).trim().toLowerCase();
+    const existing = db.prepare("SELECT id FROM users WHERE LOWER(username)=?").get(cleanUser);
+    if (existing) {
+      res.status(409).json({ error: "Username already exists" });
+      return;
+    }
+    const orgId = `org-${crypto.randomUUID().slice(0, 8)}`;
+    const userId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const chosenPlan = ["Starter", "Professional", "Enterprise"].includes(plan) ? plan : "Professional";
+    const maxUsers = chosenPlan === "Starter" ? 15 : chosenPlan === "Professional" ? 75 : 500;
+    const maxProjects = chosenPlan === "Starter" ? 5 : chosenPlan === "Professional" ? 25 : 100;
+
+    db.prepare(
+      `INSERT INTO organizations (id, name, slug, plan, subscription_status, max_users, max_projects, country, default_currency, tax_label, default_tax_rate, created_at)
+       VALUES (?, ?, ?, ?, 'Trial', ?, ?, ?, ?, 'VAT', 0, ?)`
+    ).run(
+      orgId,
+      String(organization_name).trim(),
+      String(organization_name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      chosenPlan,
+      maxUsers,
+      maxProjects,
+      country || "Global",
+      currency || "USD",
+      now
+    );
+
+    db.prepare(
+      `INSERT INTO users (id, username, password_hash, name, role, email, company, status, organization_id, created_at)
+       VALUES (?, ?, ?, ?, 'Admin', ?, ?, 'Active', ?, ?)`
+    ).run(userId, cleanUser, hashPassword(password), String(admin_name).trim(), email || "", String(organization_name).trim(), orgId, now);
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + SESSION_LIFETIME_MS).toISOString();
+    db.prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)").run(token, userId, expiresAt);
+    res.cookie("mep_session", token, { httpOnly: true, sameSite: "lax", maxAge: SESSION_LIFETIME_MS, path: "/" });
+    writeAudit(userId, "organizations", orgId, "SYSTEM", "REGISTER_ORG", null, { organization_name, plan: chosenPlan });
+
+    res.status(201).json({
+      ok: true,
+      token,
+      user: { user_id: userId, name: String(admin_name).trim(), role: "Admin", organization_id: orgId },
+      organization: db.prepare("SELECT * FROM organizations WHERE id=?").get(orgId),
+    });
+  });
+
+  // Self-service password reset request (never leaks account existence)
+  app.post("/api/auth/forgot-password", (req, res) => {
+    const { identifier } = req.body || {};
+    if (!identifier) {
+      res.status(400).json({ error: "Username or email is required" });
+      return;
+    }
+    const clean = String(identifier).trim().toLowerCase();
+    const user = db.prepare("SELECT id FROM users WHERE LOWER(username)=? OR LOWER(email)=? LIMIT 1").get(clean, clean) as any;
+    if (user) {
+      const rawToken = crypto.randomBytes(24).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+      db.prepare("INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)")
+        .run(crypto.randomUUID(), user.id, tokenHash, expiresAt, now.toISOString());
+      writeAudit(user.id, "users", user.id, "SYSTEM", "FORGOT_PASSWORD_REQUEST");
+    }
+    res.json({ ok: true, message: "If a matching account exists, password reset instructions have been issued." });
+  });
+
+  // Organization & SaaS Plan Settings
+  app.get("/api/organization", authRequired, (req, res) => {
+    const uRow = db.prepare("SELECT organization_id FROM users WHERE id=?").get(req.user!.user_id) as any;
+    const orgId = uRow?.organization_id || "org-default";
+    const org = db.prepare("SELECT * FROM organizations WHERE id=?").get(orgId) || db.prepare("SELECT * FROM organizations LIMIT 1").get();
+    const userCount = (db.prepare("SELECT COUNT(*) as c FROM users").get() as any)?.c || 0;
+    const projectCount = (db.prepare("SELECT COUNT(*) as c FROM projects").get() as any)?.c || 0;
+    res.json({ organization: org, usage: { users: userCount, projects: projectCount } });
+  });
+
+  app.put("/api/organization", authRequired, (req, res) => {
+    if (req.user!.role !== "Admin") {
+      res.status(403).json({ error: "Only Admin can update organization settings" });
+      return;
+    }
+    const uRow = db.prepare("SELECT organization_id FROM users WHERE id=?").get(req.user!.user_id) as any;
+    const orgId = uRow?.organization_id || "org-default";
+    const { name, plan, country, default_currency, tax_label, default_tax_rate } = req.body || {};
+    db.prepare(
+      `UPDATE organizations
+       SET name=COALESCE(?,name), plan=COALESCE(?,plan), country=COALESCE(?,country),
+           default_currency=COALESCE(?,default_currency), tax_label=COALESCE(?,tax_label),
+           default_tax_rate=COALESCE(?,default_tax_rate)
+       WHERE id=?`
+    ).run(name || null, plan || null, country || null, default_currency || null, tax_label || null, default_tax_rate ?? null, orgId);
+    writeAudit(req.user!.user_id, "organizations", orgId, "SYSTEM", "UPDATE_ORG", null, req.body);
+    res.json(db.prepare("SELECT * FROM organizations WHERE id=?").get(orgId));
+  });
+
 }
